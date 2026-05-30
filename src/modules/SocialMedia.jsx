@@ -212,17 +212,25 @@ const StatBar = ({ value, max, color }) => (
 );
 
 // ─── Section: Overview ────────────────────────────────────────
-const SocialOverview = ({ posts, analytics }) => {
+const SocialOverview = ({ posts, analytics, loading }) => {
+  // Loading state
+  if (loading) return (
+    <div style={{ textAlign:"center", padding:48, color:T.slate400, fontSize:13 }}>Loading social data…</div>
+  );
+
   // Dynamic today filter — formats current date as "Mon DD" to match post date format
   const todayLabel = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const todayPosts = posts.filter(p => p.date === todayLabel);
-  const scheduledThisWeek = posts.filter(p => p.status === "scheduled" || p.status === "draft").length;
-  const failedRecent = posts.filter(p => p.status === "failed").length;
-  const manualNeeded = posts.filter(p => p.status === "scheduled" && p.requires_manual).length;
+  const safePosts  = Array.isArray(posts) ? posts : [];
+  const todayPosts = safePosts.filter(p => p.date === todayLabel);
+  const scheduledThisWeek = safePosts.filter(p => p.status === "scheduled" || p.status === "draft").length;
+  const failedRecent = safePosts.filter(p => p.status === "failed").length;
+  const manualNeeded = safePosts.filter(p => p.status === "scheduled" && p.requires_manual).length;
 
+  // Safe analytics — falls back to zeros when no data yet
+  const ana = analytics || { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0 } };
   const weekChange = {
-    reach: Math.round(((analytics.this_week.total_reach - analytics.last_week.total_reach) / analytics.last_week.total_reach) * 100),
-    likes: Math.round(((analytics.this_week.total_likes - analytics.last_week.total_likes) / analytics.last_week.total_likes) * 100),
+    reach: ana.last_week.total_reach > 0 ? Math.round(((ana.this_week.total_reach - ana.last_week.total_reach) / ana.last_week.total_reach) * 100) : 0,
+    likes: ana.last_week.total_likes > 0 ? Math.round(((ana.this_week.total_likes - ana.last_week.total_likes) / ana.last_week.total_likes) * 100) : 0,
   };
 
   return (
@@ -230,8 +238,8 @@ const SocialOverview = ({ posts, analytics }) => {
       {/* KPI Row */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10, marginBottom:16 }}>
         {[
-          { label:"Posts This Week",    value:analytics.this_week.total_posts,  color:T.blue,  border:T.blue  },
-          { label:"Total Reach",        value:analytics.this_week.total_reach.toLocaleString(), color:T.green, border:T.green, sub:`↑${weekChange.reach}% vs last week` },
+          { label:"Posts This Week",    value:ana.this_week.total_posts,  color:T.blue,  border:T.blue  },
+          { label:"Total Reach",        value:(ana.this_week.total_reach||0).toLocaleString(), color:T.green, border:T.green, sub:`↑${weekChange.reach}% vs last week` },
           { label:"Drafts Scheduled",   value:scheduledThisWeek, color:T.amber, border:T.amber },
           { label:"Manual Posts Needed",value:manualNeeded,      color:manualNeeded>0?T.purple:T.green, border:manualNeeded>0?T.purple:T.green },
         ].map((k,i) => (
@@ -300,7 +308,7 @@ const SocialOverview = ({ posts, analytics }) => {
         {/* Platform Breakdown */}
         <Card>
           <div style={{ fontSize:13, fontWeight:600, color:T.slate800, marginBottom:12 }}>This week by platform</div>
-          {analytics.by_platform.map((p,i) => (
+          {(ana.by_platform||[]).map((p,i) => (
             <div key={i} style={{ marginBottom:12 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
                 <PlatformBadge platform={p.platform} />
@@ -310,7 +318,7 @@ const SocialOverview = ({ posts, analytics }) => {
                   <span style={{ fontSize:10, fontWeight:600, color:T.slate700 }}>{p.likes} ❤️</span>
                 </div>
               </div>
-              <StatBar value={p.reach} max={analytics.this_week.total_reach} color={PLATFORMS[p.platform]?.color || T.blue} />
+              <StatBar value={p.reach} max={ana.this_week.total_reach||1} color={PLATFORMS[p.platform]?.color || T.blue} />
             </div>
           ))}
         </Card>
@@ -328,7 +336,7 @@ const SocialOverview = ({ posts, analytics }) => {
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
           {analytics.by_pillar.map((p,i) => {
             const pl = PILLARS[p.pillar];
-            const pct = Math.round((p.posts / analytics.this_week.total_posts) * 100);
+            const pct = ana.this_week.total_posts > 0 ? Math.round((p.posts / ana.this_week.total_posts) * 100) : 0;
             return (
               <div key={i} style={{ flex:1, minWidth:100, background:pl?.bg||T.slate50, borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
                 <div style={{ fontSize:10, fontWeight:600, color:pl?.color||T.slate500, marginBottom:4 }}>{pl?.label||p.pillar}</div>
@@ -344,12 +352,14 @@ const SocialOverview = ({ posts, analytics }) => {
 };
 
 // ─── Section: Content Calendar ────────────────────────────────
-const ContentCalendar = ({ posts }) => {
+const ContentCalendar = ({ posts, loading }) => {
   const [platformFilter, setPlatformFilter] = useState("all");
   const [statusFilter,   setStatusFilter]   = useState("all");
   const [expanded,       setExpanded]       = useState(null);
 
-  const filtered = useMemo(() => posts.filter(p => {
+  const safePosts = Array.isArray(posts) ? posts : [];
+
+  const filtered = useMemo(() => safePosts.filter(p => {
     if (platformFilter !== "all" && p.platform !== platformFilter) return false;
     if (statusFilter   !== "all" && p.status   !== statusFilter)   return false;
     return true;
@@ -362,10 +372,15 @@ const ContentCalendar = ({ posts }) => {
     return acc;
   }, {});
 
-  const dates = Object.keys(grouped).sort((a,b) => {
-    const order = ["Apr 30","Apr 29","Apr 28","Apr 27","Apr 26","Apr 25","Apr 24"];
-    return order.indexOf(a) - order.indexOf(b);
+  const dates = Object.keys(grouped).sort((a, b) => {
+    // Parse "Mon DD" format to comparable dates
+    const parse = s => { try { return new Date(s + " 2026"); } catch { return new Date(0); } };
+    return parse(b) - parse(a); // newest first
   });
+
+  if (loading) return (
+    <div style={{ textAlign:"center", padding:48, color:T.slate400, fontSize:13 }}>Loading calendar…</div>
+  );
 
   return (
     <div>
@@ -387,6 +402,13 @@ const ContentCalendar = ({ posts }) => {
 
       {/* Calendar */}
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        {dates.length === 0 && (
+          <div style={{ textAlign:"center", padding:40, color:T.slate500 }}>
+            <div style={{ fontSize:28, marginBottom:10 }}>📅</div>
+            <div style={{ fontSize:14, fontWeight:600, color:T.slate700, marginBottom:5 }}>No posts scheduled yet</div>
+            <div style={{ fontSize:12, color:T.slate500 }}>Use the <strong>Create Content</strong> tab to build your content calendar.</div>
+          </div>
+        )}
         {dates.map(date => (
           <div key={date}>
             {/* Date Header */}
@@ -469,19 +491,37 @@ const ContentCalendar = ({ posts }) => {
 };
 
 // ─── Section: Analytics ───────────────────────────────────────
-const Analytics = ({ analytics }) => {
-  const maxReach = Math.max(...analytics.by_platform.map(p => p.reach));
+const Analytics = ({ analytics, posts, loading }) => {
+  if (loading) return (
+    <div style={{ textAlign:"center", padding:48, color:T.slate400, fontSize:13 }}>Loading analytics…</div>
+  );
+
+  // If no analytics data yet, show empty state
+  const ana = analytics || { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, by_platform:[] };
+  const safePosts = Array.isArray(posts) ? posts : [];
+
+  if (!analytics && safePosts.length === 0) return (
+    <div style={{ textAlign:"center", padding:48, color:T.slate500 }}>
+      <div style={{ fontSize:32, marginBottom:12 }}>📊</div>
+      <div style={{ fontSize:15, fontWeight:600, color:T.slate700, marginBottom:6 }}>No analytics data yet</div>
+      <div style={{ fontSize:13, color:T.slate500, maxWidth:340, margin:"0 auto" }}>
+        Analytics will populate once posts are scheduled and published. Use the <strong>Create Content</strong> tab to start building your content calendar.
+      </div>
+    </div>
+  );
+
+  const maxReach = ana.by_platform.length > 0 ? Math.max(...ana.by_platform.map(p => p.reach)) : 1;
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
       {/* Weekly Summary */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10 }}>
         {[
-          { label:"Total Reach",    value:analytics.this_week.total_reach.toLocaleString(),    sub:`vs ${analytics.last_week.total_reach.toLocaleString()} last week`, up:true },
-          { label:"Total Likes",    value:analytics.this_week.total_likes,    sub:`vs ${analytics.last_week.total_likes} last week`, up:true },
-          { label:"Total Comments", value:analytics.this_week.total_comments, sub:`vs ${analytics.last_week.total_comments} last week`, up:true },
-          { label:"Total Shares",   value:analytics.this_week.total_shares,   sub:`vs ${analytics.last_week.total_shares} last week`, up:true },
-          { label:"Posts Published",value:analytics.this_week.total_posts,    sub:`vs ${analytics.last_week.total_posts} last week`, up:true },
+          { label:"Total Reach",    value:(ana.this_week.total_reach||0).toLocaleString(),    sub:`vs ${(ana.last_week.total_reach||0).toLocaleString()} last week`, up:true },
+          { label:"Total Likes",    value:ana.this_week.total_likes||0,    sub:`vs ${ana.last_week.total_likes||0} last week`, up:true },
+          { label:"Total Comments", value:ana.this_week.total_comments||0, sub:`vs ${ana.last_week.total_comments||0} last week`, up:true },
+          { label:"Total Shares",   value:ana.this_week.total_shares||0,   sub:`vs ${ana.last_week.total_shares||0} last week`, up:true },
+          { label:"Posts Published",value:ana.this_week.total_posts||0,    sub:`vs ${ana.last_week.total_posts||0} last week`, up:true },
         ].map((k,i) => (
           <div key={i} style={{ background:T.white, border:`1px solid ${T.slate200}`, borderRadius:12, padding:"14px 16px" }}>
             <div style={{ fontSize:11, color:T.slate500, fontWeight:500, marginBottom:6 }}>{k.label}</div>
@@ -495,7 +535,7 @@ const Analytics = ({ analytics }) => {
       <Card>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
           <div style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Performance by platform — this week</div>
-          <AskBtn size="small" context={`My social media analytics this week:\n${analytics.by_platform.map(p=>`${p.platform}: ${p.posts} posts, ${p.reach} reach, ${p.likes} likes, ${p.comments} comments, ${p.shares} shares. Best post: "${p.best_post}"`).join("\n")}\n\nAnalyze my platform performance. Which platform is performing best? What content is working? What should I focus on next week?`} />
+          <AskBtn size="small" context={`My social media analytics this week:\n${(ana.by_platform||[]).map(p=>`${p.platform}: ${p.posts} posts, ${p.reach} reach, ${p.likes} likes, ${p.comments} comments, ${p.shares} shares. Best post: "${p.best_post}"`).join("\n")}\n\nAnalyze my platform performance. Which platform is performing best? What content is working? What should I focus on next week?`} />
         </div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
@@ -506,7 +546,7 @@ const Analytics = ({ analytics }) => {
             </tr>
           </thead>
           <tbody>
-            {analytics.by_platform.map((p,i) => (
+            {(ana.by_platform||[]).map((p,i) => (
               <tr key={i} style={{ borderBottom:`1px solid ${T.slate100}` }}>
                 <td style={{ padding:"10px 8px" }}><PlatformBadge platform={p.platform} /></td>
                 <td style={{ padding:"10px 8px", fontSize:12, fontWeight:600, color:T.slate900, textAlign:"right" }}>{p.posts}</td>
@@ -757,6 +797,57 @@ export default function SocialMedia() {
   const [showScheduler, setShowScheduler] = useState(false);
   const [newPost, setNewPost] = useState({platform:"facebook", content:"", post_date:"", status:"draft"});
 
+  // ── Live data from Supabase ──────────────────────────────────
+  const [posts, setPosts]           = useState([]);
+  const [analytics, setAnalytics]   = useState(null);
+  const [loadingData, setLoadingData] = useState(true);
+
+  useEffect(() => {
+    async function loadSocialData() {
+      setLoadingData(true);
+      try {
+        // Load content calendar posts
+        const { data: calData } = await supabase
+          .from("content_calendar")
+          .select("*")
+          .eq("agency_id", AGENCY_ID)
+          .order("scheduled_date", { ascending: false })
+          .limit(60);
+
+        // Normalize rows to match component expectations
+        const normalized = (calData || []).map(row => ({
+          id:              row.id,
+          platform:        row.platform,
+          date:            row.scheduled_date
+            ? new Date(row.scheduled_date).toLocaleDateString("en-US", { month:"short", day:"numeric" })
+            : "",
+          time:            row.scheduled_time || "",
+          status:          row.status,
+          pillar:          row.content_type || "educate",
+          caption:         row.caption || "",
+          requires_manual: row.requires_manual || false,
+          engagement:      null,
+        }));
+        setPosts(normalized);
+
+        // Load analytics if table exists (graceful — table may be empty)
+        const { data: anaData } = await supabase
+          .from("social_analytics")
+          .select("*")
+          .eq("agency_id", AGENCY_ID)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        setAnalytics((anaData && anaData.length > 0) ? anaData[0] : null);
+      } catch (err) {
+        console.error("Social data load error:", err);
+      } finally {
+        setLoadingData(false);
+      }
+    }
+    loadSocialData();
+  }, []);
+
   const savePost = async (post) => {
     const { error } = await supabase.from("content_calendar").upsert([{
       ...post,
@@ -795,9 +886,9 @@ export default function SocialMedia() {
       </div>
 
       {/* Section Content */}
-      {section === "overview"  && <SocialOverview  posts={MOCK_POSTS} analytics={MOCK_ANALYTICS} />}
-      {section === "calendar"  && <ContentCalendar  posts={MOCK_POSTS} />}
-      {section === "analytics" && <Analytics        analytics={MOCK_ANALYTICS} />}
+      {section === "overview"  && <SocialOverview  posts={posts} analytics={analytics} loading={loadingData} />}
+      {section === "calendar"  && <ContentCalendar  posts={posts} loading={loadingData} />}
+      {section === "analytics" && <Analytics        analytics={analytics} posts={posts} loading={loadingData} />}
       {section === "platforms" && <PlatformGuide />}
       {section === "create"    && <CreateContent />}
     </div>
