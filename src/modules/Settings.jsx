@@ -858,6 +858,22 @@ export default function Settings() {
 
   const [section, setSection] = useState("profile");
 
+  // Map real Supabase agency row to the shape AgencyProfile/About expect
+  const realAgency = agencyData ? {
+    name:              agencyData.name             || MOCK_AGENCY.name,
+    owner_name:        agencyData.owner_name        || MOCK_AGENCY.owner_name,
+    entity_type:       agencyData.entity_type       || MOCK_AGENCY.entity_type,
+    tax_id:            agencyData.tax_id            || MOCK_AGENCY.tax_id,
+    sf_agent_code:     agencyData.state_farm_agent_code || MOCK_AGENCY.sf_agent_code,
+    licensing_states:  agencyData.licensing_states  || MOCK_AGENCY.licensing_states,
+    primary_email:     agencyData.primary_email     || MOCK_AGENCY.primary_email,
+    phone:             agencyData.phone             || MOCK_AGENCY.phone,
+    address:           agencyData.address           || MOCK_AGENCY.address,
+    google_account_email: agencyData.google_account_email || MOCK_AGENCY.google_account_email,
+    vercel_url:        agencyData.vercel_url        || MOCK_AGENCY.vercel_url,
+    setup_date:        agencyData.setup_date        || MOCK_AGENCY.setup_date,
+  } : MOCK_AGENCY;
+
   const sections = [
     { id:"profile",     label:"Agency Profile"    },
     { id:"team",        label:"Team Access"        },
@@ -886,11 +902,11 @@ export default function Settings() {
       </div>
 
       {/* Section Content */}
-      {section === "profile"     && <AgencyProfile      agency={MOCK_AGENCY} />}
-      {section === "team"        && <TeamAccess         users={MOCK_USERS} />}
+      {section === "profile"     && <AgencyProfile      agency={realAgency} />}
+      {section === "team"        && <TeamAccess         users={usersData.length > 0 ? usersData : MOCK_USERS} />}
       {section === "connections" && <ConnectedAccounts  connections={MOCK_CONNECTIONS} />}
       {section === "config"      && <BCCConfiguration   config={MOCK_CONFIG} />}
-      {section === "about"       && <About              agency={MOCK_AGENCY} />}
+      {section === "about"       && <About              agency={realAgency} />}
     </div>
   );
 }
