@@ -162,30 +162,30 @@ const MOCK_RUN_LOG = [
   { id:"l9",  recipe_name:"Drive Filer",              run_at:"Yesterday 11:00 PM",   status:"success", records_processed:3,  duration_seconds:4,  output_summary:"3 documents filed to correct Drive folders. BCC/2026/April/ structure verified." },
   { id:"l10", recipe_name:"Gmail Organizer",          run_at:"Yesterday 6:14 PM",    status:"success", records_processed:7,  duration_seconds:3,  output_summary:"7 emails labeled and filed." },
   { id:"l11", recipe_name:"Gmail Organizer",          run_at:"Yesterday 5:14 PM",    status:"success", records_processed:2,  duration_seconds:2,  output_summary:"2 emails labeled and filed." },
-  { id:"l12", recipe_name:"Daily Briefing Email",     run_at:"Yesterday 6:01 AM",    status:"success", records_processed:1,  duration_seconds:11, output_summary:"Briefing email sent to jane@smithagency.com. Subject: Your Agency Snapshot — Sunday April 26." },
+  { id:"l12", recipe_name:"Daily Briefing Email",     run_at:"Yesterday 6:01 AM",    status:"success", records_processed:1,  duration_seconds:11, output_summary:"Briefing email sent to tmapp09@gmail.com. Subject: Your Agency Snapshot." },
 ];
 
 const MOCK_CONNECTIONS = [
-  { id:"c1", platform:"Gmail",        icon:"📧", status:"error",   connected_account:"jane@smithagency.com", last_sync:"Today 6:00 AM",    note:"OAuth token expired — needs reconnection in Composio" },
-  { id:"c2", platform:"Google Drive", icon:"📁", status:"healthy", connected_account:"jane@smithagency.com", last_sync:"Yesterday 11:00 PM", note:"All Drive operations running normally" },
-  { id:"c3", platform:"Google Calendar",icon:"📅",status:"healthy",connected_account:"jane@smithagency.com", last_sync:"Today 7:00 AM",    note:"Calendar sync active" },
+  { id:"c1", platform:"Gmail",        icon:"📧", status:"error",   connected_account:"tiffanymapp.businessclaude@gmail.com", last_sync:"Today 6:00 AM",    note:"OAuth token expired — needs reconnection in Composio" },
+  { id:"c2", platform:"Google Drive", icon:"📁", status:"healthy", connected_account:"tiffanymapp.businessclaude@gmail.com", last_sync:"Yesterday 11:00 PM", note:"All Drive operations running normally" },
+  { id:"c3", platform:"Google Calendar",icon:"📅",status:"healthy",connected_account:"tiffanymapp.businessclaude@gmail.com", last_sync:"Today 7:00 AM",    note:"Calendar sync active" },
   { id:"c4", platform:"Facebook",     icon:"👥", status:"healthy", connected_account:"Smith Insurance Agency Page", last_sync:"Yesterday 9:00 AM", note:"Page posting active" },
-  { id:"c5", platform:"LinkedIn",     icon:"💼", status:"healthy", connected_account:"Jane Smith",           last_sync:"Yesterday 12:00 PM", note:"Profile posting active" },
-  { id:"c6", platform:"Instagram",    icon:"📸", status:"manual",  connected_account:"@smithinsurance",      last_sync:"N/A",              note:"Instagram requires manual daily posting — no API scheduling available" },
+  { id:"c5", platform:"LinkedIn",     icon:"💼", status:"healthy", connected_account:"Tiffany Mapp",           last_sync:"Yesterday 12:00 PM", note:"Profile posting active" },
+  { id:"c6", platform:"Instagram",    icon:"📸", status:"manual",  connected_account:"@tiffanymappstatefarm",      last_sync:"N/A",              note:"Instagram requires manual daily posting — no API scheduling available" },
 ];
 
 const MOCK_BRIEFINGS = [
   {
     id:"b1", date:"Apr 26, 2026", sent_at:"6:01 AM", delivered:true, opened:true,
-    content:"Good morning Jane — here's your agency snapshot for Sunday April 26.\n\n💰 Revenue MTD: $48,240 (↑12% vs last year)\n🎯 AIPP: 47.5% of $142,000 target — on track\n📋 Tasks: 7 open, 2 due this week\n⚠️ Alerts: 3 active (1 critical — SF social media audit due May 11)\n📱 Social: 2 posts scheduled today (Facebook 9AM, LinkedIn 12PM) + Instagram manual needed\n🔴 Automation: Drive Filer ran successfully last night\n\nHave a great Sunday."
+    content:"Good morning Tiffany — here's your agency snapshot for Sunday April 26.\n\n💰 Revenue MTD: $48,240 (↑12% vs last year)\n🎯 AIPP: 47.5% of $142,000 target — on track\n📋 Tasks: 7 open, 2 due this week\n⚠️ Alerts: 3 active (1 critical — SF social media audit due May 11)\n📱 Social: 2 posts scheduled today (Facebook 9AM, LinkedIn 12PM) + Instagram manual needed\n🔴 Automation: Drive Filer ran successfully last night\n\nHave a great day."
   },
   {
     id:"b2", date:"Apr 25, 2026", sent_at:"6:01 AM", delivered:true, opened:true,
-    content:"Good morning Jane — here's your agency snapshot for Saturday April 25.\n\n💰 Revenue MTD: $48,240 (↑12% vs last year)\n🎯 AIPP: 47.5% of $142,000 target — on track\n📋 Tasks: 7 open, 2 due this week\n⚠️ Alerts: 2 active\n📱 Social: Facebook post scheduled 9AM\n✅ All automations ran successfully overnight."
+    content:"Good morning Tiffany — here's your agency snapshot for Saturday April 25.\n\n💰 Revenue MTD: $48,240 (↑12% vs last year)\n🎯 AIPP: 47.5% of $142,000 target — on track\n📋 Tasks: 7 open, 2 due this week\n⚠️ Alerts: 2 active\n📱 Social: Facebook post scheduled 9AM\n✅ All automations ran successfully overnight."
   },
   {
     id:"b3", date:"Apr 24, 2026", sent_at:"6:01 AM", delivered:true, opened:false,
-    content:"Good morning Jane — here's your agency snapshot for Friday April 24.\n\n💰 Revenue MTD: $42,400 (↑9% vs last year)\n🎯 AIPP: 44.2% of $142,000 target\n📋 Tasks: 8 open, 3 due this week\n⚠️ Alerts: 2 active\n📱 Social: Facebook and LinkedIn posts scheduled\n✅ All automations ran successfully overnight."
+    content:"Good morning Tiffany — here's your agency snapshot for Friday April 24.\n\n💰 Revenue MTD: $42,400 (↑9% vs last year)\n🎯 AIPP: 44.2% of $142,000 target\n📋 Tasks: 8 open, 3 due this week\n⚠️ Alerts: 2 active\n📱 Social: Facebook and LinkedIn posts scheduled\n✅ All automations ran successfully overnight."
   },
 ];
 
@@ -536,7 +536,11 @@ const Connections = ({ connections }) => (
       These are your Composio connected accounts. Every automation that interacts with Gmail, Drive, Facebook, LinkedIn, or other services uses one of these connections. If a connection shows an error, automations that depend on it will fail until it is reconnected.
     </div>
 
-    {connections.map(conn => (
+    {(!connections || connections.length === 0) && (
+      <div style={{ textAlign:"center", padding:32, color:T.slate400, fontSize:13 }}>Loading connections…</div>
+    )}
+
+    {(connections || []).map(conn => (
       <Card key={conn.id}>
         <div style={{ display:"flex", alignItems:"flex-start", gap:14 }}>
           <div style={{ width:44, height:44, borderRadius:12, background:T.slate50, border:`1px solid ${T.slate200}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
@@ -722,6 +726,115 @@ export default function Automations() {
     ? liveRunLog
     : useMockData ? MOCK_RUN_LOG : [];
 
+  // ── Live connections from settings table ─────────────────────
+  const [connections, setConnections] = useState([]);
+
+  useEffect(() => {
+    async function loadConnections() {
+      const { data } = await supabase
+        .from("settings")
+        .select("setting_key, setting_value")
+        .eq("agency_id", AGENCY_ID)
+        .in("setting_key", [
+          "google_account_email",
+          "composio_gmail_account_id",
+          "composio_googledrive_account_id",
+          "composio_googlecalendar_account_id",
+          "composio_googledocs_account_id",
+          "instagram_manual_reminder",
+          "instagram_handle",
+          "facebook_page_name",
+          "linkedin_url",
+        ]);
+
+      if (!data) return;
+      const s = Object.fromEntries(data.map(r => [r.setting_key, r.setting_value]));
+      const email = s.google_account_email || "tiffanymapp.businessclaude@gmail.com";
+
+      setConnections([
+        {
+          id: "c1",
+          platform: "Gmail",
+          icon: "📧",
+          status: s.composio_gmail_account_id ? "healthy" : "error",
+          connected_account: email,
+          last_sync: "Daily at 8:00 AM ET",
+          note: s.composio_gmail_account_id
+            ? `Account ID: ${s.composio_gmail_account_id} — Daily Briefing + Document Processor use this connection`
+            : "Not connected — reconnect in Composio",
+        },
+        {
+          id: "c2",
+          platform: "Google Drive",
+          icon: "📁",
+          status: s.composio_googledrive_account_id ? "healthy" : "error",
+          connected_account: email,
+          last_sync: "On document upload",
+          note: s.composio_googledrive_account_id
+            ? `Account ID: ${s.composio_googledrive_account_id} — Email Archiver files documents here`
+            : "Not connected — reconnect in Composio",
+        },
+        {
+          id: "c3",
+          platform: "Google Calendar",
+          icon: "📅",
+          status: s.composio_googlecalendar_account_id ? "healthy" : "error",
+          connected_account: email,
+          last_sync: "On compliance events",
+          note: s.composio_googlecalendar_account_id
+            ? `Account ID: ${s.composio_googlecalendar_account_id} — Compliance calendar sync`
+            : "Not connected — reconnect in Composio",
+        },
+        {
+          id: "c4",
+          platform: "Facebook",
+          icon: "📘",
+          status: "pending",
+          connected_account: s.facebook_page_name || "Page not yet connected",
+          last_sync: "N/A",
+          note: "Facebook page connection pending — connect in Composio to enable auto-posting",
+        },
+        {
+          id: "c5",
+          platform: "LinkedIn",
+          icon: "💼",
+          status: "pending",
+          connected_account: s.linkedin_url || "Profile not yet connected",
+          last_sync: "N/A",
+          note: "LinkedIn connection pending — connect in Composio to enable auto-posting",
+        },
+        {
+          id: "c6",
+          platform: "Instagram",
+          icon: "📸",
+          status: "manual",
+          connected_account: s.instagram_handle || "@tiffanymappstatefarm",
+          last_sync: "N/A",
+          note: "Instagram requires manual daily posting — no API scheduling available. You post manually each day.",
+        },
+        {
+          id: "c7",
+          platform: "GitHub",
+          icon: "⚙️",
+          status: "healthy",
+          connected_account: "tiffanymappbusinessclaude-cyber",
+          last_sync: "On every app update",
+          note: "BCC web app repo — Claude pushes code changes here, Vercel auto-deploys",
+        },
+        {
+          id: "c8",
+          platform: "Supabase",
+          icon: "🗄️",
+          status: "healthy",
+          connected_account: "aerutjqyjlbzrklgpwzv",
+          last_sync: "Live — every automation",
+          note: "Agency database — all automations read and write here",
+        },
+      ]);
+    }
+    loadConnections();
+  }, []);
+
   const toggleRecipe = (id) => {
     setRecipes(prev => prev.map(r => r.id === id ? { ...r, is_active: !r.is_active } : r));
   };
@@ -761,10 +874,10 @@ export default function Automations() {
       </div>
 
       {/* Section Content */}
-      {section === "overview"    && <AutomationOverview recipes={recipes} runLog={runLog} connections={MOCK_CONNECTIONS} />}
+      {section === "overview"    && <AutomationOverview recipes={recipes} runLog={runLog} connections={connections} />}
       {section === "runlog"      && <RunLog runLog={runLog} />}
       {section === "recipes"     && <Recipes recipes={recipes} onToggle={toggleRecipe} />}
-      {section === "connections" && <Connections connections={MOCK_CONNECTIONS} />}
+      {section === "connections" && <Connections connections={connections} />}
       {section === "briefing"    && <DailyBriefingSection briefings={MOCK_BRIEFINGS} />}
       {section === "importer"    && <DocImporter imports={MOCK_IMPORTS} />}
     </div>
