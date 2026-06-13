@@ -345,6 +345,85 @@ const ComplianceWidget = ({ data, onNavigate }) => {
   );
 };
 
+// ── Widget: Producer Scoreboard (FrontRunner) ────────────────
+const ProducerScoreboardWidget = ({ data, onNavigate }) => {
+  const rows = Array.isArray(data?.producerScoreboard) ? data.producerScoreboard : [];
+  const totals = data?.producerScoreboardTotals || {};
+  const days = data?.producerScoreboardDays || 0;
+  const start = data?.producerScoreboardStart || "";
+  const end = data?.producerScoreboardEnd || "";
+  const fmtDate = d => { if (!d) return ""; const [y,m,da] = d.split("-"); return `${parseInt(m)}/${parseInt(da)}`; };
+  const conv = (Number.isFinite(totals.outbound) && totals.outbound > 0)
+    ? ((totals.issued / totals.outbound) * 100).toFixed(2)
+    : "0.00";
+
+  return (
+    <Card>
+      <SectionTitle
+        icon="🏆"
+        title={`Producer Scoreboard${days ? ` — ${days} Day${days===1?"":"s"}` : ""}`}
+        action={
+          <span style={{fontSize:11, color:T.slate500, fontWeight:600}}>
+            {(start && end) ? `${fmtDate(start)} → ${fmtDate(end)}` : ""}
+          </span>
+        }
+      />
+      {rows.length === 0 ? (
+        <EmptyRow message="No producer activity yet — FrontRunner daily summaries auto-ingest at 10:30 AM ET." />
+      ) : (
+        <>
+          <div style={{display:"grid", gridTemplateColumns:"1.7fr 0.7fr 0.8fr 0.8fr 1fr 0.8fr 0.8fr", gap:6, fontSize:10, fontWeight:700, color:T.slate500, padding:"6px 8px", borderBottom:`1px solid ${T.slate200}`, textTransform:"uppercase", letterSpacing:0.4}}>
+            <div>Producer</div>
+            <div style={{textAlign:"right"}}>Hrs</div>
+            <div style={{textAlign:"right"}}>Written</div>
+            <div style={{textAlign:"right"}}>Issued</div>
+            <div style={{textAlign:"right"}}>Outbound</div>
+            <div style={{textAlign:"right"}}>Quotes</div>
+            <div style={{textAlign:"right"}}>FS Piv</div>
+          </div>
+          {rows.map((r, i) => {
+            const hrs = (parseFloat(r?.hours) || 0).toFixed(1);
+            const written = parseInt(r?.written) || 0;
+            const issued = parseInt(r?.issued) || 0;
+            const outbound = parseInt(r?.outbound) || 0;
+            const quotes = parseInt(r?.auto_quotes) || 0;
+            const piv = parseInt(r?.fs_pivots) || 0;
+            const expectedHrs = (days || 0) * 8;
+            const isLow = days >= 3 && (parseFloat(r?.hours) || 0) < expectedHrs * 0.5;
+            const isStar = issued >= 2 || written >= 5;
+            return (
+              <div key={i} style={{display:"grid", gridTemplateColumns:"1.7fr 0.7fr 0.8fr 0.8fr 1fr 0.8fr 0.8fr", gap:6, fontSize:11, padding:"8px", borderBottom:`1px solid ${T.slate100}`, alignItems:"center", background: isStar ? `${T.green}10` : isLow ? `${T.red}10` : "transparent"}}>
+                <div style={{fontWeight:600, color:T.slate800}}>
+                  {r?.producer_name || "—"} {isStar ? "⭐" : ""}{isLow ? " ⚠️" : ""}
+                </div>
+                <div style={{textAlign:"right", color:T.slate700}}>{hrs}</div>
+                <div style={{textAlign:"right", fontWeight:600, color: written>0 ? T.green : T.slate400}}>{written}</div>
+                <div style={{textAlign:"right", fontWeight:700, color: issued>0 ? T.green : T.slate400}}>{issued}</div>
+                <div style={{textAlign:"right", color:T.slate700}}>{outbound}</div>
+                <div style={{textAlign:"right", color:T.slate700}}>{quotes}</div>
+                <div style={{textAlign:"right", color:T.slate700}}>{piv}</div>
+              </div>
+            );
+          })}
+          <div style={{display:"grid", gridTemplateColumns:"1.7fr 0.7fr 0.8fr 0.8fr 1fr 0.8fr 0.8fr", gap:6, fontSize:11, padding:"10px 8px", borderTop:`2px solid ${T.slate300}`, fontWeight:800, color:T.navy, background:T.slate50}}>
+            <div>TEAM TOTAL</div>
+            <div style={{textAlign:"right"}}>{(parseFloat(totals?.hours)||0).toFixed(1)}</div>
+            <div style={{textAlign:"right"}}>{parseInt(totals?.written)||0}</div>
+            <div style={{textAlign:"right"}}>{parseInt(totals?.issued)||0}</div>
+            <div style={{textAlign:"right"}}>{parseInt(totals?.outbound)||0}</div>
+            <div style={{textAlign:"right"}}>{parseInt(totals?.auto_quotes)||0}</div>
+            <div style={{textAlign:"right"}}>{parseInt(totals?.fs_pivots)||0}</div>
+          </div>
+          <div style={{padding:"10px 8px 0", fontSize:10, color:T.slate500, display:"flex", justifyContent:"space-between"}}>
+            <span>Outbound → Issued conversion: <strong style={{color:T.slate700}}>{conv}%</strong></span>
+            <span style={{fontStyle:"italic"}}>⭐ standout · ⚠️ low engagement (&lt;50% of expected hrs)</span>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+};
+
 // ── Main Dashboard Component ───────────────────────────────────
 export default function Dashboard({ onNavigate = () => {} }) {
   const [dashData, setDashData] = useState({});
@@ -364,7 +443,8 @@ export default function Dashboard({ onNavigate = () => {} }) {
         // Parallel fetch all dashboard data
         const [
           agencyRes, summaryRes, aippRes, tasksRes,
-          alertsRes, memoryRes, complianceRes, closeRes, closeChecklistRes
+          alertsRes, memoryRes, complianceRes, closeRes, closeChecklistRes,
+          producerActivityRes
         ] = await Promise.allSettled([
           supabase.from("agency").select("*").limit(1).single(),
           Promise.resolve({ data: null }), // removed — no comp_recap_data  table
@@ -376,6 +456,10 @@ export default function Dashboard({ onNavigate = () => {} }) {
           supabase.from("compliance_rules").select("id,title,severity,is_active").limit(100),
           supabase.from("documents").select("*").order("created_at",{ascending:false}).limit(20),
           supabase.from("monthly_close_checklist").select("*").order("period_year",{ascending:false}).order("period_month",{ascending:false}).limit(60),
+          supabase.from("producer_activity_daily")
+            .select("producer_name,activity_date,hours,written_sales,issued_sales,outbound_calls,auto_quotes,fs_pivots,inbound_calls")
+            .gte("activity_date", new Date(Date.now() - 7*24*60*60*1000).toISOString().slice(0,10))
+            .order("activity_date",{ascending:false}),
         ]);
 
         const agency = agencyRes.status==="fulfilled" ? agencyRes.value.data : null;
@@ -400,6 +484,33 @@ export default function Dashboard({ onNavigate = () => {} }) {
         const revenueMTD  = sum(incomeLines.filter(r  => r.month === curMonth));
         const expensesMTD = sum(expenseLines.filter(r => r.month === curMonth));
         const revenueYTD  = sum(incomeLines);
+
+        // Aggregate producer_activity_daily into per-producer scoreboard (last 7 days)
+        const paDaily = producerActivityRes?.status === "fulfilled" ? (producerActivityRes.value?.data || []) : [];
+        const byProducer = {};
+        let earliestDate = null, latestDate = null;
+        for (const r of paDaily) {
+          if (!earliestDate || r.activity_date < earliestDate) earliestDate = r.activity_date;
+          if (!latestDate   || r.activity_date > latestDate)   latestDate   = r.activity_date;
+          const k = r.producer_name || "Unknown";
+          if (!byProducer[k]) byProducer[k] = { producer_name:k, hours:0, written:0, issued:0, outbound:0, auto_quotes:0, fs_pivots:0, inbound:0 };
+          const acc = byProducer[k];
+          acc.hours       += parseFloat(r.hours) || 0;
+          acc.written     += parseInt(r.written_sales) || 0;
+          acc.issued      += parseInt(r.issued_sales) || 0;
+          acc.outbound    += parseInt(r.outbound_calls) || 0;
+          acc.auto_quotes += parseInt(r.auto_quotes) || 0;
+          acc.fs_pivots   += parseInt(r.fs_pivots) || 0;
+          acc.inbound     += parseInt(r.inbound_calls) || 0;
+        }
+        const scoreboardRows = Object.values(byProducer).sort((a,b) =>
+          (b.issued - a.issued) || (b.written - a.written) || (b.outbound - a.outbound) || a.producer_name.localeCompare(b.producer_name)
+        );
+        const scoreboardTotals = scoreboardRows.reduce((t,r) => ({
+          hours: t.hours + r.hours, written: t.written + r.written, issued: t.issued + r.issued,
+          outbound: t.outbound + r.outbound, auto_quotes: t.auto_quotes + r.auto_quotes, fs_pivots: t.fs_pivots + r.fs_pivots, inbound: t.inbound + r.inbound,
+        }), {hours:0, written:0, issued:0, outbound:0, auto_quotes:0, fs_pivots:0, inbound:0});
+        const uniqueDays = new Set(paDaily.map(r => r.activity_date)).size;
 
         setDashData({
           agency,
@@ -426,6 +537,11 @@ export default function Dashboard({ onNavigate = () => {} }) {
           complianceRules: complianceRes.status==="fulfilled" ? (complianceRes.value.data||[]) : [],
           closeDocuments: closeRes.status==="fulfilled" ? (closeRes.value.data||[]) : [],
           closeChecklist: closeChecklistRes.status==="fulfilled" ? (closeChecklistRes.value.data||[]) : [],
+          producerScoreboard: scoreboardRows,
+          producerScoreboardTotals: scoreboardTotals,
+          producerScoreboardDays: uniqueDays,
+          producerScoreboardStart: earliestDate,
+          producerScoreboardEnd: latestDate,
         });
       } catch (err) {
         console.error("Dashboard load error:", err);
@@ -471,6 +587,11 @@ export default function Dashboard({ onNavigate = () => {} }) {
       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14}}>
         <TasksWidget data={dashData} onNavigate={onNavigate} />
         <ComplianceWidget data={dashData} onNavigate={onNavigate} />
+      </div>
+
+      {/* Fourth Row — Producer Scoreboard (full width) */}
+      <div style={{marginBottom:14}}>
+        <ProducerScoreboardWidget data={dashData} onNavigate={onNavigate} />
       </div>
 
       {/* Bottom Row — Open Items (full width) */}
