@@ -86,27 +86,109 @@ const FinancialWidget = ({ data, onNavigate }) => {
 };
 
 // ── Widget: AIPP Progress ──────────────────────────────────────
+// Shows YTD earned AIPP (5% × qualifying NEW P&C production), projected full
+// year (using prior-year shape ratio), YoY pace vs same period last year, and
+// per-line-of-business breakdown so the agent can see WHERE the gap is.
 const AIPPWidget = ({ data, onNavigate }) => {
   const a = data.aipp || {};
-  const earned = parseFloat(a.earned)||0;
-  const target = parseFloat(a.target)||1;
-  const achievement = pct(earned, target);
+  const earned = parseFloat(a.earned) || 0;
+  const projected = parseFloat(a.projected) || 0;
+  const priorYearActual = parseFloat(a.priorYearActual) || 0;
+  const target = parseFloat(a.target) || 0;
+  const targetIsPlaceholder = !!a.targetIsPlaceholder;
+
+  // Pace vs prior year: projected vs prior year actual
+  const pacePct = priorYearActual > 0
+    ? ((projected - priorYearActual) / priorYearActual) * 100
+    : null;
+  const paceColor = pacePct == null ? T.slate500 : pacePct >= 0 ? T.green : T.red;
+  const paceArrow = pacePct == null ? "—" : pacePct >= 0 ? "▲" : "▼";
+
+  // Achievement vs target — only show if target is real
+  const showAchievement = !targetIsPlaceholder && target > 0;
+  const achievement = showAchievement ? (earned / target) * 100 : null;
+
+  const lobRows = Array.isArray(a.lobBreakdown) ? a.lobBreakdown : [];
+
+  const lobLabel = c => {
+    if (c === "auto_mutual") return "Auto (AMUTL)";
+    if (c === "fire") return "Fire";
+    if (c === "florida_auto") return "Florida Auto";
+    return c || "—";
+  };
+
   return (
     <Card>
-      <SectionTitle icon="🏆" title={`AIPP ${a.year||2026} Progress`}
-        action={<button onClick={()=>onNavigate("financials")} style={{fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>Details →</button>}
+      <SectionTitle
+        icon="🏆"
+        title={`AIPP ${a.year || new Date().getFullYear()} Progress`}
+        action={<button onClick={() => onNavigate("financials")} style={{fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>Details →</button>}
       />
-      <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:8}}>
+
+      {/* Top row: earned YTD + projected vs prior-year */}
+      <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:10}}>
         <div>
-          <div style={{fontSize:28, fontWeight:800, color:parseFloat(achievement)>=80?T.green:T.amber}}>{achievement}%</div>
-          <div style={{fontSize:11, color:T.slate500}}>{fmt(earned)} of {fmt(target)} target</div>
+          <div style={{fontSize:28, fontWeight:800, color:T.navy}}>{fmt(earned)}</div>
+          <div style={{fontSize:11, color:T.slate500}}>earned YTD (Jan–{a.ytdThroughMonth || "current"})</div>
         </div>
         <div style={{textAlign:"right"}}>
-          <div style={{fontSize:11, color:T.slate500}}>Projected</div>
-          <div style={{fontSize:16, fontWeight:700, color:T.navy}}>{fmt(a.projected)}</div>
+          <div style={{fontSize:11, color:T.slate500}}>Projected full year</div>
+          <div style={{fontSize:18, fontWeight:700, color:T.navy}}>{fmt(projected)}</div>
+          {pacePct != null && (
+            <div style={{fontSize:11, color:paceColor, fontWeight:600, marginTop:2}}>
+              {paceArrow} {Math.abs(pacePct).toFixed(1)}% vs {a.priorYear || "PY"} actual {fmt(priorYearActual)}
+            </div>
+          )}
         </div>
       </div>
-      <ProgressBar value={earned} max={target} color={parseFloat(achievement)>=80?T.green:T.amber} height={8} />
+
+      {/* Achievement bar (only if real target exists) */}
+      {showAchievement && (
+        <>
+          <div style={{display:"flex", justifyContent:"space-between", fontSize:11, color:T.slate500, marginBottom:4}}>
+            <span>{achievement.toFixed(1)}% of {fmt(target)} target</span>
+            <span style={{color: achievement >= 80 ? T.green : T.amber}}>
+              {achievement >= 100 ? "🎯 At goal" : achievement >= 80 ? "On pace" : "Behind"}
+            </span>
+          </div>
+          <ProgressBar
+            value={earned}
+            max={target}
+            color={achievement >= 80 ? T.green : T.amber}
+            height={8}
+          />
+        </>
+      )}
+
+      {/* Line-of-business breakdown */}
+      {lobRows.length > 0 && (
+        <div style={{marginTop:12, paddingTop:10, borderTop:`1px solid ${T.slate200}`}}>
+          <div style={{fontSize:10, fontWeight:700, color:T.slate500, textTransform:"uppercase", letterSpacing:0.4, marginBottom:6}}>
+            AIPP-eligible by line · YTD vs {a.priorYear || "PY"} same period
+          </div>
+          {lobRows.map((r, i) => {
+            const yoy = r.yoy_pct;
+            const yoyColor = yoy == null ? T.slate500 : yoy >= 0 ? T.green : T.red;
+            const yoyArrow = yoy == null ? "—" : yoy >= 0 ? "▲" : "▼";
+            return (
+              <div key={i} style={{display:"grid", gridTemplateColumns:"1.4fr 0.9fr 0.9fr", gap:6, fontSize:11, padding:"3px 0", color:T.slate700}}>
+                <div style={{fontWeight:600}}>{lobLabel(r.category)}</div>
+                <div style={{textAlign:"right"}}>{fmt(r.ytd_current)}</div>
+                <div style={{textAlign:"right", color: yoyColor, fontWeight:600}}>
+                  {yoyArrow} {yoy == null ? "—" : Math.abs(yoy).toFixed(1) + "%"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Footnote */}
+      {targetIsPlaceholder && (
+        <div style={{marginTop:10, padding:"6px 8px", background:`${T.amber}15`, borderRadius:4, fontSize:10, color:T.slate700, lineHeight:1.4}}>
+          ⚠️ <strong>Target needs update.</strong> ${target.toLocaleString()} is a placeholder. Provide the actual State Farm AIPP target for achievement % to populate.
+        </div>
+      )}
     </Card>
   );
 };
@@ -444,7 +526,7 @@ export default function Dashboard({ onNavigate = () => {} }) {
         const [
           agencyRes, summaryRes, aippRes, tasksRes,
           alertsRes, memoryRes, complianceRes, closeRes, closeChecklistRes,
-          producerActivityRes
+          producerActivityRes, aippEligRes
         ] = await Promise.allSettled([
           supabase.from("agency").select("*").limit(1).single(),
           Promise.resolve({ data: null }), // removed — no comp_recap_data  table
@@ -460,6 +542,11 @@ export default function Dashboard({ onNavigate = () => {} }) {
             .select("producer_name,activity_date,hours,written_sales,issued_sales,outbound_calls,auto_quotes,fs_pivots,inbound_calls")
             .gte("activity_date", new Date(Date.now() - 7*24*60*60*1000).toISOString().slice(0,10))
             .order("activity_date",{ascending:false}),
+          supabase.from("comp_recap")
+            .select("period_year,period_month,comp_category,amount")
+            .eq("is_aipp_eligible", true)
+            .gte("period_year", new Date().getFullYear() - 1)
+            .order("period_year",{ascending:false}),
         ]);
 
         const agency = agencyRes.status==="fulfilled" ? agencyRes.value.data : null;
@@ -521,14 +608,64 @@ export default function Dashboard({ onNavigate = () => {} }) {
           },
           aipp: (() => {
             const a = aippRes.status==="fulfilled" ? aippRes.value.data : null;
-            if (!a) return { year: new Date().getFullYear(), target:0, earned:0, projected:0 };
+            const elig = aippEligRes?.status==="fulfilled" ? (aippEligRes.value?.data || []) : [];
+            const year = a?.program_year || new Date().getFullYear();
+            const priorYear = year - 1;
+            const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+            // Determine YTD-through month: max period_month in current year for which we have data
+            const currentYearMonths = elig.filter(r => r.period_year === year).map(r => r.period_month);
+            const ytdMaxMonth = currentYearMonths.length ? Math.max(...currentYearMonths) : (new Date().getMonth() + 1);
+
+            // LoB breakdown — YTD current year vs same-period prior year
+            const lobMap = {};
+            for (const r of elig) {
+              const cat = r.category_normalized = r.comp_category || "unknown";
+              if (!lobMap[cat]) lobMap[cat] = { category: cat, ytd_current: 0, ytd_prior: 0 };
+              const amt = parseFloat(r.amount) || 0;
+              if (r.period_year === year && r.period_month <= ytdMaxMonth) {
+                lobMap[cat].ytd_current += amt;
+              } else if (r.period_year === priorYear && r.period_month <= ytdMaxMonth) {
+                lobMap[cat].ytd_prior += amt;
+              }
+            }
+            const lobBreakdown = Object.values(lobMap)
+              .map(o => ({
+                ...o,
+                yoy_pct: o.ytd_prior > 0 ? ((o.ytd_current - o.ytd_prior) / o.ytd_prior) * 100 : null,
+              }))
+              .sort((x,y) => y.ytd_current - x.ytd_current);
+
+            // Prior year actual AIPP (for pace comparison) — 5% × ALL prior-year AIPP-eligible
+            const priorYearEligTotal = elig
+              .filter(r => r.period_year === priorYear)
+              .reduce((s,r) => s + (parseFloat(r.amount) || 0), 0);
+            const priorYearActual = priorYearEligTotal * 0.05;
+
+            // Placeholder detection: target $50k with notes mentioning "placeholder"
+            const targetIsPlaceholder = a?.notes?.toLowerCase?.().includes("placeholder") || false;
+
+            if (!a) {
+              return {
+                year, priorYear,
+                target: 0, earned: 0, projected: 0,
+                priorYearActual, lobBreakdown,
+                ytdThroughMonth: monthNames[ytdMaxMonth - 1],
+                targetIsPlaceholder: true,
+              };
+            }
             return {
-              year:      a.program_year || new Date().getFullYear(),
-              target:    parseFloat(a.target_amount)        || 0,
-              earned:    parseFloat(a.earned_ytd)           || 0,
-              projected: parseFloat(a.projected_full_year)  || 0,
-              achievement: parseFloat(a.achievement_percentage) || 0,
-              notes:     a.notes || null,
+              year,
+              priorYear,
+              target:           parseFloat(a.target_amount)        || 0,
+              earned:           parseFloat(a.earned_ytd)           || 0,
+              projected:        parseFloat(a.projected_full_year)  || 0,
+              achievement:      parseFloat(a.achievement_percentage) || 0,
+              priorYearActual,
+              lobBreakdown,
+              ytdThroughMonth:  monthNames[ytdMaxMonth - 1],
+              targetIsPlaceholder,
+              notes:            a.notes || null,
             };
           })(),
           tasks: tasksRes.status==="fulfilled" ? (tasksRes.value.data||[]) : [],
