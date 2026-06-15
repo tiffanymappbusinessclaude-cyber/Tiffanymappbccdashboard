@@ -506,6 +506,155 @@ const ProducerScoreboardWidget = ({ data, onNavigate }) => {
   );
 };
 
+// ── Widget: Q3 2026 Progress vs FS Pivot Targets ───────────────
+// Pre-Q3 (before Jul 1): countdown + targets-only display
+// During Q3: per-producer actual vs target with pace flag
+// Post-Q3 (after Sep 30): archive view
+const Q3ProgressWidget = ({ data, onNavigate }) => {
+  const rows = Array.isArray(data?.q3Rows) ? data.q3Rows : [];
+  const teamGoal = data?.q3TeamGoal || null;
+  const phase = data?.q3Phase || "pre"; // 'pre' | 'live' | 'post'
+  const daysUntilQ3 = data?.q3DaysUntil || 0;
+  const daysIntoQ3 = data?.q3DaysInto || 0;
+  const q3TotalWorkingDays = 65; // 13 working weeks
+  const daysRemaining = Math.max(0, q3TotalWorkingDays - daysIntoQ3);
+
+  const fmtPct = v => Number.isFinite(v) ? v.toFixed(0) + "%" : "—";
+
+  // Per-row helpers
+  const computeRow = r => {
+    const target = parseFloat(r.target) || 0;
+    const actual = parseFloat(r.actual) || 0;
+    const expectedToDate = phase === "live"
+      ? target * (daysIntoQ3 / q3TotalWorkingDays)
+      : (phase === "post" ? target : 0);
+    const pctOfTarget = target > 0 ? (actual / target) * 100 : 0;
+    const paceDelta = expectedToDate > 0 ? actual - expectedToDate : 0;
+    const onPace = expectedToDate === 0 ? null : actual >= expectedToDate * 0.9;
+    return { target, actual, expectedToDate, pctOfTarget, paceDelta, onPace };
+  };
+
+  // Banner styling per phase
+  const bannerBg = phase === "pre" ? `${T.blue}10` : phase === "live" ? `${T.green}10` : `${T.slate200}`;
+  const bannerColor = phase === "pre" ? T.blue : phase === "live" ? T.green : T.slate500;
+  const bannerText = phase === "pre"
+    ? `Q3 2026 starts in ${daysUntilQ3} day${daysUntilQ3 === 1 ? "" : "s"} — targets are set, scoreboard goes live July 1`
+    : phase === "live"
+      ? `Day ${daysIntoQ3} of ${q3TotalWorkingDays} working days — ${daysRemaining} remaining`
+      : `Q3 2026 closed — archive view`;
+
+  return (
+    <Card>
+      <SectionTitle
+        icon="🎯"
+        title="Q3 2026 Progress — FS Pivot Targets"
+        action={<button onClick={() => onNavigate("tasksgoals")} style={{fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>Goals →</button>}
+      />
+
+      {/* Phase banner */}
+      <div style={{padding:"8px 10px", background:bannerBg, borderLeft:`3px solid ${bannerColor}`, borderRadius:3, marginBottom:10, fontSize:11, fontWeight:600, color:bannerColor}}>
+        {bannerText}
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyRow message="No Q3 2026 goals found in the database." />
+      ) : (
+        <>
+          {/* Column headers */}
+          <div style={{display:"grid", gridTemplateColumns:"1.6fr 0.7fr 0.8fr 0.9fr 1fr 1fr", gap:6, fontSize:10, fontWeight:700, color:T.slate500, padding:"6px 8px", borderBottom:`1px solid ${T.slate200}`, textTransform:"uppercase", letterSpacing:0.4}}>
+            <div>Producer</div>
+            <div style={{textAlign:"right"}}>Target</div>
+            <div style={{textAlign:"right"}}>Actual</div>
+            <div style={{textAlign:"right"}}>Expected{phase==="live" ? " to date" : ""}</div>
+            <div>Progress</div>
+            <div style={{textAlign:"right"}}>Pace</div>
+          </div>
+
+          {/* Producer rows */}
+          {rows.map((r, i) => {
+            const m = computeRow(r);
+            const barPct = Math.min(100, Math.max(0, m.pctOfTarget));
+            const barColor = phase === "pre"
+              ? T.slate300
+              : m.onPace === true ? T.green : m.onPace === false ? T.red : T.slate400;
+            const paceArrow = m.paceDelta > 0 ? "▲" : m.paceDelta < 0 ? "▼" : "—";
+            const paceText = phase === "pre"
+              ? "—"
+              : phase === "live"
+                ? `${paceArrow} ${Math.abs(m.paceDelta).toFixed(0)}`
+                : (m.actual >= m.target ? "✅ Hit" : "Missed");
+            const paceColor = phase === "pre" ? T.slate400 : m.onPace === true ? T.green : m.onPace === false ? T.red : T.slate500;
+
+            return (
+              <div key={i} style={{display:"grid", gridTemplateColumns:"1.6fr 0.7fr 0.8fr 0.9fr 1fr 1fr", gap:6, fontSize:11, padding:"7px 8px", borderBottom:`1px solid ${T.slate100}`, alignItems:"center"}}>
+                <div style={{fontWeight:600, color:T.slate800}}>{r.producer_name || "—"}</div>
+                <div style={{textAlign:"right", color:T.slate700}}>{m.target.toFixed(0)}</div>
+                <div style={{textAlign:"right", fontWeight:600, color:T.slate800}}>{m.actual.toFixed(0)}</div>
+                <div style={{textAlign:"right", color:T.slate500}}>{phase==="pre" ? "—" : m.expectedToDate.toFixed(0)}</div>
+                <div>
+                  <div style={{display:"flex", alignItems:"center", gap:6}}>
+                    <div style={{flex:1, height:6, background:T.slate100, borderRadius:3, overflow:"hidden"}}>
+                      <div style={{width:`${barPct}%`, height:"100%", background:barColor, transition:"width 300ms"}}/>
+                    </div>
+                    <span style={{fontSize:10, color:T.slate500, minWidth:32, textAlign:"right"}}>{fmtPct(m.pctOfTarget)}</span>
+                  </div>
+                </div>
+                <div style={{textAlign:"right", color:paceColor, fontWeight:600, fontSize:11}}>{paceText}</div>
+              </div>
+            );
+          })}
+
+          {/* Team total row */}
+          {teamGoal && (() => {
+            const m = computeRow(teamGoal);
+            const barPct = Math.min(100, Math.max(0, m.pctOfTarget));
+            const barColor = phase === "pre" ? T.slate400
+              : m.onPace === true ? T.green : m.onPace === false ? T.red : T.slate400;
+            const paceArrow = m.paceDelta > 0 ? "▲" : m.paceDelta < 0 ? "▼" : "—";
+            const paceText = phase === "pre" ? "—"
+              : phase === "live" ? `${paceArrow} ${Math.abs(m.paceDelta).toFixed(0)}`
+              : (m.actual >= m.target ? "✅ Hit" : "Missed");
+            const paceColor = phase === "pre" ? T.slate400 : m.onPace === true ? T.green : m.onPace === false ? T.red : T.slate500;
+
+            return (
+              <div style={{display:"grid", gridTemplateColumns:"1.6fr 0.7fr 0.8fr 0.9fr 1fr 1fr", gap:6, fontSize:11.5, padding:"10px 8px", borderTop:`2px solid ${T.slate300}`, alignItems:"center", fontWeight:800, color:T.navy, background:T.slate50}}>
+                <div>TEAM TOTAL</div>
+                <div style={{textAlign:"right"}}>{m.target.toFixed(0)}</div>
+                <div style={{textAlign:"right"}}>{m.actual.toFixed(0)}</div>
+                <div style={{textAlign:"right", color:T.slate500}}>{phase==="pre" ? "—" : m.expectedToDate.toFixed(0)}</div>
+                <div>
+                  <div style={{display:"flex", alignItems:"center", gap:6}}>
+                    <div style={{flex:1, height:8, background:T.slate100, borderRadius:4, overflow:"hidden"}}>
+                      <div style={{width:`${barPct}%`, height:"100%", background:barColor, transition:"width 300ms"}}/>
+                    </div>
+                    <span style={{fontSize:11, color:T.navy, minWidth:36, textAlign:"right", fontWeight:800}}>{fmtPct(m.pctOfTarget)}</span>
+                  </div>
+                </div>
+                <div style={{textAlign:"right", color:paceColor}}>{paceText}</div>
+              </div>
+            );
+          })()}
+
+          {/* Footer legend */}
+          <div style={{padding:"10px 8px 0", fontSize:10, color:T.slate500, display:"flex", justifyContent:"space-between"}}>
+            <span>
+              {phase === "pre"
+                ? `Q3 daily team target: ~19.5 pivots/day`
+                : phase === "live"
+                  ? `Expected = target × (days elapsed / ${q3TotalWorkingDays})`
+                  : "Q3 closed — final results"}
+            </span>
+            <span style={{fontStyle:"italic"}}>
+              {phase === "live" && "▲ ahead of pace · ▼ behind"}
+              {phase === "pre" && "Targets from goals table · live tracking July 1"}
+            </span>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+};
+
 // ── Main Dashboard Component ───────────────────────────────────
 export default function Dashboard({ onNavigate = () => {} }) {
   const [dashData, setDashData] = useState({});
@@ -526,7 +675,7 @@ export default function Dashboard({ onNavigate = () => {} }) {
         const [
           agencyRes, summaryRes, aippRes, tasksRes,
           alertsRes, memoryRes, complianceRes, closeRes, closeChecklistRes,
-          producerActivityRes, aippEligRes
+          producerActivityRes, aippEligRes, q3GoalsRes, q3ActivityRes
         ] = await Promise.allSettled([
           supabase.from("agency").select("*").limit(1).single(),
           Promise.resolve({ data: null }), // removed — no comp_recap_data  table
@@ -547,6 +696,15 @@ export default function Dashboard({ onNavigate = () => {} }) {
             .eq("is_aipp_eligible", true)
             .gte("period_year", new Date().getFullYear() - 1)
             .order("period_year",{ascending:false}),
+          supabase.from("goals")
+            .select("id,title,target_value,current_value,unit,target_date,status")
+            .eq("status","active")
+            .like("title","Q3 2026 %"),
+          // Q3 producer_activity_daily — for live progress tracking once Q3 starts
+          supabase.from("producer_activity_daily")
+            .select("producer_name,activity_date,fs_pivots")
+            .gte("activity_date","2026-07-01")
+            .lte("activity_date","2026-09-30"),
         ]);
 
         const agency = agencyRes.status==="fulfilled" ? agencyRes.value.data : null;
@@ -598,6 +756,75 @@ export default function Dashboard({ onNavigate = () => {} }) {
           outbound: t.outbound + r.outbound, auto_quotes: t.auto_quotes + r.auto_quotes, fs_pivots: t.fs_pivots + r.fs_pivots, inbound: t.inbound + r.inbound,
         }), {hours:0, written:0, issued:0, outbound:0, auto_quotes:0, fs_pivots:0, inbound:0});
         const uniqueDays = new Set(paDaily.map(r => r.activity_date)).size;
+
+        // ── Q3 2026 progress: join goals + producer_activity_daily (Q3 dates only) ──
+        const q3Goals = q3GoalsRes?.status==="fulfilled" ? (q3GoalsRes.value?.data || []) : [];
+        const q3Activity = q3ActivityRes?.status==="fulfilled" ? (q3ActivityRes.value?.data || []) : [];
+
+        // Sum fs_pivots per producer for Q3 to date
+        const q3PivotsByProducer = {};
+        let q3TeamPivots = 0;
+        for (const r of q3Activity) {
+          const k = r.producer_name || "Unknown";
+          const v = parseInt(r.fs_pivots) || 0;
+          q3PivotsByProducer[k] = (q3PivotsByProducer[k] || 0) + v;
+          q3TeamPivots += v;
+        }
+
+        // Phase detection
+        const Q3_START = new Date("2026-07-01T00:00:00Z");
+        const Q3_END   = new Date("2026-09-30T23:59:59Z");
+        const nowTs = new Date();
+        const msPerDay = 24*60*60*1000;
+        // Working days helper — count weekdays between two dates inclusive
+        const workingDaysBetween = (start, end) => {
+          let count = 0;
+          const cur = new Date(start);
+          while (cur <= end) {
+            const d = cur.getUTCDay();
+            if (d !== 0 && d !== 6) count++;
+            cur.setUTCDate(cur.getUTCDate() + 1);
+          }
+          return count;
+        };
+
+        let q3Phase, q3DaysUntil = 0, q3DaysInto = 0;
+        if (nowTs < Q3_START) {
+          q3Phase = "pre";
+          q3DaysUntil = Math.ceil((Q3_START - nowTs) / msPerDay);
+        } else if (nowTs > Q3_END) {
+          q3Phase = "post";
+          q3DaysInto = workingDaysBetween(Q3_START, Q3_END);
+        } else {
+          q3Phase = "live";
+          q3DaysInto = workingDaysBetween(Q3_START, nowTs);
+        }
+
+        // Parse goal title to extract producer name. Pattern:
+        //   "Q3 2026 — {NAME} FS Pivot Target"  or  "Q3 2026 — Team FS Pivot Target"
+        const parseGoalName = title => {
+          const m = (title || "").match(/^Q3 2026 [—-] (.+) FS Pivot Target$/);
+          return m ? m[1].trim() : null;
+        };
+
+        let q3TeamGoal = null;
+        const q3Rows = [];
+        for (const g of q3Goals) {
+          const name = parseGoalName(g.title);
+          if (!name) continue;
+          const target = parseFloat(g.target_value) || 0;
+          if (name.toLowerCase() === "team") {
+            q3TeamGoal = { producer_name: "TEAM", target, actual: q3TeamPivots };
+          } else {
+            q3Rows.push({
+              producer_name: name,
+              target,
+              actual: q3PivotsByProducer[name] || 0,
+            });
+          }
+        }
+        // Sort by target desc (puts top-targeted producers first)
+        q3Rows.sort((a, b) => b.target - a.target);
 
         setDashData({
           agency,
@@ -679,6 +906,11 @@ export default function Dashboard({ onNavigate = () => {} }) {
           producerScoreboardDays: uniqueDays,
           producerScoreboardStart: earliestDate,
           producerScoreboardEnd: latestDate,
+          q3Rows,
+          q3TeamGoal,
+          q3Phase,
+          q3DaysUntil,
+          q3DaysInto,
         });
       } catch (err) {
         console.error("Dashboard load error:", err);
@@ -729,6 +961,11 @@ export default function Dashboard({ onNavigate = () => {} }) {
       {/* Fourth Row — Producer Scoreboard (full width) */}
       <div style={{marginBottom:14}}>
         <ProducerScoreboardWidget data={dashData} onNavigate={onNavigate} />
+      </div>
+
+      {/* Fifth Row — Q3 2026 Progress (full width) */}
+      <div style={{marginBottom:14}}>
+        <Q3ProgressWidget data={dashData} onNavigate={onNavigate} />
       </div>
 
       {/* Bottom Row — Open Items (full width) */}
