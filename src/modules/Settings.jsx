@@ -365,58 +365,248 @@ const TeamAccess = ({ users }) => {
 };
 
 // ─── Section: Connected Accounts ─────────────────────────────
-const ConnectedAccounts = ({ connections }) => (
-  <div>
-    <SectionHeader title="Connected Accounts" sub="Composio manages all external connections. Reconnect any account that shows an error." />
+// Live data from connection_health table. Polled every 5 min by the
+// connection-health-poller Edge Function. Grouped by category.
 
-    <div style={{ background:T.blueLt, border:`1px solid ${T.blue}20`, borderLeft:`4px solid ${T.blue}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
-      <div style={{ fontSize:12, fontWeight:600, color:T.navy, marginBottom:3 }}>How connections work</div>
-      <div style={{ fontSize:11, color:T.slate600, lineHeight:1.6 }}>
-        Your BCC automations use Composio to interact with Gmail, Google Drive, Facebook, LinkedIn, and Instagram on your behalf. Connections are authenticated via your Google account and each platform's OAuth. If a connection expires, automations that depend on it will fail until reconnected. All connections are managed in your Composio dashboard.
+const CONNECTION_CATEGORIES = {
+  gmail:           { category: "Google Workspace", icon: "📧", display: "Gmail" },
+  googledrive:     { category: "Google Workspace", icon: "📁", display: "Google Drive" },
+  googledocs:      { category: "Google Workspace", icon: "📝", display: "Google Docs" },
+  googlesheets:    { category: "Google Workspace", icon: "📊", display: "Google Sheets" },
+  googlecalendar:  { category: "Google Workspace", icon: "📅", display: "Google Calendar" },
+  supabase:        { category: "Infrastructure",   icon: "🗄️", display: "Supabase" },
+  github:          { category: "Infrastructure",   icon: "🐙", display: "GitHub" },
+  composio:        { category: "Infrastructure",   icon: "🔌", display: "Composio" },
+  facebook:        { category: "Social Media",     icon: "👥", display: "Facebook" },
+  linkedin:        { category: "Social Media",     icon: "💼", display: "LinkedIn" },
+  instagram:       { category: "Social Media",     icon: "📸", display: "Instagram" },
+  slack:           { category: "Communication",    icon: "💬", display: "Slack" },
+};
+
+const STATUS_LABEL = {
+  ACTIVE:       { label: "Connected",   pill: { bg: T.greenLt, color: "#065F46" } },
+  EXPIRED:      { label: "Expired",     pill: { bg: T.redLt,   color: "#991B1B" } },
+  FAILED:       { label: "Failed",      pill: { bg: T.redLt,   color: "#991B1B" } },
+  INACTIVE:     { label: "Inactive",    pill: { bg: T.redLt,   color: "#991B1B" } },
+  INITIALIZING: { label: "Connecting",  pill: { bg: T.amberLt, color: "#92400E" } },
+  GONE:         { label: "Gone",        pill: { bg: T.slate100,color: T.slate500 } },
+};
+
+const ConnectedAccounts = () => {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr]         = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("connection_health")
+          .select("toolkit_slug,display_name,status,status_color,connected_account_id,status_reason,last_checked_at,account_updated_at,word_id")
+          .eq("agency_id", AGENCY_ID);
+        if (cancelled) return;
+        if (error) { setErr(error.message); setLoading(false); return; }
+        setRows(Array.isArray(data) ? data : []);
+        setLoading(false);
+      } catch (e) {
+        if (!cancelled) { setErr(e?.message || "Failed to load connections"); setLoading(false); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Group by category, sort within each
+  const groups = {};
+  (rows || []).forEach(r => {
+    const meta = CONNECTION_CATEGORIES[r?.toolkit_slug] || { category: "Other", icon: "🔗", display: r?.display_name || r?.toolkit_slug || "Unknown" };
+    const cat = meta.category;
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push({ ...r, _meta: meta });
+  });
+  const order = ["Google Workspace", "Infrastructure", "Social Media", "Communication", "Other"];
+  Object.keys(groups).forEach(k => {
+    groups[k].sort((a,b) => (a._meta?.display || "").localeCompare(b._meta?.display || ""));
+  });
+
+  const fmt = (ts) => {
+    if (!ts) return "—";
+    try {
+      const d = new Date(ts);
+      const now = new Date();
+      const diffMs = now - d;
+      const mins = Math.floor(diffMs / 60000);
+      if (mins < 1)  return "just now";
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24)  return `${hrs}h ago`;
+      const days = Math.floor(hrs / 24);
+      return `${days}d ago`;
+    } catch { return String(ts); }
+  };
+
+  const summary = (() => {
+    const counts = { ACTIVE: 0, expired_or_failed: 0, total: rows?.length || 0 };
+    (rows || []).forEach(r => {
+      if (r?.status === "ACTIVE") counts.ACTIVE++;
+      else if (["EXPIRED","FAILED","INACTIVE","GONE"].includes(r?.status)) counts.expired_or_failed++;
+    });
+    return counts;
+  })();
+
+  return (
+    <div>
+      <SectionHeader title="Connected Accounts" sub="Composio manages all external connections. Reconnect any account that shows an error." />
+
+      <div style={{ background:T.blueLt, border:`1px solid ${T.blue}20`, borderLeft:`4px solid ${T.blue}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+        <div style={{ fontSize:12, fontWeight:600, color:T.navy, marginBottom:3 }}>How connections work</div>
+        <div style={{ fontSize:11, color:T.slate600, lineHeight:1.6 }}>
+          BCC automations use Composio to interact with Gmail, Drive, Calendar, GitHub, Supabase, and social platforms on your behalf. Each connection is authenticated via OAuth; if a token expires, the dependent automation will fail until you reconnect. Status below is refreshed every 5 minutes by the Connection Health Poller.
+        </div>
       </div>
-    </div>
 
-    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-      {connections.map(conn => (
-        <Card key={conn.id} style={{ border:`1px solid ${conn.status==="error"?T.red:T.slate200}` }}>
-          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:conn.status==="error"?T.redLt:T.slate50, border:`1px solid ${conn.status==="error"?T.red:T.slate200}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
-              {conn.icon}
-            </div>
-            <div style={{ flex:1 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
-                <span style={{ fontSize:13, fontWeight:700, color:T.slate900 }}>{conn.platform}</span>
-                <span style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:20, ...{
-                  healthy:{ background:T.greenLt, color:"#065F46" },
-                  error:  { background:T.redLt,   color:"#991B1B" },
-                  manual: { background:T.purpleLt,color:"#5B21B6" },
-                }[conn.status] }}>{conn.status === "healthy" ? "Connected" : conn.status === "error" ? "Error" : "Manual"}</span>
+      {/* Summary strip */}
+      {!loading && summary.total > 0 && (
+        <div style={{ display:"flex", gap:10, marginBottom:14, fontSize:11, color:T.slate600 }}>
+          <span><b style={{ color:T.green }}>{summary.ACTIVE}</b> active</span>
+          <span style={{ color:T.slate300 }}>·</span>
+          <span><b style={{ color:summary.expired_or_failed > 0 ? T.red : T.slate500 }}>{summary.expired_or_failed}</b> needing attention</span>
+          <span style={{ color:T.slate300 }}>·</span>
+          <span>{summary.total} total</span>
+        </div>
+      )}
+
+      {loading && (
+        <div style={{ fontSize:12, color:T.slate500, padding:"24px 8px" }}>Loading connection status…</div>
+      )}
+
+      {!loading && err && (
+        <div style={{ fontSize:12, color:T.red, padding:"24px 8px" }}>
+          Could not load connections: {String(err)}
+        </div>
+      )}
+
+      {!loading && !err && (rows?.length || 0) === 0 && (
+        <div style={{ fontSize:12, color:T.slate500, padding:"24px 8px" }}>No connections found. The Connection Health Poller may not have run yet.</div>
+      )}
+
+      {!loading && !err && (rows?.length || 0) > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          {order.filter(c => Array.isArray(groups[c]) && groups[c].length > 0).map(cat => (
+            <div key={cat}>
+              <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", color:T.slate500, letterSpacing:0.5, marginBottom:8 }}>{cat}</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {(groups[cat] || []).map(conn => {
+                  const isError = ["EXPIRED","FAILED","INACTIVE","GONE"].includes(conn?.status);
+                  const statusMeta = STATUS_LABEL[conn?.status] || { label: conn?.status || "Unknown", pill: { bg: T.slate100, color: T.slate500 } };
+                  return (
+                    <Card key={conn?.connected_account_id || conn?.toolkit_slug} style={{ border:`1px solid ${isError ? T.red : T.slate200}` }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                        <div style={{ width:44, height:44, borderRadius:12, background:isError ? T.redLt : T.slate50, border:`1px solid ${isError ? T.red : T.slate200}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
+                          {conn?._meta?.icon || "🔗"}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3, flexWrap:"wrap" }}>
+                            <span style={{ fontSize:13, fontWeight:700, color:T.slate900 }}>{conn?._meta?.display || conn?.display_name}</span>
+                            <span style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:20, background: statusMeta.pill.bg, color: statusMeta.pill.color }}>{statusMeta.label}</span>
+                          </div>
+                          <div style={{ fontSize:11, color:T.slate600, wordBreak:"break-all" }}>{conn?.connected_account_id || "—"}</div>
+                          <div style={{ fontSize:10, color: isError ? T.red : T.slate400, marginTop:2 }}>
+                            {conn?.status_reason || (isError ? "Reconnect required" : "Active")} · Last checked: {fmt(conn?.last_checked_at)}
+                          </div>
+                        </div>
+                        {isError && (
+                          <a href="https://platform.composio.dev/connections" target="_blank" rel="noopener noreferrer"
+                            style={{ padding:"7px 14px", fontSize:11, fontWeight:600, color:T.white, background:T.red, border:"none", borderRadius:8, cursor:"pointer", flexShrink:0, textDecoration:"none" }}>
+                            Reconnect
+                          </a>
+                        )}
+                        {conn?.status === "ACTIVE" && (
+                          <div style={{ fontSize:11, color:T.green, fontWeight:600, flexShrink:0 }}>✓ Active</div>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
-              <div style={{ fontSize:11, color:T.slate600 }}>{conn.account}</div>
-              <div style={{ fontSize:10, color:conn.status==="error"?T.red:T.slate400, marginTop:2 }}>{conn.note} · Last sync: {conn.last_sync}</div>
             </div>
-            {conn.status === "error" && (
-              <button style={{ padding:"7px 14px", fontSize:11, fontWeight:600, color:T.white, background:T.red, border:"none", borderRadius:8, cursor:"pointer", flexShrink:0 }}>
-                Reconnect
-              </button>
-            )}
-            {conn.status === "healthy" && (
-              <div style={{ fontSize:11, color:T.green, fontWeight:600, flexShrink:0 }}>✓ Active</div>
-            )}
-            {conn.status === "manual" && (
-              <div style={{ fontSize:10, color:T.purple, fontWeight:600, flexShrink:0, maxWidth:120, textAlign:"right", lineHeight:1.4 }}>Manual posting required daily</div>
-            )}
-          </div>
-        </Card>
-      ))}
+          ))}
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 // ─── Section: BCC Configuration ──────────────────────────────
-const BCCConfiguration = ({ config }) => {
-  const [cfg, setCfg] = useState(config);
-  const set = (k,v) => setCfg(c => ({...c,[k]:v}));
+// Live data: reads from agency, settings, aipp_tracking tables.
+
+const BCCConfiguration = () => {
+  const [cfg, setCfg] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const yearNow = new Date().getFullYear();
+        const [agencyResp, settingsResp, aippResp] = await Promise.all([
+          supabase.from("agency").select("*").eq("id", AGENCY_ID).maybeSingle(),
+          supabase.from("settings").select("setting_key,setting_value").eq("agency_id", AGENCY_ID),
+          supabase.from("aipp_tracking").select("year,target_amount,earned_ytd").eq("agency_id", AGENCY_ID).eq("year", yearNow).maybeSingle(),
+        ]);
+        if (cancelled) return;
+
+        if (agencyResp.error)  { setErr(agencyResp.error.message);  setLoading(false); return; }
+
+        const settingsMap = {};
+        (settingsResp.data || []).forEach(s => { settingsMap[s.setting_key] = s.setting_value; });
+
+        const agency = agencyResp.data || {};
+        const aipp = aippResp?.data || null;
+
+        setCfg({
+          // Agency facts
+          accounting_method: "Accrual (CPA aligned)",  // per persistent_memory 2026-06-10
+          fiscal_year_start: "January 1",
+          currency:          "USD",
+          timezone:          settingsMap.timezone || "America/New_York",
+          // Briefing
+          briefing_time:     settingsMap.daily_briefing_time   || "12:00 UTC",
+          briefing_email:    settingsMap.daily_briefing_email  || "tmapp09@gmail.com",
+          briefing_enabled:  (settingsMap.daily_briefing_enabled ?? "true") === "true",
+          // AIPP
+          aipp_year:         aipp?.year || yearNow,
+          aipp_target:       aipp?.target_amount ?? null,
+          aipp_target_is_placeholder: !aipp?.target_amount || Number(aipp?.target_amount) === 50000,
+          // Compensation
+          smvc_rate_pc:      agency.smvc_rate_pc       ?? null,
+          blended_rate:      agency.blended_rate_other ?? agency.smvc_rate_life_health_fs ?? null,
+          a005_loaded:       Boolean(agency.smvc_rate_pc && Number(agency.smvc_rate_pc) !== 0.10),
+          // Entity
+          entity_type:       agency.entity_type || "S-Corp",
+          lapse_rate:        agency.lapse_rate_annual,
+          // Dashboard
+          dashboard_period:  settingsMap.dashboard_period || "mtd",
+        });
+        setLoading(false);
+      } catch (e) {
+        if (!cancelled) { setErr(e?.message || "Failed to load configuration"); setLoading(false); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const set = (k,v) => setCfg(c => c ? ({...c,[k]:v}) : c);
+  const pct = (x) => (x == null || x === "" ? "—" : `${(Number(x) * 100).toFixed(1)}%`);
+  const money = (x) => (x == null || x === "" ? "—" : `$${Number(x).toLocaleString()}`);
+
+  if (loading) {
+    return <div style={{ fontSize:12, color:T.slate500, padding:"24px 8px" }}>Loading configuration…</div>;
+  }
+  if (err || !cfg) {
+    return <div style={{ fontSize:12, color:T.red, padding:"24px 8px" }}>Could not load configuration: {String(err || "no data")}</div>;
+  }
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -432,12 +622,12 @@ const BCCConfiguration = ({ config }) => {
         {cfg.briefing_enabled && (
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             {[
-              { label:"Send Time",          key:"briefing_time",  value:cfg.briefing_time,  hint:"24hr format, agency timezone" },
-              { label:"Delivery Email",     key:"briefing_email", value:cfg.briefing_email, hint:"Where briefings are sent"      },
+              { label:"Send Time",      key:"briefing_time",  value:cfg.briefing_time,  hint:"24hr UTC; runs daily" },
+              { label:"Delivery Email", key:"briefing_email", value:cfg.briefing_email, hint:"Where briefings are sent" },
             ].map(f => (
               <div key={f.key}>
                 <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>{f.label.toUpperCase()}</label>
-                <input value={f.value} onChange={e => set(f.key, e.target.value)}
+                <input value={f.value || ""} onChange={e => set(f.key, e.target.value)}
                   style={{ width:"100%", padding:"8px 10px", fontSize:12, color:T.slate800, border:`1px solid ${T.slate200}`, borderRadius:8, outline:"none", boxSizing:"border-box" }} />
                 <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{f.hint}</div>
               </div>
@@ -451,39 +641,61 @@ const BCCConfiguration = ({ config }) => {
         <div style={{ fontSize:13, fontWeight:700, color:T.slate900, marginBottom:14 }}>Financial Settings</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
           {[
-            { label:"Accounting Method",   value:cfg.accounting_method, hint:"Cash basis — do not change",  editable:false },
-            { label:"Fiscal Year Start",   value:cfg.fiscal_year_start, hint:"Calendar year Jan-Dec",       editable:false },
-            { label:"Currency",            value:cfg.currency,          hint:"USD",                         editable:false },
-            { label:"Timezone",            value:cfg.timezone,          hint:"Used for scheduling",          editable:true  },
+            { label:"Accounting Method", value:cfg.accounting_method, hint:"Aligned with CPA — do not change" },
+            { label:"Fiscal Year Start", value:cfg.fiscal_year_start, hint:"Calendar year Jan-Dec" },
+            { label:"Currency",          value:cfg.currency,          hint:"USD" },
+            { label:"Timezone",          value:cfg.timezone,          hint:"Used for scheduling" },
+            { label:"Entity Type",       value:cfg.entity_type,       hint:"Tax structure" },
+            { label:"Lapse Rate (annual)", value:(cfg.lapse_rate == null ? "Not set — pull from AgentWeb" : pct(cfg.lapse_rate)), hint:"SF-reported retention metric" },
           ].map(f => (
             <div key={f.label}>
               <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>{f.label.toUpperCase()}</label>
-              {f.editable ? (
-                <input defaultValue={f.value}
-                  style={{ width:"100%", padding:"8px 10px", fontSize:12, color:T.slate800, border:`1px solid ${T.slate200}`, borderRadius:8, outline:"none", boxSizing:"border-box" }} />
-              ) : (
-                <div style={{ padding:"8px 10px", fontSize:12, color:T.slate600, background:T.slate50, borderRadius:8, border:`1px solid ${T.slate200}` }}>{f.value}</div>
-              )}
+              <div style={{ padding:"8px 10px", fontSize:12, color:T.slate600, background:T.slate50, borderRadius:8, border:`1px solid ${T.slate200}` }}>{f.value || "—"}</div>
               <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{f.hint}</div>
             </div>
           ))}
         </div>
       </Card>
 
+      {/* Compensation Rates */}
+      <Card>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:T.slate900 }}>Compensation Rates</div>
+          {!cfg.a005_loaded && (
+            <span style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:20, background:T.amberLt, color:"#92400E" }}>A005 pending</span>
+          )}
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+          <div>
+            <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>SMVC RATE (P&C)</label>
+            <div style={{ padding:"8px 10px", fontSize:12, color:T.slate600, background:T.slate50, borderRadius:8, border:`1px solid ${T.slate200}` }}>{pct(cfg.smvc_rate_pc)}</div>
+            <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{cfg.a005_loaded ? "From A005 agreement" : "Default placeholder — needs A005"}</div>
+          </div>
+          <div>
+            <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>BLENDED RATE (Life/Health/FS)</label>
+            <div style={{ padding:"8px 10px", fontSize:12, color:T.slate600, background:T.slate50, borderRadius:8, border:`1px solid ${T.slate200}` }}>{pct(cfg.blended_rate)}</div>
+            <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{cfg.a005_loaded ? "From A005 agreement" : "Default placeholder — needs A005"}</div>
+          </div>
+        </div>
+      </Card>
+
       {/* AIPP Settings */}
       <Card>
-        <div style={{ fontSize:13, fontWeight:700, color:T.slate900, marginBottom:14 }}>AIPP Configuration</div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:T.slate900 }}>AIPP Configuration</div>
+          {cfg.aipp_target_is_placeholder && (
+            <span style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:20, background:T.amberLt, color:"#92400E" }}>Target placeholder</span>
+          )}
+        </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
           <div>
             <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>PROGRAM YEAR</label>
-            <input defaultValue={cfg.aipp_year} type="number"
-              style={{ width:"100%", padding:"8px 10px", fontSize:12, color:T.slate800, border:`1px solid ${T.slate200}`, borderRadius:8, outline:"none", boxSizing:"border-box" }} />
+            <div style={{ padding:"8px 10px", fontSize:12, color:T.slate600, background:T.slate50, borderRadius:8, border:`1px solid ${T.slate200}` }}>{cfg.aipp_year || "—"}</div>
           </div>
           <div>
-            <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>AIPP TARGET ($)</label>
-            <input defaultValue={cfg.aipp_target} type="number"
-              style={{ width:"100%", padding:"8px 10px", fontSize:12, color:T.slate800, border:`1px solid ${T.slate200}`, borderRadius:8, outline:"none", boxSizing:"border-box" }} />
-            <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>Used for progress calculations across the BCC</div>
+            <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>AIPP TARGET</label>
+            <div style={{ padding:"8px 10px", fontSize:12, color:T.slate600, background:T.slate50, borderRadius:8, border:`1px solid ${T.slate200}` }}>{money(cfg.aipp_target)}</div>
+            <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{cfg.aipp_target_is_placeholder ? "Update when SF publishes target" : "Used for progress calculations"}</div>
           </div>
         </div>
       </Card>
@@ -904,8 +1116,8 @@ export default function Settings() {
       {/* Section Content */}
       {section === "profile"     && <AgencyProfile      agency={realAgency} />}
       {section === "team"        && <TeamAccess         users={usersData.length > 0 ? usersData : MOCK_USERS} />}
-      {section === "connections" && <ConnectedAccounts  connections={MOCK_CONNECTIONS} />}
-      {section === "config"      && <BCCConfiguration   config={MOCK_CONFIG} />}
+      {section === "connections" && <ConnectedAccounts />}
+      {section === "config"      && <BCCConfiguration />}
       {section === "about"       && <About              agency={realAgency} />}
     </div>
   );
