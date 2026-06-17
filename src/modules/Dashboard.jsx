@@ -62,25 +62,139 @@ const ProgressBar = ({value, max, color=T.blue, height=6}) => {
 // ── Widget: Financial KPIs ─────────────────────────────────────
 const FinancialWidget = ({ data, onNavigate }) => {
   const s = data.summary || {};
+  const trend = (p) => (p == null) ? "" : `${p >= 0 ? "↑" : "↓"} ${Math.abs(p).toFixed(1)}%`;
+  const netColor = (s.netYTD >= 0) ? T.green : T.red;
+  const ratioColor = (v, warn, crit) => (v == null) ? T.slate900 : (v > crit ? T.red : v > warn ? T.amber : T.slate900);
   const kpis = [
-    { label:"Revenue MTD",    value:fmt(s.revenueMTD),    color:T.green,  border:T.green },
-    { label:"Expenses MTD",   value:fmt(s.expensesMTD),   color:T.red,    border:T.red   },
-    { label:"Net Income MTD", value:fmt(s.netIncomeMTD),  color:s.netIncomeMTD>=0?T.green:T.red, border:s.netIncomeMTD>=0?T.green:T.red },
-    { label:"Revenue YTD",   value:fmt(s.revenueYTD),    color:T.navy,   border:T.navy  },
+    { label:"Revenue YTD",   value:fmt(s.revenueYTD),  sub: s.yoyRevenuePct != null ? `${trend(s.yoyRevenuePct)} YoY` : "", color:T.navy,  border:T.navy },
+    { label:"Expenses YTD",  value:fmt(s.expensesYTD), sub:"Accrual (CPA)",                                                color:T.red,   border:T.red  },
+    { label:"Net Income YTD",value:fmt(s.netYTD),      sub: s.yoyNetPct != null ? `${trend(s.yoyNetPct)} YoY` : "",        color:netColor,border:netColor },
+    { label:"Payroll Ratio", value:s.payrollRatioYTD != null ? `${Math.round(s.payrollRatioYTD)}%` : "—", sub: s.payrollRatioYTD != null && s.payrollRatioYTD > 55 ? "CRITICAL >55%" : "Target 40-50%", color: ratioColor(s.payrollRatioYTD, 50, 55), border: ratioColor(s.payrollRatioYTD, 50, 55) },
   ];
   return (
     <Card>
       <SectionTitle icon="💰" title="Financial Overview"
         action={<button onClick={()=>onNavigate("financials")} style={{fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>View Full P&L →</button>}
       />
+      <div style={{fontSize:10, color:T.slate500, marginBottom:8}}>As of {s.asOfLabel || "—"}</div>
       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10}}>
         {kpis.map((k,i) => (
           <div key={i} style={{padding:"10px 12px", borderRadius:8, border:`1px solid ${k.border}20`, background:`${k.border}08`}}>
             <div style={{fontSize:10, color:T.slate500, marginBottom:4, fontWeight:600}}>{k.label}</div>
             <div style={{fontSize:16, fontWeight:800, color:k.color}}>{k.value}</div>
+            {k.sub ? <div style={{fontSize:10, color:T.slate500, marginTop:3}}>{k.sub}</div> : null}
           </div>
         ))}
       </div>
+    </Card>
+  );
+};
+
+
+// ── Widget: Renewal Retention (renewal commission MoM + YoY) ──
+// The renewal book is ~6.5x larger than new business; renewal commission
+// is the agency's foundation. This widget surfaces MoM trend, last-month
+// headline with YoY, and per-LoB YTD breakdown so erosion is visible early.
+const RetentionWidget = ({ data, onNavigate }) => {
+  const r = data.retention || null;
+  if (!r || !r.monthly || r.monthly.length === 0) {
+    return (
+      <Card>
+        <SectionTitle icon="🔄" title="Renewal Retention" />
+        <EmptyRow message="Loading renewal data…" />
+      </Card>
+    );
+  }
+  const lm = r.lastMonth;
+  const yoyTotal = r.yoyPct;
+  const arrow = (p) => (p == null) ? "" : (p >= 0 ? "↑" : "↓");
+  const fmtPct = (p) => (p == null) ? "—" : `${arrow(p)} ${Math.abs(p).toFixed(1)}%`;
+  const colorForPct = (p) => (p == null) ? T.slate500 : (p < -10 ? T.red : p < 0 ? T.amber : T.green);
+
+  // Bar chart: monthly renewal total (last 12 months)
+  const maxBar = Math.max(...r.monthly.map(m => m.total), 1);
+
+  // LoB breakdown YTD vs prior YTD same period
+  const lobView = [
+    { key:"amutl",   label:"Auto/Mutual",   cur:r.ytd.amutl,   pri:r.ytd.prior_amutl   },
+    { key:"fl_auto", label:"FL Auto",       cur:r.ytd.fl_auto, pri:r.ytd.prior_fl_auto },
+    { key:"fire",    label:"Fire",          cur:r.ytd.fire,    pri:r.ytd.prior_fire    },
+    { key:"life",    label:"Life",          cur:r.ytd.life,    pri:r.ytd.prior_life    },
+  ].map(o => ({
+    ...o,
+    yoyPct: o.pri > 0 ? ((o.cur - o.pri) / o.pri) * 100 : null,
+  }));
+
+  return (
+    <Card>
+      <SectionTitle icon="🔄" title="Renewal Retention"
+        action={<button onClick={()=>onNavigate("financials")} style={{fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>View Comp Detail →</button>}
+      />
+
+      {/* Top row: YTD + Last Month headline */}
+      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12}}>
+        <div style={{padding:"10px 12px", borderRadius:8, border:`1px solid ${T.navy}20`, background:`${T.navy}08`}}>
+          <div style={{fontSize:10, color:T.slate500, marginBottom:4, fontWeight:600}}>Renewal Commission YTD</div>
+          <div style={{fontSize:18, fontWeight:800, color:T.navy}}>${(r.ytd.total || 0).toLocaleString()}</div>
+          <div style={{fontSize:11, color:colorForPct(yoyTotal), marginTop:3, fontWeight:600}}>
+            {fmtPct(yoyTotal)} vs ${(r.ytd.priorTotal || 0).toLocaleString()} prior YTD
+          </div>
+          <div style={{fontSize:10, color:T.slate400, marginTop:2}}>{r.priorYtdLabel}</div>
+        </div>
+        <div style={{padding:"10px 12px", borderRadius:8, border:`1px solid ${colorForPct(lm?.yoy_pct)}30`, background:`${colorForPct(lm?.yoy_pct)}10`}}>
+          <div style={{fontSize:10, color:T.slate500, marginBottom:4, fontWeight:600}}>Last Closed Month — {lm?.label}</div>
+          <div style={{fontSize:18, fontWeight:800, color:T.slate900}}>${(lm?.total || 0).toLocaleString()}</div>
+          <div style={{fontSize:11, color:colorForPct(lm?.yoy_pct), marginTop:3, fontWeight:600}}>
+            {fmtPct(lm?.yoy_pct)} vs same month prior year
+          </div>
+          <div style={{fontSize:10, color:T.slate400, marginTop:2}}>Prior year: ${(lm?.prior_total || 0).toLocaleString()}</div>
+        </div>
+      </div>
+
+      {/* Monthly bar chart — last 12 months */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11, color:T.slate600, fontWeight:600, marginBottom:6}}>Monthly Renewal Commission — 12-month trend</div>
+        <div style={{display:"flex", alignItems:"flex-end", gap:4, height:80}}>
+          {r.monthly.map((m, i) => {
+            const h = (m.total / maxBar) * 100;
+            const isLast = i === r.monthly.length - 1;
+            const yoyColor = colorForPct(m.yoy_pct);
+            return (
+              <div key={i} style={{flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3}}>
+                <div title={`${m.label}: $${m.total.toLocaleString()} (${fmtPct(m.yoy_pct)} YoY)`}
+                  style={{
+                    width:"100%", height:`${Math.max(h, 4)}%`, minHeight:4,
+                    background: isLast ? yoyColor : T.blue,
+                    borderRadius:"3px 3px 0 0",
+                    opacity: isLast ? 1 : 0.7,
+                  }} />
+                <div style={{fontSize:8, color:T.slate500}}>{m.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Per-LoB YTD breakdown */}
+      <div>
+        <div style={{fontSize:11, color:T.slate600, fontWeight:600, marginBottom:6}}>YTD by Line of Business</div>
+        <div style={{display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:6}}>
+          {lobView.map(lob => (
+            <div key={lob.key} style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate200}`, background:T.white}}>
+              <div style={{fontSize:10, color:T.slate500, fontWeight:600}}>{lob.label}</div>
+              <div style={{fontSize:13, fontWeight:700, color:T.slate900, marginTop:2}}>${(lob.cur || 0).toLocaleString()}</div>
+              <div style={{fontSize:10, color:colorForPct(lob.yoyPct), marginTop:2, fontWeight:600}}>{fmtPct(lob.yoyPct)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Insight callout */}
+      {lm && lm.yoy_pct != null && lm.yoy_pct < -10 && (
+        <div style={{marginTop:12, padding:"10px 12px", background:`${T.red}08`, borderRadius:8, borderLeft:`3px solid ${T.red}`, fontSize:11, color:T.slate700, lineHeight:1.5}}>
+          <strong>{lm.label} renewal commission declined {Math.abs(lm.yoy_pct).toFixed(1)}% YoY.</strong> The renewal book is the agency's foundation — when monthly trend turns sustained-negative, root-cause is usually either lapse-rate increasing, rate-shopping (especially FL Auto), or a producer not making renewal touches. Open Comp Detail to see which LoB is bleeding.
+        </div>
+      )}
     </Card>
   );
 };
@@ -714,21 +828,109 @@ export default function Dashboard({ onNavigate = () => {} }) {
         const { data: compData } = await supabase.from("comp_recap").select("*").order("period_year",{ascending:false}).order("period_month",{ascending:false}).limit(20);
         const latestComp = (compData||[])[0] || {};
 
-        // Build income statement summary
+        // Build YTD P&L summary from cpa_pnl_monthly (authoritative) + comp_recap.
+        // v_income_statement intentionally NOT used — its journal_entries source
+        // only contains post-cutover (May 2026 onward) live system data.
         const now = new Date();
         const curYear  = now.getFullYear();
         const curMonth = now.getMonth() + 1;
-        const { data: isData } = await supabase.from("v_income_statement")
-          .select("account_name, account_type, amount, month, year")
-          .eq("year", curYear)
-          .limit(500);
-
-        const incomeLines  = (isData||[]).filter(r => r.account_type === "income");
-        const expenseLines = (isData||[]).filter(r => r.account_type === "expense");
+        const priorYr  = curYear - 1;
+        const priorEndMonth = Math.max(1, curMonth - 1);
         const sum = rows => rows.reduce((s, r) => s + parseFloat(r.amount || 0), 0);
-        const revenueMTD  = sum(incomeLines.filter(r  => r.month === curMonth));
-        const expensesMTD = sum(expenseLines.filter(r => r.month === curMonth));
-        const revenueYTD  = sum(incomeLines);
+
+        const [pnlCurRes2, pnlPriorRes2, renewalRes] = await Promise.all([
+          supabase.from("cpa_pnl_monthly")
+            .select("section,account_name,period_year,period_month,amount,is_subtotal,notes")
+            .eq("agency_id", AGENCY_ID)
+            .eq("period_year", curYear)
+            .eq("is_subtotal", false),
+          supabase.from("cpa_pnl_monthly")
+            .select("section,account_name,period_year,period_month,amount,is_subtotal")
+            .eq("agency_id", AGENCY_ID)
+            .eq("period_year", priorYr)
+            .eq("is_subtotal", false),
+          supabase.from("comp_recap")
+            .select("period_year,period_month,comp_category,amount,comp_type")
+            .eq("agency_id", AGENCY_ID)
+            .eq("comp_type", "smvc_renewal")
+            .gte("period_year", priorYr),
+        ]);
+
+        const pnlCur   = pnlCurRes2.data   || [];
+        const pnlPrior = pnlPriorRes2.data || [];
+
+        // Current year cpa_pnl_monthly is at period_month=13 (YTD); prior year is monthly 1..12
+        const curIsYTD = pnlCur.some(r => r.period_month === 13);
+        const curIncomeRows  = curIsYTD ? pnlCur.filter(r => r.period_month === 13 && r.section === "Income")
+                                        : pnlCur.filter(r => r.section === "Income" && r.period_month <= curMonth);
+        const curExpenseRows = curIsYTD ? pnlCur.filter(r => r.period_month === 13 && r.section === "Expenses")
+                                        : pnlCur.filter(r => r.section === "Expenses" && r.period_month <= curMonth);
+        const revenueYTD  = sum(curIncomeRows);
+        const expensesYTD = sum(curExpenseRows);
+        const netYTD      = revenueYTD - expensesYTD;
+
+        const priorRevSame = sum(pnlPrior.filter(r => r.section === "Income"   && r.period_month >= 1 && r.period_month <= priorEndMonth));
+        const priorExpSame = sum(pnlPrior.filter(r => r.section === "Expenses" && r.period_month >= 1 && r.period_month <= priorEndMonth));
+        const priorNetSame = priorRevSame - priorExpSame;
+        const yoyRevPct = priorRevSame > 0 ? ((revenueYTD - priorRevSame) / priorRevSame) * 100 : null;
+        const yoyNetPct = priorNetSame !== 0 ? ((netYTD - priorNetSame) / Math.abs(priorNetSame)) * 100 : null;
+
+        const payrollAccts = ["Payroll - Employee Wages","Payroll Taxes","Payroll Expenses","Officer Salary"];
+        const payrollYTD = sum(curExpenseRows.filter(r => payrollAccts.includes(r.account_name)));
+        const payrollRatioYTD = revenueYTD > 0 ? (payrollYTD / revenueYTD) * 100 : null;
+        const expenseRatioYTD = revenueYTD > 0 ? (expensesYTD / revenueYTD) * 100 : null;
+        const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const asOfLabel = pnlCur.find(r => r.notes)?.notes || `Jan 1 – ${monthNames[curMonth-1]} ${now.getDate()}, ${curYear}`;
+
+        // ── Build retention picture from comp_recap renewal rows ──
+        const renewalRows = renewalRes.data || [];
+        const lobs = ["auto_mutual","fire","florida_auto","life"];
+        const renewalByYM = {};
+        for (const r of renewalRows) {
+          const k = `${r.period_year}-${r.period_month}-${r.comp_category}`;
+          renewalByYM[k] = (renewalByYM[k] || 0) + parseFloat(r.amount || 0);
+        }
+        const rGet = (y, m, lob) => renewalByYM[`${y}-${m}-${lob}`] || 0;
+        const rMonthTotal = (y, m) => lobs.reduce((s, lob) => s + rGet(y, m, lob), 0);
+
+        const monthlyRenewal = [];
+        for (let i = 11; i >= 0; i--) {
+          const d = new Date(curYear, curMonth - 1 - i, 1);
+          const y = d.getFullYear(), m = d.getMonth() + 1;
+          const total = rMonthTotal(y, m);
+          const priorTotal = rMonthTotal(y - 1, m);
+          monthlyRenewal.push({
+            year: y, month: m, label: `${monthNames[m-1]} ${String(y).slice(2)}`,
+            total: Math.round(total),
+            amutl:   Math.round(rGet(y, m, "auto_mutual")),
+            fire:    Math.round(rGet(y, m, "fire")),
+            fl_auto: Math.round(rGet(y, m, "florida_auto")),
+            life:    Math.round(rGet(y, m, "life")),
+            prior_total: Math.round(priorTotal),
+            yoy_pct: priorTotal > 0 ? ((total - priorTotal) / priorTotal) * 100 : null,
+          });
+        }
+
+        const renewalYTD = { total:0, amutl:0, fire:0, fl_auto:0, life:0,
+                             priorTotal:0, prior_amutl:0, prior_fire:0, prior_fl_auto:0, prior_life:0 };
+        for (let m = 1; m <= priorEndMonth; m++) {
+          renewalYTD.amutl       += rGet(curYear, m, "auto_mutual");
+          renewalYTD.fire        += rGet(curYear, m, "fire");
+          renewalYTD.fl_auto     += rGet(curYear, m, "florida_auto");
+          renewalYTD.life        += rGet(curYear, m, "life");
+          renewalYTD.prior_amutl += rGet(priorYr, m, "auto_mutual");
+          renewalYTD.prior_fire  += rGet(priorYr, m, "fire");
+          renewalYTD.prior_fl_auto += rGet(priorYr, m, "florida_auto");
+          renewalYTD.prior_life    += rGet(priorYr, m, "life");
+        }
+        renewalYTD.total      = renewalYTD.amutl + renewalYTD.fire + renewalYTD.fl_auto + renewalYTD.life;
+        renewalYTD.priorTotal = renewalYTD.prior_amutl + renewalYTD.prior_fire + renewalYTD.prior_fl_auto + renewalYTD.prior_life;
+        Object.keys(renewalYTD).forEach(k => { renewalYTD[k] = Math.round(renewalYTD[k]); });
+        const renewalYoYPct = renewalYTD.priorTotal > 0
+          ? ((renewalYTD.total - renewalYTD.priorTotal) / renewalYTD.priorTotal) * 100
+          : null;
+
+        const lastMonth = monthlyRenewal[monthlyRenewal.length - 1] || null;
 
         // Aggregate producer_activity_daily into per-producer scoreboard (last 7 days)
         const paDaily = producerActivityRes?.status === "fulfilled" ? (producerActivityRes.value?.data || []) : [];
@@ -829,9 +1031,26 @@ export default function Dashboard({ onNavigate = () => {} }) {
         setDashData({
           agency,
           summary: {
-            revenueMTD, expensesMTD,
-            netIncomeMTD: revenueMTD - expensesMTD,
-            revenueYTD,
+            revenueYTD:       Math.round(revenueYTD),
+            expensesYTD:      Math.round(expensesYTD),
+            netYTD:           Math.round(netYTD),
+            yoyRevenuePct:    yoyRevPct,
+            yoyNetPct:        yoyNetPct,
+            payrollRatioYTD,
+            expenseRatioYTD,
+            payrollYTD:       Math.round(payrollYTD),
+            priorRevSame:     Math.round(priorRevSame),
+            priorNetSame:     Math.round(priorNetSame),
+            asOfLabel,
+            priorEndMonth,
+          },
+          retention: {
+            ytdLabel:      asOfLabel,
+            priorYtdLabel: `Jan – ${monthNames[priorEndMonth-1]} ${priorYr}`,
+            ytd:           renewalYTD,
+            yoyPct:        renewalYoYPct,
+            monthly:       monthlyRenewal,
+            lastMonth,
           },
           aipp: (() => {
             const a = aippRes.status==="fulfilled" ? aippRes.value.data : null;
@@ -944,6 +1163,11 @@ export default function Dashboard({ onNavigate = () => {} }) {
       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14}}>
         <FinancialWidget data={dashData} onNavigate={onNavigate} />
         <AIPPWidget data={dashData} onNavigate={onNavigate} />
+      </div>
+
+      {/* Renewal Retention (full width) — the renewal book is the agency's foundation */}
+      <div style={{marginBottom:14}}>
+        <RetentionWidget data={dashData} onNavigate={onNavigate} />
       </div>
 
       {/* Second Row — Monthly Close + Alerts */}
