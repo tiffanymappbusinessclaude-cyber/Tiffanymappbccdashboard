@@ -893,9 +893,22 @@ export default function Dashboard({ onNavigate = () => {} }) {
         const rGet = (y, m, lob) => renewalByYM[`${y}-${m}-${lob}`] || 0;
         const rMonthTotal = (y, m) => lobs.reduce((s, lob) => s + rGet(y, m, lob), 0);
 
+        // Detect most-recent month with renewal data; end the 12-month series there
+        // so we don't show a $0 bar for the in-progress current month.
+        let lastClosedY = curYear, lastClosedM = curMonth - 1;
+        if (lastClosedM < 1) { lastClosedM = 12; lastClosedY = curYear - 1; }
+        // If even the (curMonth-1) row is empty (e.g. comp recap not yet processed),
+        // walk back until we find a month with data.
+        for (let k = 0; k < 6; k++) {
+          if (rMonthTotal(lastClosedY, lastClosedM) > 0) break;
+          lastClosedM -= 1;
+          if (lastClosedM < 1) { lastClosedM = 12; lastClosedY -= 1; }
+        }
+
         const monthlyRenewal = [];
+        const baseRef = new Date(lastClosedY, lastClosedM - 1, 1);
         for (let i = 11; i >= 0; i--) {
-          const d = new Date(curYear, curMonth - 1 - i, 1);
+          const d = new Date(baseRef.getFullYear(), baseRef.getMonth() - i, 1);
           const y = d.getFullYear(), m = d.getMonth() + 1;
           const total = rMonthTotal(y, m);
           const priorTotal = rMonthTotal(y - 1, m);
@@ -911,9 +924,11 @@ export default function Dashboard({ onNavigate = () => {} }) {
           });
         }
 
+        // Use lastClosedM as the YTD cutoff for renewal — gives an honest like-for-like comparison.
+        const renewalCutoffM = (lastClosedY === curYear) ? lastClosedM : priorEndMonth;
         const renewalYTD = { total:0, amutl:0, fire:0, fl_auto:0, life:0,
                              priorTotal:0, prior_amutl:0, prior_fire:0, prior_fl_auto:0, prior_life:0 };
-        for (let m = 1; m <= priorEndMonth; m++) {
+        for (let m = 1; m <= renewalCutoffM; m++) {
           renewalYTD.amutl       += rGet(curYear, m, "auto_mutual");
           renewalYTD.fire        += rGet(curYear, m, "fire");
           renewalYTD.fl_auto     += rGet(curYear, m, "florida_auto");
