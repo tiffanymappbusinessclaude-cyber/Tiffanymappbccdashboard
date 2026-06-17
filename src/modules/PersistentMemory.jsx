@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSupabaseTable } from "../lib/hooks.js";
 import { supabase, AGENCY_ID } from "../lib/supabase.js";
 
 // ============================================================
@@ -554,7 +555,14 @@ const CategorySidebar = ({ categories, activeCategory, counts, onChange }) => (
 
 // ─── Main Module ──────────────────────────────────────────────
 export default function PersistentMemory() {
-  const [memories,        setMemories]        = useState(MOCK_MEMORY);
+  // Live-fetch from Supabase; fall back to MOCK_MEMORY only while loading
+  const { data: liveMemories, loading: memoryLoading } = useSupabaseTable(
+    "persistent_memory", AGENCY_ID, { orderBy: "updated_at", ascending: false }
+  );
+  const [memories,        setMemories]        = useState([]);
+  useEffect(() => {
+    if (Array.isArray(liveMemories)) setMemories(liveMemories);
+  }, [liveMemories]);
   const [activeCategory,  setActiveCategory]  = useState("all");
   const [editingItem,     setEditingItem]      = useState(null);
   const [showNewModal,    setShowNewModal]     = useState(false);
