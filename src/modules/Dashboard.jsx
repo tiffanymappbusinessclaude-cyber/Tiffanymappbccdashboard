@@ -568,7 +568,7 @@ const ProducerScoreboardWidget = ({ data, onNavigate }) => {
         <EmptyRow message="No producer activity yet — FrontRunner daily summaries auto-ingest at 10:30 AM ET." />
       ) : (
         <>
-          <div style={{display:"grid", gridTemplateColumns:"1.7fr 0.7fr 0.8fr 0.8fr 1fr 0.8fr 0.8fr", gap:6, fontSize:10, fontWeight:700, color:T.slate500, padding:"6px 8px", borderBottom:`1px solid ${T.slate200}`, textTransform:"uppercase", letterSpacing:0.4}}>
+          <div style={{display:"grid", gridTemplateColumns:"1.5fr 0.55fr 0.7fr 0.7fr 0.9fr 0.7fr 0.7fr 0.9fr", gap:6, fontSize:10, fontWeight:700, color:T.slate500, padding:"6px 8px", borderBottom:`1px solid ${T.slate200}`, textTransform:"uppercase", letterSpacing:0.4}}>
             <div>Producer</div>
             <div style={{textAlign:"right"}}>Hrs</div>
             <div style={{textAlign:"right"}}>Written</div>
@@ -576,6 +576,7 @@ const ProducerScoreboardWidget = ({ data, onNavigate }) => {
             <div style={{textAlign:"right"}}>Outbound</div>
             <div style={{textAlign:"right"}}>Quotes</div>
             <div style={{textAlign:"right"}}>FS Piv</div>
+            <div style={{textAlign:"right"}} title="Renewal touches / retained / lost">Renewals</div>
           </div>
           {rows.map((r, i) => {
             const hrs = (parseFloat(r?.hours) || 0).toFixed(1);
@@ -584,11 +585,14 @@ const ProducerScoreboardWidget = ({ data, onNavigate }) => {
             const outbound = parseInt(r?.outbound) || 0;
             const quotes = parseInt(r?.auto_quotes) || 0;
             const piv = parseInt(r?.fs_pivots) || 0;
+            const renTouch = parseInt(r?.renewal_touches) || 0;
+            const renRet = parseInt(r?.renewals_retained) || 0;
+            const renLost = parseInt(r?.renewals_lost) || 0;
             const expectedHrs = (days || 0) * 8;
             const isLow = days >= 3 && (parseFloat(r?.hours) || 0) < expectedHrs * 0.5;
             const isStar = issued >= 2 || written >= 5;
             return (
-              <div key={i} style={{display:"grid", gridTemplateColumns:"1.7fr 0.7fr 0.8fr 0.8fr 1fr 0.8fr 0.8fr", gap:6, fontSize:11, padding:"8px", borderBottom:`1px solid ${T.slate100}`, alignItems:"center", background: isStar ? `${T.green}10` : isLow ? `${T.red}10` : "transparent"}}>
+              <div key={i} style={{display:"grid", gridTemplateColumns:"1.5fr 0.55fr 0.7fr 0.7fr 0.9fr 0.7fr 0.7fr 0.9fr", gap:6, fontSize:11, padding:"8px", borderBottom:`1px solid ${T.slate100}`, alignItems:"center", background: isStar ? `${T.green}10` : isLow ? `${T.red}10` : "transparent"}}>
                 <div style={{fontWeight:600, color:T.slate800}}>
                   {r?.producer_name || "—"} {isStar ? "⭐" : ""}{isLow ? " ⚠️" : ""}
                 </div>
@@ -598,10 +602,23 @@ const ProducerScoreboardWidget = ({ data, onNavigate }) => {
                 <div style={{textAlign:"right", color:T.slate700}}>{outbound}</div>
                 <div style={{textAlign:"right", color:T.slate700}}>{quotes}</div>
                 <div style={{textAlign:"right", color:T.slate700}}>{piv}</div>
+                <div style={{textAlign:"right", fontSize:10, color: renTouch>0 ? T.slate700 : T.slate400}}>
+                  {renTouch>0 ? (
+                    <span title={`${renTouch} touches · ${renRet} retained · ${renLost} lost`}>
+                      <strong style={{color: T.navy}}>{renTouch}</strong>
+                      {(renRet>0 || renLost>0) ? (
+                        <span style={{marginLeft:2, color: T.slate500}}>
+                          <span style={{color:T.green}}>+{renRet}</span>
+                          {renLost>0 ? <span style={{color:T.red, marginLeft:1}}>/-{renLost}</span> : null}
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : "—"}
+                </div>
               </div>
             );
           })}
-          <div style={{display:"grid", gridTemplateColumns:"1.7fr 0.7fr 0.8fr 0.8fr 1fr 0.8fr 0.8fr", gap:6, fontSize:11, padding:"10px 8px", borderTop:`2px solid ${T.slate300}`, fontWeight:800, color:T.navy, background:T.slate50}}>
+          <div style={{display:"grid", gridTemplateColumns:"1.5fr 0.55fr 0.7fr 0.7fr 0.9fr 0.7fr 0.7fr 0.9fr", gap:6, fontSize:11, padding:"10px 8px", borderTop:`2px solid ${T.slate300}`, fontWeight:800, color:T.navy, background:T.slate50}}>
             <div>TEAM TOTAL</div>
             <div style={{textAlign:"right"}}>{(parseFloat(totals?.hours)||0).toFixed(1)}</div>
             <div style={{textAlign:"right"}}>{parseInt(totals?.written)||0}</div>
@@ -609,6 +626,15 @@ const ProducerScoreboardWidget = ({ data, onNavigate }) => {
             <div style={{textAlign:"right"}}>{parseInt(totals?.outbound)||0}</div>
             <div style={{textAlign:"right"}}>{parseInt(totals?.auto_quotes)||0}</div>
             <div style={{textAlign:"right"}}>{parseInt(totals?.fs_pivots)||0}</div>
+            <div style={{textAlign:"right"}} title="Touches / retained / lost">
+              <strong>{parseInt(totals?.renewal_touches)||0}</strong>
+              {((parseInt(totals?.renewals_retained)||0) > 0 || (parseInt(totals?.renewals_lost)||0) > 0) ? (
+                <span style={{fontSize:9, marginLeft:3, fontWeight:600}}>
+                  <span style={{color:T.green}}>+{parseInt(totals?.renewals_retained)||0}</span>
+                  {(parseInt(totals?.renewals_lost)||0) > 0 ? <span style={{color:T.red}}>/-{parseInt(totals?.renewals_lost)||0}</span> : null}
+                </span>
+              ) : null}
+            </div>
           </div>
           <div style={{padding:"10px 8px 0", fontSize:10, color:T.slate500, display:"flex", justifyContent:"space-between"}}>
             <span>Outbound → Issued conversion: <strong style={{color:T.slate700}}>{conv}%</strong></span>
@@ -802,7 +828,7 @@ export default function Dashboard({ onNavigate = () => {} }) {
           supabase.from("documents").select("*").order("created_at",{ascending:false}).limit(20),
           supabase.from("monthly_close_checklist").select("*").order("period_year",{ascending:false}).order("period_month",{ascending:false}).limit(60),
           supabase.from("producer_activity_daily")
-            .select("producer_name,activity_date,hours,written_sales,issued_sales,outbound_calls,auto_quotes,fs_pivots,inbound_calls")
+            .select("producer_name,activity_date,hours,written_sales,issued_sales,outbound_calls,auto_quotes,fs_pivots,inbound_calls,renewal_touches,renewals_retained,renewals_lost")
             .gte("activity_date", new Date(Date.now() - 7*24*60*60*1000).toISOString().slice(0,10))
             .order("activity_date",{ascending:false}),
           supabase.from("comp_recap")
@@ -955,15 +981,18 @@ export default function Dashboard({ onNavigate = () => {} }) {
           if (!earliestDate || r.activity_date < earliestDate) earliestDate = r.activity_date;
           if (!latestDate   || r.activity_date > latestDate)   latestDate   = r.activity_date;
           const k = r.producer_name || "Unknown";
-          if (!byProducer[k]) byProducer[k] = { producer_name:k, hours:0, written:0, issued:0, outbound:0, auto_quotes:0, fs_pivots:0, inbound:0 };
+          if (!byProducer[k]) byProducer[k] = { producer_name:k, hours:0, written:0, issued:0, outbound:0, auto_quotes:0, fs_pivots:0, inbound:0, renewal_touches:0, renewals_retained:0, renewals_lost:0 };
           const acc = byProducer[k];
-          acc.hours       += parseFloat(r.hours) || 0;
-          acc.written     += parseInt(r.written_sales) || 0;
-          acc.issued      += parseInt(r.issued_sales) || 0;
-          acc.outbound    += parseInt(r.outbound_calls) || 0;
-          acc.auto_quotes += parseInt(r.auto_quotes) || 0;
-          acc.fs_pivots   += parseInt(r.fs_pivots) || 0;
-          acc.inbound     += parseInt(r.inbound_calls) || 0;
+          acc.hours              += parseFloat(r.hours) || 0;
+          acc.written            += parseInt(r.written_sales) || 0;
+          acc.issued             += parseInt(r.issued_sales) || 0;
+          acc.outbound           += parseInt(r.outbound_calls) || 0;
+          acc.auto_quotes        += parseInt(r.auto_quotes) || 0;
+          acc.fs_pivots          += parseInt(r.fs_pivots) || 0;
+          acc.inbound            += parseInt(r.inbound_calls) || 0;
+          acc.renewal_touches    += parseInt(r.renewal_touches) || 0;
+          acc.renewals_retained  += parseInt(r.renewals_retained) || 0;
+          acc.renewals_lost      += parseInt(r.renewals_lost) || 0;
         }
         const scoreboardRows = Object.values(byProducer).sort((a,b) =>
           (b.issued - a.issued) || (b.written - a.written) || (b.outbound - a.outbound) || a.producer_name.localeCompare(b.producer_name)
@@ -971,7 +1000,8 @@ export default function Dashboard({ onNavigate = () => {} }) {
         const scoreboardTotals = scoreboardRows.reduce((t,r) => ({
           hours: t.hours + r.hours, written: t.written + r.written, issued: t.issued + r.issued,
           outbound: t.outbound + r.outbound, auto_quotes: t.auto_quotes + r.auto_quotes, fs_pivots: t.fs_pivots + r.fs_pivots, inbound: t.inbound + r.inbound,
-        }), {hours:0, written:0, issued:0, outbound:0, auto_quotes:0, fs_pivots:0, inbound:0});
+          renewal_touches: t.renewal_touches + r.renewal_touches, renewals_retained: t.renewals_retained + r.renewals_retained, renewals_lost: t.renewals_lost + r.renewals_lost,
+        }), {hours:0, written:0, issued:0, outbound:0, auto_quotes:0, fs_pivots:0, inbound:0, renewal_touches:0, renewals_retained:0, renewals_lost:0});
         const uniqueDays = new Set(paDaily.map(r => r.activity_date)).size;
 
         // ── Q3 2026 progress: join goals + producer_activity_daily (Q3 dates only) ──
