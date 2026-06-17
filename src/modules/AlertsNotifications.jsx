@@ -642,10 +642,12 @@ const NotificationPrefs = () => {
 export default function AlertsNotifications({ onNavigate }) {
   const [section, setSection] = useState("overview");
   const { data: liveAlerts, loading: alertsLoading } = useSupabaseTable("alerts", AGENCY_ID, { orderBy: "created_at", ascending: false });
-  const useMockData = import.meta.env.VITE_USE_MOCK_DATA !== "false";
-  const [alerts, setAlerts] = useState(useMockData ? MOCK_ALERTS : []);
+  const [alerts, setAlerts] = useState([]);
   useEffect(() => {
-    if (liveAlerts && liveAlerts.length > 0) setAlerts(liveAlerts);
+    if (Array.isArray(liveAlerts)) setAlerts(liveAlerts);
+  }, [liveAlerts]);
+  useEffect(() => {
+    if (Array.isArray(liveAlerts)) setAlerts(liveAlerts);
   }, [liveAlerts]);
 
   const markRead    = (id) => setAlerts(p => p.map(a => a.id===id ? {...a, is_read:true} : a));
