@@ -685,11 +685,10 @@ export default function TasksGoals({ onNavigate }) {
   const [section,  setSection]  = useState("overview");
   const { data: liveTasks, loading: tasksLoading } = useSupabaseTable("tasks", AGENCY_ID, { orderBy: "due_date", ascending: true });
   const { data: liveGoals, loading: goalsLoading } = useSupabaseTable("goals", AGENCY_ID, { orderBy: "target_date", ascending: true });
-  const useMockData = import.meta.env.VITE_USE_MOCK_DATA !== "false";
 
-  const [tasks, setTasks] = useState(useMockData ? MOCK_TASKS : []);
+  const [tasks, setTasks] = useState([]);
   useEffect(() => {
-    if (liveTasks && liveTasks.length > 0) {
+    if (Array.isArray(liveTasks)) {
       // Alias schema fields so existing render code (task.module, task.due_date, etc.) keeps working
       setTasks(liveTasks.map(t => ({
         ...t,
@@ -700,9 +699,7 @@ export default function TasksGoals({ onNavigate }) {
     }
   }, [liveTasks]);
 
-  const goals = (liveGoals && liveGoals.length > 0)
-    ? liveGoals
-    : useMockData ? MOCK_GOALS : [];
+  const goals = Array.isArray(liveGoals) ? liveGoals : [];
 
   if (tasksLoading || goalsLoading) return <div style={{padding:40,textAlign:"center",fontSize:13,color:"#64748B"}}>Loading tasks and goals…</div>;
   if (tasks.length === 0 && goals.length === 0) return <EmptyState module="tasks" />;
