@@ -91,6 +91,63 @@ const FinancialWidget = ({ data, onNavigate }) => {
 };
 
 
+
+// ── Widget: Retention Touches This Week (compact tile for Row 1) ──
+const RetentionWeekTile = ({ data, onNavigate }) => {
+  const w = data?.retentionWeek || null;
+  // Q3 weekly team target = 25 (325 / 13 weeks)
+  const WEEKLY_TARGET = 25;
+  const touches = w?.touches ?? 0;
+  const retained = w?.retained ?? 0;
+  const lost = w?.lost ?? 0;
+  const startLabel = w?.startLabel || "";
+  const isPreQ3 = w?.isPreQ3 || false;
+  const pctOfTarget = WEEKLY_TARGET > 0 ? Math.round((touches / WEEKLY_TARGET) * 100) : 0;
+  const targetColor = touches >= WEEKLY_TARGET ? T.green
+                    : touches >= WEEKLY_TARGET * 0.6 ? T.amber
+                    : touches > 0 ? T.red
+                    : T.slate400;
+
+  return (
+    <Card>
+      <SectionTitle icon="🔄" title="Renewals This Week"
+        action={<button onClick={()=>onNavigate("financials")} style={{fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>Protocol →</button>}
+      />
+      <div style={{fontSize:10, color:T.slate500, marginBottom:8}}>
+        {isPreQ3 ? <>Week of {startLabel} · <span style={{color:T.amber, fontWeight:600}}>Pre-Q3 build</span></> : <>Week of {startLabel}</>}
+      </div>
+
+      {/* Big stat */}
+      <div style={{padding:"14px 12px", borderRadius:8, border:`1px solid ${targetColor}30`, background:`${targetColor}08`, marginBottom:10}}>
+        <div style={{display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:4}}>
+          <div style={{fontSize:32, fontWeight:800, color:targetColor, letterSpacing:"-0.03em"}}>{touches}</div>
+          <div style={{fontSize:11, color:T.slate500}}>of {WEEKLY_TARGET} target</div>
+        </div>
+        <ProgressBar value={touches} max={WEEKLY_TARGET} color={targetColor} height={6} />
+        <div style={{fontSize:10, color:T.slate500, marginTop:6}}>{pctOfTarget}% of weekly goal</div>
+      </div>
+
+      {/* Outcomes row */}
+      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
+        <div style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate200}`, background:T.white}}>
+          <div style={{fontSize:10, color:T.slate500, fontWeight:600}}>Retained</div>
+          <div style={{fontSize:18, fontWeight:800, color: retained > 0 ? T.green : T.slate400, marginTop:2}}>{retained}</div>
+        </div>
+        <div style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate200}`, background:T.white}}>
+          <div style={{fontSize:10, color:T.slate500, fontWeight:600}}>Lost</div>
+          <div style={{fontSize:18, fontWeight:800, color: lost > 0 ? T.red : T.slate400, marginTop:2}}>{lost}</div>
+        </div>
+      </div>
+
+      {isPreQ3 && touches === 0 && (
+        <div style={{marginTop:10, padding:"8px 10px", background:`${T.amber}10`, borderRadius:6, borderLeft:`3px solid ${T.amber}`, fontSize:10, color:T.slate700, lineHeight:1.4}}>
+          Program kickoff: Monday team walkthrough. Patti owns the workflow.
+        </div>
+      )}
+    </Card>
+  );
+};
+
 // ── Widget: Renewal Retention (renewal commission MoM + YoY) ──
 // The renewal book is ~6.5x larger than new business; renewal commission
 // is the agency's foundation. This widget surfaces MoM trend, last-month
@@ -791,11 +848,108 @@ const Q3ProgressWidget = ({ data, onNavigate }) => {
           </div>
         </>
       )}
-    </Card>
+    
+</Card>
   );
 };
 
 // ── Main Dashboard Component ───────────────────────────────────
+// ── Widget: Q3 2026 Retention Progress ────────────────────────
+// Mirror of Q3ProgressWidget pattern but for the retention goals
+// added 2026-06-17. Shows team touches vs target, AMUTL commission
+// outcome, and per-producer touch progress.
+const Q3RetentionWidget = ({ data, onNavigate }) => {
+  const r = data?.q3Retention || null;
+  if (!r) return null;
+  const teamTarget = r.teamTarget || 325;
+  const teamPct = teamTarget > 0 ? Math.round((r.teamTouches / teamTarget) * 100) : 0;
+  const commPct = r.amutlCommissionTarget > 0 ? Math.round((r.amutlCommissionQ3 / r.amutlCommissionTarget) * 100) : 0;
+  const fmtMoney = v => `$${Math.round(v).toLocaleString()}`;
+  const color = (p) => p >= 80 ? T.green : p >= 40 ? T.amber : T.red;
+
+  const producerRows = Object.entries(r.byProducer || {})
+    .map(([name, p]) => ({
+      name, ...p,
+      target: r.perProducerTargets?.[name] || null,
+    }))
+    .sort((a,b) => b.touches - a.touches);
+
+  return (
+    <Card>
+      <SectionTitle
+        icon="🔄"
+        title="Q3 2026 Retention Progress"
+        action={<button onClick={()=>onNavigate("financials")} style={{fontSize:11, color:T.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600}}>View Comp →</button>}
+      />
+      <div style={{fontSize:10, color:T.slate500, marginBottom:14}}>
+        AMUTL retention touches + commission outcome · Jul 1 – Sep 30, 2026
+        {r.isPreQ3 ? <span style={{color:T.amber, fontWeight:600, marginLeft:6}}>· Pre-Q3 build window</span> : null}
+      </div>
+
+      {/* Team touches headline */}
+      <div style={{padding:"10px 12px", borderRadius:8, border:`1px solid ${T.slate200}`, background:T.slate50, marginBottom:10}}>
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:4}}>
+          <div style={{fontSize:11, fontWeight:600, color:T.slate600}}>Team Renewal Touches</div>
+          <div style={{fontSize:12, fontWeight:700, color:T.slate900}}>{r.teamTouches} / {teamTarget}</div>
+        </div>
+        <ProgressBar value={r.teamTouches} max={teamTarget} color={color(teamPct)} height={6} />
+        <div style={{fontSize:10, color:T.slate500, marginTop:4, display:"flex", justifyContent:"space-between"}}>
+          <span>{teamPct}% of Q3 target</span>
+          <span>
+            <span style={{color:T.green}}>+{r.teamRetained} retained</span>
+            {r.teamLost > 0 ? <span style={{color:T.red, marginLeft:6}}>-{r.teamLost} lost</span> : null}
+          </span>
+        </div>
+      </div>
+
+      {/* AMUTL commission outcome */}
+      <div style={{padding:"10px 12px", borderRadius:8, border:`1px solid ${color(commPct)}30`, background:`${color(commPct)}08`, marginBottom:14}}>
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:4}}>
+          <div style={{fontSize:11, fontWeight:600, color:T.slate600}}>AMUTL Renewal Commission Q3 (outcome)</div>
+          <div style={{fontSize:12, fontWeight:700, color:T.slate900}}>{fmtMoney(r.amutlCommissionQ3)} / {fmtMoney(r.amutlCommissionTarget)}</div>
+        </div>
+        <ProgressBar value={r.amutlCommissionQ3} max={r.amutlCommissionTarget} color={color(commPct)} height={6} />
+        <div style={{fontSize:10, color:T.slate500, marginTop:4}}>
+          {commPct}% of $90K stabilization target · 2025 Q3 actual: $89,742
+        </div>
+      </div>
+
+      {/* Per-producer touch progress */}
+      {producerRows.length > 0 ? (
+        <div>
+          <div style={{fontSize:10, fontWeight:700, color:T.slate500, marginBottom:6, textTransform:"uppercase", letterSpacing:0.4}}>Per-producer Q3 touches</div>
+          <div style={{display:"flex", flexDirection:"column", gap:6}}>
+            {producerRows.map(p => {
+              const tgt = p.target;
+              const pct = tgt ? Math.round((p.touches / tgt) * 100) : null;
+              return (
+                <div key={p.name} style={{display:"grid", gridTemplateColumns:"1.5fr 0.7fr 1.5fr 0.8fr", gap:8, fontSize:11, alignItems:"center"}}>
+                  <div style={{color:T.slate700, fontWeight:500}}>{p.name}</div>
+                  <div style={{textAlign:"right", color:T.slate900, fontWeight:600}}>
+                    {p.touches}{tgt ? <span style={{color:T.slate400, fontWeight:400}}> / {tgt}</span> : null}
+                  </div>
+                  <div>
+                    {tgt ? <ProgressBar value={p.touches} max={tgt} color={color(pct)} height={4} /> : <span style={{fontSize:9, color:T.slate400, fontStyle:"italic"}}>no individual target</span>}
+                  </div>
+                  <div style={{textAlign:"right", fontSize:10, color:T.slate500}}>
+                    {p.retained > 0 && <span style={{color:T.green}}>+{p.retained}</span>}
+                    {p.lost > 0 && <span style={{color:T.red, marginLeft:4}}>-{p.lost}</span>}
+                    {p.retained === 0 && p.lost === 0 && <span style={{color:T.slate400}}>—</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div style={{padding:"12px 14px", background:T.slate50, borderRadius:8, fontSize:11, color:T.slate600, borderLeft:`3px solid ${T.amber}`}}>
+          No retention touches logged yet for Q3. Program kicks off Monday — Patti owns the workflow. Once daily activity logging includes renewal_touches, this view populates.
+        </div>
+      )}
+    </Card>
+  );
+};
+
 export default function Dashboard({ onNavigate = () => {} }) {
   const [dashData, setDashData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -842,7 +996,7 @@ export default function Dashboard({ onNavigate = () => {} }) {
             .like("title","Q3 2026 %"),
           // Q3 producer_activity_daily — for live progress tracking once Q3 starts
           supabase.from("producer_activity_daily")
-            .select("producer_name,activity_date,fs_pivots")
+            .select("producer_name,activity_date,fs_pivots,renewal_touches,renewals_retained,renewals_lost")
             .gte("activity_date","2026-07-01")
             .lte("activity_date","2026-09-30"),
         ]);
@@ -1023,6 +1177,53 @@ export default function Dashboard({ onNavigate = () => {} }) {
         const Q3_END   = new Date("2026-09-30T23:59:59Z");
         const nowTs = new Date();
         const msPerDay = 24*60*60*1000;
+
+        // ── Current week retention (Mon-Sun) ──
+        const weekStart = new Date(nowTs);
+        const dow = (weekStart.getDay() + 6) % 7;  // make Mon=0
+        weekStart.setDate(weekStart.getDate() - dow);
+        weekStart.setHours(0,0,0,0);
+        const weekStartIso = weekStart.toISOString().slice(0,10);
+        const weekStartLabel = weekStart.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+
+        const { data: weekPa } = await supabase
+          .from("producer_activity_daily")
+          .select("renewal_touches,renewals_retained,renewals_lost")
+          .eq("agency_id", AGENCY_ID)
+          .gte("activity_date", weekStartIso);
+        const weekTouches  = (weekPa || []).reduce((s,r) => s + (parseInt(r?.renewal_touches) || 0), 0);
+        const weekRetained = (weekPa || []).reduce((s,r) => s + (parseInt(r?.renewals_retained) || 0), 0);
+        const weekLost     = (weekPa || []).reduce((s,r) => s + (parseInt(r?.renewals_lost) || 0), 0);
+
+        // ── Q3 retention sums for the Q3 progress widget ──
+        const q3PA = q3Activity || [];  // already fetched above with renewal_touches now
+        const q3RenewalByProducer = {};
+        let q3RenewalTeamTouches = 0, q3RenewalTeamRetained = 0, q3RenewalTeamLost = 0;
+        for (const r of q3PA) {
+          const k = r.producer_name || "Unknown";
+          const t = parseInt(r.renewal_touches) || 0;
+          const ret = parseInt(r.renewals_retained) || 0;
+          const lst = parseInt(r.renewals_lost) || 0;
+          if (!q3RenewalByProducer[k]) q3RenewalByProducer[k] = { touches:0, retained:0, lost:0 };
+          q3RenewalByProducer[k].touches += t;
+          q3RenewalByProducer[k].retained += ret;
+          q3RenewalByProducer[k].lost += lst;
+          q3RenewalTeamTouches += t;
+          q3RenewalTeamRetained += ret;
+          q3RenewalTeamLost += lst;
+        }
+
+        // ── Q3 AMUTL renewal commission (Jul-Sep 2026) for the outcome goal ──
+        const { data: q3CommData } = await supabase
+          .from("comp_recap")
+          .select("amount")
+          .eq("agency_id", AGENCY_ID)
+          .eq("comp_category", "auto_mutual")
+          .eq("comp_type", "smvc_renewal")
+          .eq("period_year", 2026)
+          .gte("period_month", 7)
+          .lte("period_month", 9);
+        const q3AmutlRenewalCommission = (q3CommData || []).reduce((s,r) => s + parseFloat(r?.amount || 0), 0);
         // Working days helper — count weekdays between two dates inclusive
         const workingDaysBetween = (start, end) => {
           let count = 0;
@@ -1097,6 +1298,39 @@ export default function Dashboard({ onNavigate = () => {} }) {
             monthly:       monthlyRenewal,
             lastMonth,
           },
+          retentionWeek: {
+            startLabel: weekStartLabel,
+            touches:    weekTouches,
+            retained:   weekRetained,
+            lost:       weekLost,
+            isPreQ3:    nowTs < Q3_START,
+          },
+          q3Retention: (() => {
+            // Build per-producer targets from goals that match "Q3 2026 — [Name] Renewal Touches"
+            const retentionGoals = (q3Goals || []).filter(g => /Renewal Touches/i.test(g.title));
+            const perProducerTargets = {};
+            let teamTarget = 325;  // fallback
+            retentionGoals.forEach(g => {
+              if (/Team Renewal Touches/i.test(g.title)) {
+                teamTarget = parseFloat(g.target_value) || teamTarget;
+              } else {
+                // Extract producer name: "Q3 2026 — {Name} Renewal Touches"
+                const m = g.title.match(/Q3 2026\s+[—-]\s+(.+?)\s+Renewal Touches/i);
+                if (m && m[1]) perProducerTargets[m[1].trim()] = parseFloat(g.target_value) || 0;
+              }
+            });
+            return {
+              byProducer:           q3RenewalByProducer,
+              teamTouches:          q3RenewalTeamTouches,
+              teamRetained:         q3RenewalTeamRetained,
+              teamLost:             q3RenewalTeamLost,
+              teamTarget,
+              perProducerTargets,
+              amutlCommissionQ3:    Math.round(q3AmutlRenewalCommission),
+              amutlCommissionTarget: 90000,
+              isPreQ3:              nowTs < Q3_START,
+            };
+          })(),
           aipp: (() => {
             const a = aippRes.status==="fulfilled" ? aippRes.value.data : null;
             const elig = aippEligRes?.status==="fulfilled" ? (aippEligRes.value?.data || []) : [];
@@ -1204,10 +1438,11 @@ export default function Dashboard({ onNavigate = () => {} }) {
         <div style={{fontSize:12, color:T.slate500, marginTop:4}}>{today}</div>
       </div>
 
-      {/* Top Row — Financial + AIPP */}
-      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14}}>
+      {/* Top Row — Financial + AIPP + Renewals This Week */}
+      <div style={{display:"grid", gridTemplateColumns:"1.2fr 1.2fr 1fr", gap:14, marginBottom:14}}>
         <FinancialWidget data={dashData} onNavigate={onNavigate} />
         <AIPPWidget data={dashData} onNavigate={onNavigate} />
+        <RetentionWeekTile data={dashData} onNavigate={onNavigate} />
       </div>
 
       {/* Renewal Retention (full width) — the renewal book is the agency's foundation */}
@@ -1235,6 +1470,11 @@ export default function Dashboard({ onNavigate = () => {} }) {
       {/* Fifth Row — Q3 2026 Progress (full width) */}
       <div style={{marginBottom:14}}>
         <Q3ProgressWidget data={dashData} onNavigate={onNavigate} />
+      </div>
+
+      {/* Sixth Row — Q3 2026 Retention Progress (full width) */}
+      <div style={{marginBottom:14}}>
+        <Q3RetentionWidget data={dashData} onNavigate={onNavigate} />
       </div>
 
       {/* Bottom Row — Open Items (full width) */}
