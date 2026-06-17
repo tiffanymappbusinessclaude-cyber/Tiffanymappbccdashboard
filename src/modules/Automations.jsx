@@ -715,16 +715,13 @@ export default function Automations() {
   const [section, setSection] = useState("overview");
   const { data: liveRecipes, loading: recipesLoading } = useSupabaseTable("automation_recipes", AGENCY_ID, { orderBy: "created_at", ascending: false });
   const { data: liveRunLog }   = useSupabaseTable("automation_run_log", AGENCY_ID, { orderBy: "run_at", ascending: false });
-  const useMockData = import.meta.env.VITE_USE_MOCK_DATA !== "false";
 
-  const [recipes, setRecipes] = useState(useMockData ? MOCK_RECIPES : []);
+  const [recipes, setRecipes] = useState([]);
   useEffect(() => {
-    if (liveRecipes && liveRecipes.length > 0) setRecipes(liveRecipes);
+    if (Array.isArray(liveRecipes)) setRecipes(liveRecipes);
   }, [liveRecipes]);
 
-  const runLog = (liveRunLog && liveRunLog.length > 0)
-    ? liveRunLog
-    : useMockData ? MOCK_RUN_LOG : [];
+  const runLog = Array.isArray(liveRunLog) ? liveRunLog : [];
 
   // ── Live connections from settings table ─────────────────────
   const [connections, setConnections] = useState([]);
