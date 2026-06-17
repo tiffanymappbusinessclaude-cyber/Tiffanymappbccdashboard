@@ -796,10 +796,7 @@ const UploadSection = () => {
 export default function Documents() {
   const [section, setSection] = useState("overview");
   const { data: liveDocs, loading: docsLoading } = useSupabaseTable("documents", AGENCY_ID, { orderBy: "uploaded_at", ascending: false });
-  const useMockData = import.meta.env.VITE_USE_MOCK_DATA !== "false";
-  const documents = (liveDocs && liveDocs.length > 0)
-    ? liveDocs
-    : useMockData ? MOCK_DOCUMENTS : [];
+  const documents = Array.isArray(liveDocs) ? liveDocs : [];
 
   const sections = [
     { id:"overview", label:"Overview"   },
