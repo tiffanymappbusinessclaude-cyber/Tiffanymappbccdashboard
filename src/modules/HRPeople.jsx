@@ -68,197 +68,10 @@ const STAGES = {
   rejected:  { label:"Rejected",   color:T.red,      bg:T.redLt,   order:5 },
 };
 
-// ─── Mock Data ────────────────────────────────────────────────
-const MOCK_APPLICANTS = [
-  {
-    id:"ap1", first_name:"Jamie",  last_name:"Chen",
-    email:"jamie.chen@email.com", phone:"(312) 555-0142",
-    position:"Licensed Sales Agent",
-    status:"interview", source:"email_auto",
-    claude_score:8,
-    claude_summary:"Strong candidate with 3 years P&C experience at Allstate. Currently licensed in IL. Demonstrated production record of 85 new policies/month. Clean background. Minor concern: reason for leaving current role unclear.",
-    interview_focus:`ONE PAGE INTERVIEW FOCUS — Jamie Chen
 
-STRENGTHS TO EXPLORE:
-1. P&C production record at Allstate — ask for specific monthly new business numbers and what drove them
-2. IL license status — verify current, in good standing, ask about plans to add WI/IN
-3. Customer retention approach — 3 years at same agency suggests loyalty; understand philosophy
 
-CONCERNS TO PROBE:
-1. Reason for leaving Allstate — current role ended abruptly per resume gap; ask directly and assess answer
-2. Experience with life insurance — P&C heavy background; assess openness to cross-selling
-3. Salary expectations vs. commission structure — candidate may expect base salary
 
-SUGGESTED QUESTIONS:
-1. Walk me through your average month at Allstate — how many new policies, what product mix?
-2. What made you decide to leave your last agency, and what are you looking for in your next role?
-3. How do you approach customers who have coverage gaps they haven't asked about?
-4. Have you sold life insurance before? What's your comfort level with that conversation?
-5. Where do you see yourself in 2 years — still in sales, or are you interested in eventually running your own agency?
 
-RED FLAGS: Resume gap Apr-Aug 2025 unexplained. Probe during interview.
-LICENSING: IL P&C license verified active. Life license — confirm status.`,
-    intake_received_at:"Apr 26, 2026",
-    interview_date:"Apr 29, 2026",
-    interview_notes:"Phone screen completed Apr 27. Strong communication skills. Scheduled in-person for Apr 29.",
-    rating:null,
-  },
-  {
-    id:"ap2", first_name:"Derek",  last_name:"Washington",
-    email:"derek.w@email.com", phone:"(630) 555-0188",
-    position:"Office Manager",
-    status:"screening", source:"email_auto",
-    claude_score:7,
-    claude_summary:"Experienced office manager, 5 years in financial services operations. Not licensed — applying for unlicensed role. Strong organizational and systems background. Good cultural fit indicators.",
-    interview_focus:`ONE PAGE INTERVIEW FOCUS — Derek Washington
-
-STRENGTHS TO EXPLORE:
-1. Financial services operations background — directly relevant to agency management
-2. Systems experience — ask about CRM, scheduling, and workflow tools used
-3. 5 years tenure at prior employer — signals loyalty and stability
-
-CONCERNS TO PROBE:
-1. No insurance industry experience specifically — assess learning curve appetite
-2. Salary expectations — office manager roles have a wide range; align early
-3. Comfort with high-volume customer interaction — financial services may be less client-facing
-
-SUGGESTED QUESTIONS:
-1. Describe a typical day managing operations at your last firm — what were your top 3 responsibilities?
-2. What systems and tools do you use to stay organized across multiple priorities?
-3. Have you ever supported a licensed professional team? How did you handle questions you couldn't answer?
-4. What's your ideal work environment — autonomous or highly collaborative?
-5. What attracted you specifically to an insurance agency vs. other financial services roles?`,
-    intake_received_at:"Apr 24, 2026",
-    interview_date:null,
-    interview_notes:null,
-    rating:null,
-  },
-  {
-    id:"ap3", first_name:"Maria",  last_name:"Santos",
-    email:"m.santos@email.com", phone:"(773) 555-0211",
-    position:"Licensed Sales Agent",
-    status:"new", source:"email_auto",
-    claude_score:6,
-    claude_summary:"Recent licensing school graduate, no prior sales experience. IL P&C license new. Enthusiastic cover letter. Will require significant training investment. Score reflects potential over experience.",
-    interview_focus:null,
-    intake_received_at:"Today, Apr 27",
-    interview_date:null,
-    interview_notes:null,
-    rating:null,
-  },
-  {
-    id:"ap4", first_name:"Kevin",  last_name:"Park",
-    email:"k.park@email.com", phone:"(847) 555-0094",
-    position:"Licensed Sales Agent",
-    status:"offer", source:"referral",
-    claude_score:9,
-    claude_summary:"Exceptional candidate. 7 years State Farm experience at another agency, relocated to Chicago area. All lines licensed IL, WI, IN. Strong AIPP production history. Reference from prior agent provided.",
-    interview_focus:null,
-    intake_received_at:"Apr 18, 2026",
-    interview_date:"Apr 22, 2026",
-    interview_notes:"Excellent interview. Knows SF systems cold. Start date flexible. Salary ask is $58K base + commission. Offer being prepared.",
-    rating:5,
-  },
-  {
-    id:"ap5", first_name:"Tanya",  last_name:"Brooks",
-    email:"t.brooks@email.com", phone:"(312) 555-0317",
-    position:"Licensed Sales Agent",
-    status:"rejected", source:"email_auto",
-    claude_score:4,
-    claude_summary:"Limited insurance experience. License lapsed 2 years ago — would require retesting. Cover letter indicated interest in office admin, not sales. Mismatch with role requirements.",
-    interview_focus:null,
-    intake_received_at:"Apr 19, 2026",
-    interview_date:null,
-    interview_notes:"Reviewed profile — not a fit for current opening. License lapsed.",
-    rating:null,
-  },
-];
-
-const MOCK_STAFF = [
-  {
-    id:"s1", first_name:"Marcus", last_name:"Thompson",
-    role:"Licensed Sales Agent", employment_type:"w2",
-    start_date:"Jan 15, 2022", is_active:true,
-    email:"marcus@smithagency.com", phone:"(312) 555-0182",
-    pay_type:"salary_plus_commission", pay_rate:52000,
-    licensed:true, license_states:["IL","WI"],
-    notes:"Top producer. Life license pending — scheduled exam May 2026.",
-    ytd_production:{ new_policies:68, retention_rate:91 },
-  },
-  {
-    id:"s2", first_name:"Priya", last_name:"Patel",
-    role:"Office Manager", employment_type:"w2",
-    start_date:"Mar 1, 2020", is_active:true,
-    email:"priya@smithagency.com", phone:"(312) 555-0183",
-    pay_type:"salary", pay_rate:42000,
-    licensed:false, license_states:[],
-    notes:"Handles all operations, billing, client service. Cannot perform licensed activities.",
-    ytd_production:null,
-  },
-  {
-    id:"s3", first_name:"Tyler", last_name:"Smith",
-    role:"Administrative Support", employment_type:"family",
-    start_date:"Jun 1, 2024", is_active:true,
-    email:"tyler@smithagency.com", phone:null,
-    pay_type:"hourly", pay_rate:18,
-    licensed:false, license_states:[],
-    notes:"Jane's son. Part-time 20hrs/wk. Below standard deduction — no FIT withheld. Flag for CPA at year-end W-2. Cannot perform licensed activities.",
-    ytd_production:null,
-    compliance_flag:"Family employee — review W-2 treatment with CPA annually",
-  },
-];
-
-const MOCK_ONBOARDING = [
-  {
-    staff_id:"s1", staff_name:"Marcus Thompson", start_date:"Jan 15, 2022",
-    template:"licensed", days_employed:834,
-    items:[
-      { category:"licensing",   item:"IL Producer License verified active",           completed:true,  due:"Day 1"   },
-      { category:"licensing",   item:"WI non-resident license verified active",        completed:true,  due:"Day 7"   },
-      { category:"documents",   item:"W-4 completed and filed",                        completed:true,  due:"Day 1"   },
-      { category:"documents",   item:"Direct deposit authorization on file",           completed:true,  due:"Day 1"   },
-      { category:"documents",   item:"I-9 employment eligibility verified",            completed:true,  due:"Day 3"   },
-      { category:"compliance",  item:"SF compliance and ethics training completed",    completed:true,  due:"Day 30"  },
-      { category:"compliance",  item:"Social media compliance training acknowledged",  completed:true,  due:"Day 14"  },
-      { category:"systems",     item:"Agency management system access granted",        completed:true,  due:"Day 1"   },
-      { category:"systems",     item:"SF systems training completed",                  completed:true,  due:"Day 30"  },
-      { category:"training",    item:"Product training — P&C lines",                  completed:true,  due:"Day 30"  },
-      { category:"training",    item:"Product training — Life insurance",              completed:false, due:"Day 60"  },
-      { category:"licensing",   item:"Life insurance license — exam scheduled",        completed:false, due:"May 2026"},
-    ],
-  },
-];
-
-const MOCK_PERFORMANCE = [
-  {
-    staff_id:"s1", staff_name:"Marcus Thompson", period:"April 2026",
-    metrics:[
-      { metric:"New Policies Written",    target:20, actual:18, unit:"count"      },
-      { metric:"Life Apps Submitted",     target:3,  actual:1,  unit:"count"      },
-      { metric:"Retention Rate",          target:88, actual:91, unit:"percentage" },
-      { metric:"Customer Satisfaction",   target:95, actual:94, unit:"percentage" },
-      { metric:"Revenue Contribution",    target:12000, actual:10800, unit:"dollars" },
-    ],
-  },
-];
-
-const MOCK_COMMISSIONS = [
-  {
-    id:"c1", staff_name:"Marcus Thompson", staff_id:"s1",
-    structure_name:"Standard Licensed Agent Commission",
-    effective_date:"Jan 2022",
-    commission_type:"tiered",
-    tiers:[
-      { min:0,    max:10000, rate:8   },
-      { min:10001,max:20000, rate:10  },
-      { min:20001,max:null,  rate:12  },
-    ],
-    qualifying_products:["auto","home","life","health"],
-    notes:"Commission paid monthly on new business production attributed to Marcus. Paid with regular payroll.",
-    ytd_earned:4200,
-    this_month:1080,
-  },
-];
 
 
 // ─── Producer ROI Hook ───────────────────────────────────────
@@ -729,12 +542,31 @@ const RecruitingPipeline = ({ applicants, onUpdate }) => {
 };
 
 // ─── Section: Staff Directory ─────────────────────────────────
-const StaffDirectory = ({ staff }) => {
+const StaffDirectory = ({ staff, loading = false }) => {
   const [expanded, setExpanded] = useState(null);
+  const activeStaff = (staff || []).filter(s => s.is_active);
+
+  if (loading) {
+    return (
+      <Card>
+        <div style={{ fontSize:13, color:T.slate500, textAlign:"center", padding:"24px 0" }}>Loading staff…</div>
+      </Card>
+    );
+  }
+  if (activeStaff.length === 0) {
+    return (
+      <Card>
+        <div style={{ fontSize:13, fontWeight:600, color:T.slate700, marginBottom:6 }}>No active staff loaded</div>
+        <div style={{ fontSize:11, color:T.slate500, lineHeight:1.6 }}>
+          Staff records will populate as payroll history is imported. Forward your ADP / payroll reports to populate this directory.
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-      {staff.filter(s => s.is_active).map(member => {
+      {activeStaff.map(member => {
         const isExpanded = expanded === member.id;
         return (
           <Card key={member.id} style={{ border:`1px solid ${isExpanded?T.blue:T.slate200}` }}>
@@ -807,6 +639,16 @@ const StaffDirectory = ({ staff }) => {
 
 // ─── Section: Onboarding ─────────────────────────────────────
 const OnboardingSection = ({ onboarding }) => {
+  if (!onboarding || onboarding.length === 0) {
+    return (
+      <Card>
+        <div style={{ fontSize:13, fontWeight:600, color:T.slate700, marginBottom:6 }}>Onboarding tracking pending</div>
+        <div style={{ fontSize:11, color:T.slate500, lineHeight:1.6 }}>
+          Onboarding records will appear here once the onboarding tracker schema is built. Configure templates per role (licensed agent, office manager, family employee) to track Day 1, Day 7, Day 30, and Day 60 milestones.
+        </div>
+      </Card>
+    );
+  }
   const categoryColors = {
     licensing:  { color:T.green,  bg:T.greenLt  },
     documents:  { color:T.blue,   bg:T.blueLt   },
@@ -1216,7 +1058,18 @@ const ProducerROICard = ({ producer, smvcRate, blendedRate, lapseRate }) => {
 
 
 // ─── Section: Commissions ─────────────────────────────────────
-const CommissionsSection = ({ commissions }) => (
+const CommissionsSection = ({ commissions }) => {
+  if (!commissions || commissions.length === 0) {
+    return (
+      <Card>
+        <div style={{ fontSize:13, fontWeight:600, color:T.slate700, marginBottom:6 }}>Commission structures pending</div>
+        <div style={{ fontSize:11, color:T.slate500, lineHeight:1.6 }}>
+          Per-producer commission tiers will appear here once defined. Provide your A005 SMVC and blended rates plus any producer-specific structures to populate this section.
+        </div>
+      </Card>
+    );
+  }
+  return (
   <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
     {commissions.map(c => (
       <Card key={c.id}>
@@ -1267,13 +1120,42 @@ const CommissionsSection = ({ commissions }) => (
       </Card>
     ))}
   </div>
-);
+  );
+};
 
 // ─── Main HR Module ───────────────────────────────────────────
 export default function HRPeople() {
   const { data: roi } = useProducerROI();
   const [section,     setSection]     = useState("overview");
-  const [applicants,  setApplicants]  = useState(MOCK_APPLICANTS);
+
+  // ── Live data from Supabase ──────────────────────────────────────
+  const [staff,       setStaff]       = useState([]);
+  const [staffLoading, setStaffLoading] = useState(true);
+  // Applicants / Onboarding / Commissions tables don't exist yet — empty until built
+  const [applicants,  setApplicants]  = useState([]);
+  const onboarding  = [];
+  const commissions = [];
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("staff")
+          .select("*")
+          .eq("agency_id", AGENCY_ID)
+          .order("last_name", { ascending: true });
+        if (cancelled) return;
+        if (error) console.error("staff load error:", error);
+        setStaff(data || []);
+      } catch (e) {
+        if (!cancelled) console.error("HR staff load error:", e);
+      } finally {
+        if (!cancelled) setStaffLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const updateApplicantStage = (id, newStatus) => {
     setApplicants(prev => prev.map(a => a.id === id ? {...a, status:newStatus} : a));
@@ -1288,6 +1170,9 @@ export default function HRPeople() {
     { id:"commissions", label:"Commissions" },
   ];
 
+  const activeStaffCount = staff.filter(s => s.is_active).length;
+  const activeApplicants = applicants.filter(a => !["hired","rejected"].includes(a.status)).length;
+
   return (
     <div>
       {/* Module Header */}
@@ -1295,7 +1180,7 @@ export default function HRPeople() {
         <div>
           <div style={{ fontSize:20, fontWeight:700, color:T.slate900, letterSpacing:"-0.02em" }}>HR & People</div>
           <div style={{ fontSize:12, color:T.slate500, marginTop:3 }}>
-            {MOCK_STAFF.filter(s=>s.is_active).length} active staff · {MOCK_APPLICANTS.filter(a=>!["hired","rejected"].includes(a.status)).length} applicants in pipeline · Resume scanner active
+            {staffLoading ? "Loading staff…" : `${activeStaffCount} active staff`} · {activeApplicants} applicants in pipeline
           </div>
         </div>
         <AskBtn context="Give me a complete HR review. How is my recruiting pipeline looking? Any compliance concerns with my current team? What HR actions should I take this week?" />
@@ -1311,12 +1196,12 @@ export default function HRPeople() {
       </div>
 
       {/* Section Content */}
-      {section === "overview"    && <HROverview        applicants={applicants} staff={MOCK_STAFF} onboarding={MOCK_ONBOARDING} />}
+      {section === "overview"    && <HROverview        applicants={applicants} staff={staff} onboarding={onboarding} />}
       {section === "recruiting"  && <RecruitingPipeline applicants={applicants} onUpdate={updateApplicantStage} />}
-      {section === "staff"       && <StaffDirectory     staff={MOCK_STAFF} />}
-      {section === "onboarding"  && <OnboardingSection  onboarding={MOCK_ONBOARDING} />}
+      {section === "staff"       && <StaffDirectory     staff={staff} loading={staffLoading} />}
+      {section === "onboarding"  && <OnboardingSection  onboarding={onboarding} />}
       {section === "performance" && <PerformanceSection  roi={roi} />}
-      {section === "commissions" && <CommissionsSection  commissions={MOCK_COMMISSIONS} />}
+      {section === "commissions" && <CommissionsSection  commissions={commissions} />}
     </div>
   );
 }
