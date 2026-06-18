@@ -279,7 +279,7 @@ const SocialOverview = ({ posts, analytics, loading }) => {
 <Card>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
             <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Today — Monday April 27</span>
-            <AskBtn size="small" context={`Today's social media posts:\n${todayPosts.map(p=>`${p.platform.toUpperCase()} at ${p.time}: "${p.caption}" — Status: ${p.status}${p.requires_manual?" (MANUAL POSTING REQUIRED)":""}`).join("\n")}\n\nHelp me review today's content for compliance and engagement quality. Check against the 80/20 rule and the pre-post checklist.`} />
+            <AskBtn size="small" context={`Today's social media posts:\n${todayPosts.map(p=>`${(p.platform || 'POST').toUpperCase()} at ${p.time}: "${p.caption}" — Status: ${p.status}${p.requires_manual?" (MANUAL POSTING REQUIRED)":""}`).join("\n")}\n\nHelp me review today's content for compliance and engagement quality. Check against the 80/20 rule and the pre-post checklist.`} />
           </div>
           {todayPosts.length === 0 ? (
             <div style={{ fontSize:12, color:T.slate400, textAlign:"center", padding:"20px 0" }}>No posts scheduled for today</div>
@@ -314,7 +314,7 @@ const SocialOverview = ({ posts, analytics, loading }) => {
                 <PlatformBadge platform={p.platform} />
                 <div style={{ display:"flex", gap:12 }}>
                   <span style={{ fontSize:10, color:T.slate500 }}>{p.posts} posts</span>
-                  <span style={{ fontSize:10, color:T.slate500 }}>{p.reach.toLocaleString()} reach</span>
+                  <span style={{ fontSize:10, color:T.slate500 }}>{(p.reach||0).toLocaleString()} reach</span>
                   <span style={{ fontSize:10, fontWeight:600, color:T.slate700 }}>{p.likes} ❤️</span>
                 </div>
               </div>
