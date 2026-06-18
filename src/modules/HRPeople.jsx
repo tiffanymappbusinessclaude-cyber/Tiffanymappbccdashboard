@@ -415,7 +415,7 @@ const HROverview = ({ applicants, staff, onboarding }) => {
               </div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:12, fontWeight:600, color:T.slate800 }}>{member.first_name} {member.last_name}</div>
-                <div style={{ fontSize:10, color:T.slate500 }}>{member.role} · {member.employment_type.toUpperCase()}</div>
+                <div style={{ fontSize:10, color:T.slate500 }}>{member.role || "Producer"} · {(member.employment_type || "").toUpperCase() || "—"}</div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3 }}>
                 {member.licensed
@@ -588,15 +588,15 @@ const StaffDirectory = ({ staff, loading = false }) => {
                   )}
                 </div>
                 <div style={{ fontSize:12, color:T.slate500 }}>
-                  {member.role} · {member.employment_type === "w2" ? "W-2 Employee" : member.employment_type === "family" ? "Family Employee (W-2)" : "1099 Contractor"} · Since {member.start_date}
+                  {member.role || "Producer"} · {member.employment_type === "w2" ? "W-2 Employee" : member.employment_type === "family" ? "Family Employee (W-2)" : member.employment_type === "1099" ? "1099 Contractor" : "Employment TBD"} · Since {member.start_date || "—"}
                 </div>
               </div>
 
               <div style={{ textAlign:"right", flexShrink:0 }}>
                 <div style={{ fontSize:13, fontWeight:700, color:T.slate900 }}>
-                  {member.pay_type === "hourly" ? `$${member.pay_rate}/hr` : `$${member.pay_rate.toLocaleString()}/yr`}
+                  {member.pay_rate == null ? "—" : member.pay_type === "hourly" ? `$${member.pay_rate}/hr` : `$${member.pay_rate.toLocaleString()}/yr`}
                 </div>
-                <div style={{ fontSize:10, color:T.slate400 }}>{member.pay_type.replace(/_/g," ")}</div>
+                <div style={{ fontSize:10, color:T.slate400 }}>{(member.pay_type || "").replace(/_/g," ") || "—"}</div>
               </div>
 
               <span style={{ color:T.slate400, fontSize:12 }}>{isExpanded?"▲":"▼"}</span>
