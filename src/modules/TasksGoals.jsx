@@ -176,11 +176,12 @@ const MOCK_GOALS = [
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────
-const pct = (curr, target) => Math.min(100, Math.round((curr / target) * 100));
+const pct = (curr, target) => { if (!target || curr == null) return 0; const p = Math.round((Number(curr) / Number(target)) * 100); return Number.isFinite(p) ? Math.min(100, p) : 0; };
 const fmt = (n, unit) => {
-  if (unit === "dollars") return "$" + n.toLocaleString();
+  if (n == null || Number.isNaN(n)) return "—";
+  if (unit === "dollars") return "$" + Number(n).toLocaleString();
   if (unit === "percentage") return n + "%";
-  return n.toString();
+  return String(n);
 };
 const isOverdue = (due) => {
   const dueDate = new Date(due + ", 2026");
