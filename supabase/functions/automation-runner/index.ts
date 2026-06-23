@@ -362,6 +362,72 @@ async function executeRecipe(
       };
     }
 
+    // --- EDGE_FUNCTION recipe branch ---
+    // composio_action like "EDGE_FUNCTION:drive-archiver" → POST to the named
+    // Supabase Edge Function. The edge function is expected to self-log to
+    // automation_run_log (so the runner does NOT write a second row), and to
+    // handle its own Composio calls. The runner just dispatches and bubbles
+    // the outcome upstream.
+    if (recipe.composio_action?.startsWith("EDGE_FUNCTION:")) {
+      const slug = recipe.composio_action.substring("EDGE_FUNCTION:".length).trim();
+      if (!slug) {
+        throw new Error("EDGE_FUNCTION: prefix with empty function slug");
+      }
+      const cronSecret = await getSetting(agencyId, "automation_runner_cron_secret");
+      if (!cronSecret) {
+        throw new Error(`Missing automation_runner_cron_secret for edge dispatch (agency ${agencyId})`);
+      }
+      const url = `${SUPABASE_URL}/functions/v1/${slug}`;
+      const efRes = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          shared_secret: cronSecret,
+          recipe_id: recipeId,
+          triggered_by: triggeredBy,
+          ...(recipe.input_config || {}),
+        }),
+      });
+      const efText = await efRes.text();
+      let efParsed: any = {};
+      try { efParsed = JSON.parse(efText); } catch { efParsed = { raw: efText.slice(0, 400) }; }
+      if (!efRes.ok || efParsed?.ok === false) {
+        const msg = (efParsed?.error || efText || "").toString().slice(0, 400);
+        throw new Error(`Edge function ${slug} failed: HTTP ${efRes.status} ${msg}`);
+      }
+      // Edge function self-logged. Just update recipe status and return.
+      await sb
+        .from("automation_recipes")
+        .update({ last_run_status: "success" })
+        .eq("id", recipeId);
+      return {
+        recipe_id: recipeId,
+        recipe_name: recipe.recipe_name,
+        status: "success",
+        records_processed: efParsed?.archived ?? efParsed?.records_processed ?? 0,
+        duration_seconds: Math.round((Date.now() - started) / 1000),
+        triggered_by: triggeredBy,
+        error: null,
+      };
+    }
+
+    // --- HYBRID: internal_handler runs BEFORE the Composio call ---
+    // For recipes like "Daily Briefing Email" where internal_handler builds the
+    // snapshot data (writes daily_briefing_log) AND a separate composio_action
+    // performs the user-visible action (sending the email). Without this, the
+    // composer would never run and the runner would silently report success.
+    let hybridInternalResult: any = null;
+    if (recipe.internal_handler) {
+      const { data: ir, error: ie } = await sb.rpc("run_internal_recipe", { p_recipe_id: recipeId });
+      if (ie) {
+        throw new Error(`Hybrid internal_handler ${recipe.internal_handler} failed: ${ie.message}`);
+      }
+      hybridInternalResult = ir;
+    }
+
     // --- Resolve credentials ---
     const composioApiKey = await getSetting(agencyId, "composio_api_key");
     if (!composioApiKey) {
@@ -441,6 +507,14 @@ async function executeRecipe(
       // post to social, archive). Composio call success is the result.
       outputSummary = `Action ${action} executed successfully (no output_table)`;
       recordsProcessed = 1;
+    }
+
+    // --- HYBRID merge: prepend internal_handler summary, prefer its records count
+    if (hybridInternalResult) {
+      const hRec = (hybridInternalResult.records_processed as number) ?? 0;
+      const hSum = (hybridInternalResult.output_summary as string) ?? "";
+      recordsProcessed = hRec; // composer's count is the meaningful one
+      outputSummary = hSum + (outputSummary ? ` | ${outputSummary}` : "");
     }
   } catch (err) {
     runStatus = "failed";
