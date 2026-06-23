@@ -227,7 +227,7 @@ const SocialOverview = ({ posts, analytics, loading }) => {
   const manualNeeded = safePosts.filter(p => p.status === "scheduled" && p.requires_manual).length;
 
   // Safe analytics — falls back to zeros when no data yet
-  const ana = analytics || { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0 } };
+  const ana = analytics || { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0 }, by_platform:[], by_pillar:[] };
   const weekChange = {
     reach: ana.last_week.total_reach > 0 ? Math.round(((ana.this_week.total_reach - ana.last_week.total_reach) / ana.last_week.total_reach) * 100) : 0,
     likes: ana.last_week.total_likes > 0 ? Math.round(((ana.this_week.total_likes - ana.last_week.total_likes) / ana.last_week.total_likes) * 100) : 0,
@@ -334,7 +334,7 @@ const SocialOverview = ({ posts, analytics, loading }) => {
           <AskBtn size="small" context="Review my social media content mix for this month. Am I following the 80/20 rule correctly? 80% should be value-first (educate, community, connect, celebrate) and max 20% business-adjacent (invite). Never hard-sell." />
         </div>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-          {analytics.by_pillar.map((p,i) => {
+          {(ana.by_pillar || []).map((p,i) => {
             const pl = PILLARS[p.pillar];
             const pct = ana.this_week.total_posts > 0 ? Math.round((p.posts / ana.this_week.total_posts) * 100) : 0;
             return (
@@ -497,7 +497,7 @@ const Analytics = ({ analytics, posts, loading }) => {
   );
 
   // If no analytics data yet, show empty state
-  const ana = analytics || { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, by_platform:[] };
+  const ana = analytics || { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, by_platform:[], by_pillar:[] };
   const safePosts = Array.isArray(posts) ? posts : [];
 
   if (!analytics && safePosts.length === 0) return (
@@ -564,7 +564,7 @@ const Analytics = ({ analytics, posts, loading }) => {
       {/* By Pillar */}
       <Card>
         <div style={{ fontSize:13, fontWeight:600, color:T.slate800, marginBottom:14 }}>Performance by content pillar</div>
-        {analytics.by_pillar.map((p,i) => {
+        {(ana.by_pillar || []).map((p,i) => {
           const pl = PILLARS[p.pillar];
           return (
             <div key={i} style={{ marginBottom:14 }}>
