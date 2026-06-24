@@ -291,6 +291,11 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
                 <option value="instagram">Instagram (manual post)</option>
                 <option value="linkedin">LinkedIn</option>
               </select>
+              {newPost?.platform === "instagram" && (
+                <div style={{marginTop:6, padding:"6px 8px", background:"#FEF3C7", border:"1px solid #FDE68A", borderRadius:5, fontSize:10, color:"#92400E", lineHeight:1.5}}>
+                  📱 <strong>Instagram = manual posting.</strong> Meta's Graph API blocks third-party auto-posting unless you have an Instagram <em>Business</em> account linked to a Facebook Page. Until that's set up in Composio, the system will save this draft and send you a morning reminder to post it yourself.
+                </div>
+              )}
             </div>
             <div>
               <label style={{fontSize:10, fontWeight:700, color:"#475569", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:0.4}}>Content Pillar</label>
