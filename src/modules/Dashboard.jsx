@@ -624,6 +624,96 @@ const EmailsNeedingAttentionWidget = ({ inbox, onRefresh, onNavigate }) => {
   );
 };
 
+// ── Widget: Upcoming Calendar Events (Google Calendar via Edge Function) ──
+const CalendarEventsWidget = ({ events, onRefresh, onNavigate }) => {
+  const list = Array.isArray(events?.items) ? events.items : [];
+  const loading = !!events?.loading;
+  const error = events?.error || null;
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0,10);
+  const tomorrow = new Date(now.getTime() + 24*60*60*1000);
+  const tomorrowStr = tomorrow.toISOString().slice(0,10);
+  const fmtTime = (iso, allDay) => {
+    if (!iso) return "—";
+    if (allDay) return "All day";
+    try {
+      const d = new Date(iso);
+      return d.toLocaleTimeString("en-US", { hour:"numeric", minute:"2-digit" });
+    } catch { return "—"; }
+  };
+  const dayLabel = (iso) => {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso);
+      const dayStr = d.toISOString().slice(0,10);
+      if (dayStr === todayStr) return "Today";
+      if (dayStr === tomorrowStr) return "Tomorrow";
+      return d.toLocaleDateString("en-US", { weekday:"short", month:"short", day:"numeric" });
+    } catch { return "—"; }
+  };
+  const grouped = {};
+  for (const e of list.slice(0, 8)) {
+    const key = dayLabel(e?.start);
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(e);
+  }
+  const sectionKeys = Object.keys(grouped);
+  return (
+    <Card>
+      <SectionTitle icon="📅" title="Upcoming Events"
+        action={
+          <div style={{display:"flex", gap:8}}>
+            <button onClick={onRefresh} title="Refresh" style={{fontSize:11,color:T.slate500,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>↻ Refresh</button>
+            <a href="https://calendar.google.com/calendar/u/0/r" target="_blank" rel="noreferrer" style={{fontSize:11,color:T.blue,fontWeight:600,textDecoration:"none"}}>Open Calendar →</a>
+          </div>
+        }
+      />
+      {loading ? (
+        <div style={{padding:"14px 0", color:T.slate400, fontSize:12, textAlign:"center"}}>Loading calendar…</div>
+      ) : error ? (
+        <div style={{padding:"10px 12px", background:T.amberLt, border:`1px solid #FDE68A`, borderRadius:8, fontSize:11, color:T.amber}}>
+          Couldn't reach Calendar — {String(error).slice(0,120)}
+        </div>
+      ) : sectionKeys.length === 0 ? (
+        <div style={{display:"flex", alignItems:"center", gap:10, padding:"12px 0"}}>
+          <span style={{fontSize:24}}>🗓️</span>
+          <div>
+            <div style={{fontSize:13, fontWeight:600, color:T.slate700}}>Nothing on the books</div>
+            <div style={{fontSize:11, color:T.slate500}}>No upcoming events in the next 7 days</div>
+          </div>
+        </div>
+      ) : (
+        <div style={{display:"flex", flexDirection:"column", gap:10}}>
+          {sectionKeys.map((sect) => (
+            <div key={sect}>
+              <div style={{fontSize:10, fontWeight:700, color:T.slate500, textTransform:"uppercase", letterSpacing:0.5, marginBottom:4}}>{sect}</div>
+              <div style={{display:"flex", flexDirection:"column", gap:4}}>
+                {(grouped[sect] || []).map((e,i) => (
+                  <div key={e?.id || i} style={{display:"grid", gridTemplateColumns:"70px 1fr", gap:8, padding:"6px 10px", borderRadius:6, background:T.slate50, border:`1px solid ${T.slate200}`}}>
+                    <div style={{fontSize:11, fontWeight:600, color:T.navy, whiteSpace:"nowrap"}}>
+                      {fmtTime(e?.start, e?.is_all_day)}
+                    </div>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:11.5, fontWeight:600, color:T.slate800, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                        {e?.title || "(no title)"}
+                      </div>
+                      {(e?.location || (e?.attendee_count > 0)) && (
+                        <div style={{fontSize:10, color:T.slate500, marginTop:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                          {e?.location || ""}{e?.location && e?.attendee_count > 0 ? " · " : ""}{e?.attendee_count > 0 ? `${e.attendee_count} ${e.attendee_count===1?"attendee":"attendees"}` : ""}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+};
+
 // ── Widget: Compliance Summary ────────────────────────────────
 const ComplianceWidget = ({ data, onNavigate }) => {
   const rules = data.complianceRules || [];
@@ -1040,6 +1130,28 @@ export default function Dashboard({ onNavigate = () => {} }) {
   };
 
   useEffect(() => { fetchInboxEmails(); }, []);
+
+  const [calendarEvents, setCalendarEvents] = useState({ loading: true, items: [], error: null });
+  const fetchCalendarEvents = async () => {
+    setCalendarEvents(s => ({ ...s, loading: true, error: null }));
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "dashboard-calendar-events",
+        { body: { agency_id: AGENCY_ID, limit: 10, days_ahead: 7 } }
+      );
+      if (error) throw error;
+      if (data && data.ok === false) throw new Error(data.error || "fetch failed");
+      setCalendarEvents({
+        loading: false,
+        items: Array.isArray(data?.events) ? data.events : [],
+        fetched_at: data?.fetched_at || null,
+        error: null,
+      });
+    } catch (err) {
+      setCalendarEvents({ loading: false, items: [], error: err?.message || String(err) });
+    }
+  };
+  useEffect(() => { fetchCalendarEvents(); }, []);
 
   useEffect(() => {
     const hr = new Date().getHours();
@@ -1542,8 +1654,9 @@ export default function Dashboard({ onNavigate = () => {} }) {
       </div>
 
       {/* Third Row — Tasks + Compliance */}
-      <div style={{marginBottom:14}}>
+      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14}}>
         <EmailsNeedingAttentionWidget inbox={inboxEmails} onRefresh={fetchInboxEmails} onNavigate={onNavigate} />
+        <CalendarEventsWidget events={calendarEvents} onRefresh={fetchCalendarEvents} onNavigate={onNavigate} />
       </div>
 
       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14}}>
