@@ -833,7 +833,7 @@ export default function Documents() {
       {/* Section Content */}
       {section === "overview" && <DocumentsOverview documents={documents} />}
       {section === "library"  && <DocumentLibrary  documents={documents} />}
-      {section === "intake"   && <IntakeLog         log={MOCK_INTAKE_LOG} />}
+      {section === "intake"   && <IntakeLog         log={[]} />}
       {section === "upload"   && <UploadSection />}
     </div>
   );
