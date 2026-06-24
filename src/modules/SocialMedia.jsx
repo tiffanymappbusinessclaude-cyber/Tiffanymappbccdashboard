@@ -212,7 +212,7 @@ const StatBar = ({ value, max, color }) => (
 );
 
 // ─── Section: Overview ────────────────────────────────────────
-const SocialOverview = ({ posts, analytics, loading }) => {
+const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowScheduler, newPost, setNewPost, savePost, editingPost, setEditingPost, approvePost }) => {
   // Loading state
   if (loading) return (
     <div style={{ textAlign:"center", padding:48, color:T.slate400, fontSize:13 }}>Loading social data…</div>
@@ -276,6 +276,71 @@ const SocialOverview = ({ posts, analytics, loading }) => {
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
         <button onClick={()=>setShowScheduler(s=>!s)} style={{padding:"8px 16px",fontSize:12,fontWeight:600,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>➕ Schedule New Post</button>
       </div>
+
+      {showScheduler && (
+        <Card style={{marginBottom:12, background:"#F8FAFC", border:"1px solid #CBD5E1"}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12}}>
+            <span style={{fontSize:13, fontWeight:700, color:"#1E3A5F"}}>📝 Schedule New Post</span>
+            <button onClick={()=>setShowScheduler(false)} style={{fontSize:11, color:"#64748B", background:"none", border:"none", cursor:"pointer", fontWeight:600}}>✕ Cancel</button>
+          </div>
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10}}>
+            <div>
+              <label style={{fontSize:10, fontWeight:700, color:"#475569", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:0.4}}>Platform</label>
+              <select value={newPost?.platform || "facebook"} onChange={e => setNewPost({...newPost, platform: e.target.value})} style={{width:"100%", padding:"8px 10px", fontSize:12, border:"1px solid #CBD5E1", borderRadius:6, background:"#fff"}}>
+                <option value="facebook">Facebook</option>
+                <option value="instagram">Instagram (manual post)</option>
+                <option value="linkedin">LinkedIn</option>
+              </select>
+            </div>
+            <div>
+              <label style={{fontSize:10, fontWeight:700, color:"#475569", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:0.4}}>Content Pillar</label>
+              <select value={newPost?.content_pillar || "educate"} onChange={e => setNewPost({...newPost, content_pillar: e.target.value})} style={{width:"100%", padding:"8px 10px", fontSize:12, border:"1px solid #CBD5E1", borderRadius:6, background:"#fff"}}>
+                <option value="educate">Educate</option>
+                <option value="community">Community</option>
+                <option value="connect">Connect</option>
+                <option value="celebrate">Celebrate</option>
+                <option value="invite">Invite (max 20%)</option>
+              </select>
+            </div>
+          </div>
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:10, fontWeight:700, color:"#475569", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:0.4}}>Scheduled Date</label>
+            <input type="date" value={newPost?.scheduled_date || ""} onChange={e => setNewPost({...newPost, scheduled_date: e.target.value})} style={{width:"100%", padding:"8px 10px", fontSize:12, border:"1px solid #CBD5E1", borderRadius:6, background:"#fff"}} />
+          </div>
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:10, fontWeight:700, color:"#475569", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:0.4}}>Caption</label>
+            <textarea value={newPost?.caption || ""} onChange={e => setNewPost({...newPost, caption: e.target.value})} placeholder="Compose your post. AA05 rules will be applied by Claude when you generate via Create Content tab." rows={4} style={{width:"100%", padding:"10px 12px", fontSize:12, color:"#1E293B", border:"1px solid #CBD5E1", borderRadius:6, outline:"none", resize:"vertical", fontFamily:"inherit"}} />
+          </div>
+          <div style={{background:"#FEF3C7", border:"1px solid #FDE68A", borderRadius:6, padding:"8px 10px", marginBottom:10, fontSize:10.5, color:"#92400E", lineHeight:1.5}}>
+            <strong>Reminder:</strong> Customer not client · No "best/expert/specialist/advisor" · No pricing or rate language · No investment/wealth language · No giveaways with chance · English only
+          </div>
+          <div style={{display:"flex", gap:8, justifyContent:"flex-end"}}>
+            <button onClick={()=>setShowScheduler(false)} style={{padding:"8px 14px", fontSize:12, fontWeight:600, color:"#475569", background:"#fff", border:"1px solid #CBD5E1", borderRadius:6, cursor:"pointer"}}>Cancel</button>
+            <button
+              onClick={async () => {
+                if (!newPost?.caption?.trim() || !newPost?.scheduled_date) {
+                  alert("Caption and scheduled date are both required.");
+                  return;
+                }
+                await savePost({
+                  platform: newPost.platform || "facebook",
+                  content_pillar: newPost.content_pillar || "educate",
+                  scheduled_date: newPost.scheduled_date,
+                  caption: newPost.caption,
+                  status: "draft",
+                  requires_manual: (newPost.platform === "instagram"),
+                });
+                setNewPost({platform:"facebook", caption:"", scheduled_date:"", content_pillar:"educate", status:"draft"});
+              }}
+              disabled={!newPost?.caption?.trim() || !newPost?.scheduled_date}
+              style={{padding:"8px 16px", fontSize:12, fontWeight:700, color:"#fff", background: (newPost?.caption?.trim() && newPost?.scheduled_date) ? "#1E3A5F" : "#94A3B8", border:"none", borderRadius:6, cursor: (newPost?.caption?.trim() && newPost?.scheduled_date) ? "pointer" : "not-allowed"}}
+            >
+              💾 Save as Draft
+            </button>
+          </div>
+        </Card>
+      )}
+
 <Card>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
             <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Today — Monday April 27</span>
@@ -886,7 +951,7 @@ export default function SocialMedia() {
       </div>
 
       {/* Section Content */}
-      {section === "overview"  && <SocialOverview  posts={posts} analytics={analytics} loading={loadingData} />}
+      {section === "overview"  && <SocialOverview  posts={posts} analytics={analytics} loading={loadingData} showScheduler={showScheduler} setShowScheduler={setShowScheduler} newPost={newPost} setNewPost={setNewPost} savePost={savePost} editingPost={editingPost} setEditingPost={setEditingPost} approvePost={approvePost} />}
       {section === "calendar"  && <ContentCalendar  posts={posts} loading={loadingData} />}
       {section === "analytics" && <Analytics        analytics={analytics} posts={posts} loading={loadingData} />}
       {section === "platforms" && <PlatformGuide />}
