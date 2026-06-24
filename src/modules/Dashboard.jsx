@@ -562,6 +562,68 @@ const AlertsWidget = ({ data, onNavigate }) => {
   );
 };
 
+// ── Widget: Emails Needing Attention (Gmail via Edge Function) ──
+const EmailsNeedingAttentionWidget = ({ inbox, onRefresh, onNavigate }) => {
+  const messages = Array.isArray(inbox?.messages) ? inbox.messages.slice(0, 5) : [];
+  const loading = !!inbox?.loading;
+  const error = inbox?.error || null;
+  const ageLabel = (h) => {
+    const n = Number(h) || 0;
+    if (n < 1) return "just now";
+    if (n < 24) return `${n}h ago`;
+    const d = Math.floor(n / 24);
+    return `${d}d ago`;
+  };
+  return (
+    <Card>
+      <SectionTitle icon="📧" title="Emails Needing Attention"
+        action={
+          <div style={{display:"flex", gap:8}}>
+            <button onClick={onRefresh} title="Refresh" style={{fontSize:11,color:T.slate500,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>↻ Refresh</button>
+            <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noreferrer" style={{fontSize:11,color:T.blue,fontWeight:600,textDecoration:"none"}}>Open Inbox →</a>
+          </div>
+        }
+      />
+      {loading ? (
+        <div style={{padding:"14px 0", color:T.slate400, fontSize:12, textAlign:"center"}}>Loading inbox…</div>
+      ) : error ? (
+        <div style={{padding:"10px 12px", background:T.amberLt, border:`1px solid #FDE68A`, borderRadius:8, fontSize:11, color:T.amber}}>
+          Couldn't reach Gmail — {String(error).slice(0,120)}
+        </div>
+      ) : messages.length === 0 ? (
+        <div style={{display:"flex", alignItems:"center", gap:10, padding:"12px 0"}}>
+          <span style={{fontSize:24}}>✅</span>
+          <div>
+            <div style={{fontSize:13, fontWeight:600, color:T.green}}>Inbox Zero</div>
+            <div style={{fontSize:11, color:T.slate500}}>No unread emails needing attention</div>
+          </div>
+        </div>
+      ) : (
+        <div style={{display:"flex", flexDirection:"column", gap:6}}>
+          {messages.map((m,i) => (
+            <div key={m?.id || i} style={{padding:"8px 10px", borderRadius:8, background:T.slate50, border:`1px solid ${T.slate200}`}}>
+              <div style={{display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8}}>
+                <div style={{fontSize:11, fontWeight:700, color:T.slate800, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                  {m?.sender || "Unknown"}
+                </div>
+                <div style={{fontSize:10, color:T.slate500, whiteSpace:"nowrap"}}>{ageLabel(m?.age_hours)}</div>
+              </div>
+              <div style={{fontSize:11.5, color:T.slate700, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                {m?.has_attachment ? "📎 " : ""}{m?.subject || "(no subject)"}
+              </div>
+              {m?.snippet && (
+                <div style={{fontSize:10.5, color:T.slate500, marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                  {m.snippet}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+};
+
 // ── Widget: Compliance Summary ────────────────────────────────
 const ComplianceWidget = ({ data, onNavigate }) => {
   const rules = data.complianceRules || [];
@@ -955,6 +1017,29 @@ export default function Dashboard({ onNavigate = () => {} }) {
   const [loading, setLoading] = useState(true);
   const [agencyName, setAgencyName] = useState("Your Agency");
   const [greeting, setGreeting] = useState("Good morning");
+  const [inboxEmails, setInboxEmails] = useState({ loading: true, messages: [], error: null });
+
+  const fetchInboxEmails = async () => {
+    setInboxEmails(s => ({ ...s, loading: true, error: null }));
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "dashboard-emails-needing-attention",
+        { body: { agency_id: AGENCY_ID, limit: 8 } }
+      );
+      if (error) throw error;
+      if (data && data.ok === false) throw new Error(data.error || "fetch failed");
+      setInboxEmails({
+        loading: false,
+        messages: Array.isArray(data?.messages) ? data.messages : [],
+        fetched_at: data?.fetched_at || null,
+        error: null,
+      });
+    } catch (err) {
+      setInboxEmails({ loading: false, messages: [], error: err?.message || String(err) });
+    }
+  };
+
+  useEffect(() => { fetchInboxEmails(); }, []);
 
   useEffect(() => {
     const hr = new Date().getHours();
@@ -1457,6 +1542,10 @@ export default function Dashboard({ onNavigate = () => {} }) {
       </div>
 
       {/* Third Row — Tasks + Compliance */}
+      <div style={{marginBottom:14}}>
+        <EmailsNeedingAttentionWidget inbox={inboxEmails} onRefresh={fetchInboxEmails} onNavigate={onNavigate} />
+      </div>
+
       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14}}>
         <TasksWidget data={dashData} onNavigate={onNavigate} />
         <ComplianceWidget data={dashData} onNavigate={onNavigate} />
