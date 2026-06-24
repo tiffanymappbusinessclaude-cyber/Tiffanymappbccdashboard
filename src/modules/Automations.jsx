@@ -875,8 +875,8 @@ export default function Automations() {
       {section === "runlog"      && <RunLog runLog={runLog} />}
       {section === "recipes"     && <Recipes recipes={recipes} onToggle={toggleRecipe} />}
       {section === "connections" && <Connections connections={connections} />}
-      {section === "briefing"    && <DailyBriefingSection briefings={MOCK_BRIEFINGS} />}
-      {section === "importer"    && <DocImporter imports={MOCK_IMPORTS} />}
+      {section === "briefing"    && <DailyBriefingSection briefings={[]} />}
+      {section === "importer"    && <DocImporter imports={[]} />}
     </div>
   );
 }
