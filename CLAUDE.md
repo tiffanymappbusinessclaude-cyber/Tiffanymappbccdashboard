@@ -335,13 +335,26 @@ See `docs/PRODUCER_ROI_INSTALL.md` for the install playbook.
 
 ## Open Issues (GitHub)
 
-| # | Issue | Priority |
-|---|---|---|
-| #1 | Instagram auto-posting — Business account banner | Medium |
-| #2 | Social Media — Schedule New Post full form | High |
-| #3 | Dashboard — Emails Needing Attention (Gmail MCP) | High |
-| #4 | Dashboard — Calendar Events (Google Calendar MCP) | High |
-| #5 | Replace remaining MOCK data with EmptyState | Medium |
+All 5 issues that were listed here were SHIPPED 2026-06-24. None outstanding.
+
+| # | Issue | Priority | Status | Closing commit(s) |
+|---|---|---|---|---|
+| #1 | Instagram auto-posting — Business account banner | Medium | ✅ Closed 2026-06-24 | `d4a135fe` |
+| #2 | Social Media — Schedule New Post full form | High | ✅ Closed 2026-06-24 | `4f2cfa09` |
+| #3 | Dashboard — Emails Needing Attention (Gmail MCP) | High | ✅ Closed 2026-06-24 | `68447d8e` |
+| #4 | Dashboard — Calendar Events (Google Calendar MCP) | High | ✅ Closed 2026-06-24 | `a79db815` |
+| #5 | Replace remaining MOCK data with EmptyState | Medium | ✅ Closed 2026-06-24 | `8320c192`, `9e33f5a7` |
+
+**Notes on the 2026-06-24 shipment:**
+- Issues #3 and #4 added two new on-demand Edge Functions (`dashboard-emails-needing-attention`, `dashboard-calendar-events`) that proxy Gmail and Google Calendar through Composio. Both use `verify_jwt=true` and are called from the webapp via `supabase.functions.invoke()`.
+- Issue #2 also fixed a latent CLAUDE.md lesson #3 violation in `SocialMedia.jsx`: the `SocialOverview` component's Schedule toggle button referenced `setShowScheduler` that wasn't being passed as a prop. Signature widened, call site updated.
+- Issue #5 took the conservative path: replaced active `MOCK_*` references in `Automations.jsx` and `Documents.jsx` with empty arrays so internal empty states render. `ComplianceCenter.jsx`'s `MOCK_CHECKLIST` was KEPT (static AA05 26-item policy checklist, not transactional data). `Settings.jsx` per-field `MOCK_AGENCY` fallbacks were KEPT (placeholder behavior when a DB field is null). Orphan `MOCK_*` declarations in modules where they're no longer rendered were LEFT as harmless dead code; a follow-up cleanup commit can remove them when convenient.
+
+**Follow-up work (not blocking; tracked in persistent_memory, category=agency_profile):**
+- Document Processor Groq parsing: needs Groq API key OR formal skip + dependency removal
+- Facebook and LinkedIn social recipes: pending Composio OAuth connections
+- Score+/PYC document parser: blocked on receiving first sample document
+- Optional: 60s response caching on the two new Edge Functions if load increases
 
 ---
 
