@@ -22,15 +22,8 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 //   compliance_notes    — Agent-specific compliance reminders
 //
 // DATA: Reads/writes persistent_memory table in Supabase
-// In production replace MOCK_MEMORY with:
-//   const { data } = await supabase
-//     .from('persistent_memory')
-//     .select('*')
-//     .eq('agency_id', agencyId)
-//     .eq('is_active', true)
-//     .order('category')
+// DATA: Loaded from persistent_memory via useSupabaseTable hook.
 // ============================================================
-
 
 // ─── Design Tokens ────────────────────────────────────────────
 const T = {
@@ -69,151 +62,6 @@ const CATEGORIES = [
   { id: "goals",             label: "Goals & Priorities",icon: "🎯", color: T.amber,  colorLt: T.amberLt,  description: "Current targets, priorities, milestones" },
   { id: "relationships",     label: "Key Relationships", icon: "🤝", color: T.teal,   colorLt: T.tealLt,   description: "CPA, vendors, SF contacts, key business relationships" },
   { id: "compliance_notes",  label: "Compliance Notes",  icon: "🛡️", color: T.red,    colorLt: T.redLt,    description: "Agency-specific compliance reminders and notes" },
-];
-
-// ─── Mock Data ────────────────────────────────────────────────
-const MOCK_MEMORY = [
-  // Agency Profile
-  {
-    id: "1", category: "agency_profile", title: "Agency Overview",
-    content: `Agency Name: Smith Insurance Agency
-Owner: Jane Smith
-Entity Type: S-Corporation
-SF Agent Code: IL 22-441A
-Licensed States: IL, WI, IN
-Primary Email: jane@smithagency.com
-Phone: (312) 555-0182
-Address: 1420 N. Michigan Ave, Suite 301, Chicago, IL 60610
-BCC Setup Date: April 15, 2026`,
-    added_by: "system", source: "initial_setup",
-  },
-  {
-    id: "2", category: "agency_profile", title: "Business Context",
-    content: `Jane has operated this agency since 2018. Prior career in banking gave her strong financial acumen. Agency focus is personal lines with a growing commercial book. Located in the suburban Chicago market, high competition area. Jane reviews her BCC every morning before 9AM and prefers direct, concise communication with bullet points for action items.`,
-    added_by: "system", source: "discovery_call",
-  },
-
-  // Staff
-  {
-    id: "3", category: "staff", title: "Team Overview",
-    content: `Current Team (3 staff):
-
-1. Marcus Thompson — Licensed Sales Agent (W-2)
-   Start: Jan 2022 · Salary: $52,000 + commission
-   Licensed: IL, WI · Strong life insurance producer
-   Email: marcus@smithagency.com
-
-2. Priya Patel — Office Manager (W-2, unlicensed)
-   Start: Mar 2020 · Salary: $42,000
-   Handles operations, billing, client service
-   Email: priya@smithagency.com
-
-3. Tyler Smith — Part-time Support (W-2, family)
-   Start: Jun 2024 · Hourly: $18/hr
-   Jane's son. Works 20hrs/wk. Below standard deduction.
-   No FIT withheld. Flag for CPA at year-end for W-2.`,
-    added_by: "system", source: "discovery_call",
-  },
-
-  // Business Rules
-  {
-    id: "4", category: "business_rules", title: "Accounting Rules",
-    content: `1. Cash basis ONLY — revenue counts when money hits the bank account. Never count pending or promised payments as current revenue.
-2. PFA (Policy Financing Arrangement) is NOT a business asset. It does not appear on the balance sheet. It is a SF compliance item only.
-3. Owner draws and S-Corp distributions are equity transactions — never expenses.
-4. Owner W-2 wages must reflect reasonable compensation for S-Corp — flag for CPA annually.
-5. Always reconcile COMP_RECAP to GL before closing a period.
-6. Tyler Smith (family employee) requires W-2 at year-end. No FIT withheld — below standard deduction threshold. Review with Steven Bonventre.
-7. S-Corp Medical premiums for Jane are tracked in account 6115 and added to W-2 Box 1.`,
-    added_by: "system", source: "if_standard_rules",
-  },
-  {
-    id: "5", category: "business_rules", title: "SF Compliance Rules",
-    content: `1. Never suggest social media content that promises specific rates or savings.
-2. All advertising must be pre-approved by SF before publishing.
-3. Required disclosures must appear on all marketing materials.
-4. Flag license renewal deadlines 60 days in advance.
-5. Flag E&O insurance renewal 90 days before expiration.
-6. PFA activity should be reviewed with CPA annually.
-7. No rebating or inducements to policyholders.
-8. Do not suggest content that could be confused with official SF corporate communications.`,
-    added_by: "system", source: "if_compliance_rules",
-  },
-  {
-    id: "6", category: "business_rules", title: "Communication Preferences",
-    content: `- Direct and concise. No fluff.
-- Use bullet points for action items.
-- Flag financial issues immediately — do not soften bad news.
-- Jane reviews BCC every morning before 9AM.
-- Prefers email briefings over in-app notifications for critical items.
-- When recommending actions, lead with the most important item.`,
-    added_by: "system", source: "discovery_call",
-  },
-
-  // Financial Context
-  {
-    id: "7", category: "financial_context", title: "Accounting & Tax Setup",
-    content: `Entity: S-Corporation (elected 2019)
-Fiscal Year: Calendar Year (Jan–Dec)
-Accounting Method: Cash Basis
-Payroll Provider: Gusto (bi-weekly)
-CPA: Steven Bonventre at Club Capital Tax LLC
-CPA Email: steven@clubcapitaltax.com
-CPA Phone: (312) 555-0198
-Owner W-2 Salary: $85,000/year (reasonable comp)
-S-Corp Distributions: Separate from salary, tracked in equity
-S-Corp Medical: Jane's health insurance added to W-2 Box 1`,
-    added_by: "system", source: "discovery_call",
-  },
-  {
-    id: "8", category: "financial_context", title: "SF Compensation Structure",
-    content: `AIPP Target 2026: $142,000
-Prior Year AIPP Actual 2025: $138,200
-ScoreBoard Participation: Yes — targeting President level
-Primary Revenue Lines: Auto, Home, Life, Personal Articles
-Multi-State Comp: IL (primary), WI, IN — all comp reported on IL COMP_RECAP
-COMP_RECAP: Received monthly from SF, imported via Doc Importer`,
-    added_by: "system", source: "discovery_call",
-  },
-
-  // Goals
-  {
-    id: "9", category: "goals", title: "2026 Goals",
-    content: `1. Hit AIPP target of $142,000 (currently at 47.5% — on track)
-2. Grow new business premium by 15% vs 2025
-3. Add one licensed team member by Q3 2026
-4. Achieve ScoreBoard President recognition
-5. Reduce operating expense ratio below 45%
-6. Complete full BCC data migration by end of April
-7. Launch social media content calendar — 4 posts/week`,
-    added_by: "system", source: "discovery_call",
-  },
-
-  // Relationships
-  {
-    id: "10", category: "relationships", title: "Key Contacts",
-    content: `CPA: Steven Bonventre — Club Capital Tax LLC — steven@clubcapitaltax.com
-SF Field Leader: Michael Torres — michael.torres@statefarm.com (personal email on file)
-Payroll: Gusto support — support@gusto.com
-E&O Insurance: Hartford — policy #HRT-8821-IL — renews Aug 2026
-Attorney: Davis & Park LLC — Michelle Park — (312) 555-0211
-Landlord: Midwest Properties LLC — lease expires Dec 2027
-IT Support: TechForce Chicago — helpdesk@techforcechicago.com`,
-    added_by: "system", source: "discovery_call",
-  },
-
-  // Compliance Notes
-  {
-    id: "11", category: "compliance_notes", title: "Agency-Specific Compliance Reminders",
-    content: `- IL license renewal due: October 2026 — also covers WI and IN non-resident
-- CE hours required: 24 hours IL by Oct 2026 — 14 hours completed as of Apr 2026
-- E&O renewal: August 2026 — flag 90 days out (May 2026)
-- Annual social media audit: Due by Nov 2026
-- Privacy notice distribution: Due by Nov 2026
-- W-2 filing: January 31, 2027 for 2026 tax year
-- Tyler Smith family employment: Review with Steven at year-end for proper W-2 treatment`,
-    added_by: "system", source: "discovery_call",
-  },
 ];
 
 // ─── Shared Components ────────────────────────────────────────
@@ -555,7 +403,7 @@ const CategorySidebar = ({ categories, activeCategory, counts, onChange }) => (
 
 // ─── Main Module ──────────────────────────────────────────────
 export default function PersistentMemory() {
-  // Live-fetch from Supabase; fall back to MOCK_MEMORY only while loading
+  // Live-fetch from Supabase persistent_memory table
   const { data: liveMemories, loading: memoryLoading } = useSupabaseTable(
     "persistent_memory", AGENCY_ID, { orderBy: "updated_at", ascending: false }
   );

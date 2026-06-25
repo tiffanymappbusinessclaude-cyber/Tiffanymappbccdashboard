@@ -25,7 +25,6 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 //       social_analytics tables in Supabase
 // ============================================================
 
-
 // ─── Design Tokens ────────────────────────────────────────────
 const T = {
   navy:    "#1B2B4B",
@@ -70,41 +69,6 @@ const PILLARS = {
   connect:   { label:"Connect",   color:T.purple, bg:T.purpleLt },
   celebrate: { label:"Celebrate", color:T.amber,  bg:T.amberLt  },
   invite:    { label:"Invite",    color:T.teal,   bg:T.tealLt   },
-};
-
-// ─── Mock Data ────────────────────────────────────────────────
-const MOCK_POSTS = [
-  { id:"p1",  platform:"facebook",  date:"Apr 27", time:"9:00 AM",  status:"scheduled", pillar:"educate",   caption:"Monday motivation — your agency runs on relationships, not just policies. Here are 3 things every homeowner should review this spring... 🏠", requires_manual:false, engagement:null },
-  { id:"p2",  platform:"linkedin",  date:"Apr 27", time:"12:00 PM", status:"scheduled", pillar:"connect",   caption:"3 things State Farm agents overlook in their Q2 planning — and what I do differently to stay ahead of the numbers.", requires_manual:false, engagement:null },
-  { id:"p3",  platform:"instagram", date:"Apr 27", time:"11:00 AM", status:"scheduled", pillar:"connect",   caption:"Behind the scenes at the agency this Monday morning. Coffee, team huddle, and a full week ahead. ☕", requires_manual:true, engagement:null },
-  { id:"p4",  platform:"facebook",  date:"Apr 26", time:"9:00 AM",  status:"posted",    pillar:"community", caption:"Huge shoutout to the Sarasota Food Bank for their incredible work this month. Proud to support our community! 🙌", requires_manual:false, engagement:{ likes:42, comments:8, shares:6, reach:680 } },
-  { id:"p5",  platform:"linkedin",  date:"Apr 26", time:"12:00 PM", status:"posted",    pillar:"educate",   caption:"The biggest financial mistake I see new homeowners make — and it's easier to fix than you think.", requires_manual:false, engagement:{ likes:31, comments:4, shares:2, reach:410 } },
-  { id:"p6",  platform:"instagram", date:"Apr 26", time:"11:00 AM", status:"posted",    pillar:"community", caption:"Saturday morning walk through Lakewood Ranch. This community never gets old. 🌿", requires_manual:true, engagement:{ likes:89, comments:12, shares:0, reach:920 } },
-  { id:"p7",  platform:"facebook",  date:"Apr 25", time:"9:00 AM",  status:"posted",    pillar:"celebrate", caption:"Happy work anniversary to Marcus! 4 years of helping Sarasota families feel confident about their coverage. 🎉", requires_manual:false, engagement:{ likes:67, comments:22, shares:3, reach:1100 } },
-  { id:"p8",  platform:"facebook",  date:"Apr 24", time:"9:00 AM",  status:"posted",    pillar:"educate",   caption:"Spring storm season reminder — here are 4 things every Florida homeowner should check before June 1st.", requires_manual:false, engagement:{ likes:38, comments:5, shares:11, reach:820 } },
-  { id:"p9",  platform:"instagram", date:"Apr 25", time:"11:00 AM", status:"failed",    pillar:"celebrate", caption:"Team Friday! Celebrating Marcus's work anniversary at lunch today. 🎂", requires_manual:true, engagement:null },
-  { id:"p10", platform:"twitter",   date:"Apr 26", time:"9:00 AM",  status:"posted",    pillar:"educate",   caption:"Florida homeowners: your policy probably doesn't cover flooding. Worth a 5-minute conversation to find out for sure.", requires_manual:false, engagement:{ likes:18, comments:3, shares:7, reach:290 } },
-  { id:"p11", platform:"facebook",  date:"Apr 28", time:"9:00 AM",  status:"draft",     pillar:"community", caption:"Local Love Tuesday — this week we're spotlighting a favorite local business in the area...", requires_manual:false, engagement:null },
-  { id:"p12", platform:"linkedin",  date:"Apr 29", time:"12:00 PM", status:"draft",     pillar:"educate",   caption:"Thursday Thoughts: what the best-run independent insurance agencies have in common.", requires_manual:false, engagement:null },
-  { id:"p13", platform:"facebook",  date:"Apr 30", time:"9:00 AM",  status:"draft",     pillar:"invite",    caption:"End of April — if you haven't done a policy review this year, my door is always open. No pressure, just a conversation.", requires_manual:false, engagement:null },
-  { id:"p14", platform:"instagram", date:"Apr 28", time:"11:00 AM", status:"draft",     pillar:"educate",   caption:"Myth Monday: does a red car actually cost more to insure? Let's bust this one. 🚗❓", requires_manual:true, engagement:null },
-];
-
-const MOCK_ANALYTICS = {
-  this_week: { total_posts:8, total_reach:4220, total_likes:285, total_comments:54, total_shares:29 },
-  last_week: { total_posts:7, total_reach:3890, total_likes:241, total_comments:41, total_shares:21 },
-  by_platform: [
-    { platform:"facebook",  posts:4, reach:2600, likes:147, comments:35, shares:20, best_post:"Marcus anniversary" },
-    { platform:"instagram", posts:2, reach:1420, likes:101, comments:12, shares:0,  best_post:"Saturday walk" },
-    { platform:"linkedin",  posts:1, reach:410,  likes:31,  comments:4,  shares:2,  best_post:"Homeowner mistake" },
-    { platform:"twitter",   posts:1, reach:290,  likes:18,  comments:3,  shares:7,  best_post:"Flood coverage tip" },
-  ],
-  by_pillar: [
-    { pillar:"educate",   posts:4, avg_reach:712, avg_likes:28 },
-    { pillar:"community", posts:2, avg_reach:890, avg_likes:55 },
-    { pillar:"connect",   posts:1, avg_reach:410, avg_likes:31 },
-    { pillar:"celebrate", posts:1, avg_reach:1100,avg_likes:67 },
-  ],
 };
 
 // ─── Shared Components ────────────────────────────────────────
@@ -932,7 +896,6 @@ export default function SocialMedia() {
     window.location.reload();
   };
 
-
   return (
     <div>
       {/* Module Header */}
@@ -964,4 +927,3 @@ export default function SocialMedia() {
     </div>
   );
 }
-

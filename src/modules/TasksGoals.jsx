@@ -24,7 +24,6 @@ import EmptyState from "../components/EmptyState.jsx";
 // DATA: Reads tasks, goals tables in Supabase
 // ============================================================
 
-
 // ─── Design Tokens ────────────────────────────────────────────
 const T = {
   navy:    "#1B2B4B",
@@ -88,92 +87,6 @@ const GOAL_CATS = {
   personal:   { label:"Personal",   color:T.amber,  icon:"⭐" },
   growth:     { label:"Growth",     color:T.teal,   icon:"📈" },
 };
-
-// ─── Mock Data ────────────────────────────────────────────────
-const MOCK_TASKS = [
-  // Open tasks
-  { id:"t1",  title:"Fix Daily Briefing automation — Gmail OAuth expired",       priority:"critical", status:"open",        module:"automations", due_date:"Apr 27, 2026", assigned_to:"Jane Smith",  created_by:"system",      description:"Gmail OAuth token expired causing Daily Briefing to fail. Reconnect Gmail in Composio dashboard.", created_at:"Today" },
-  { id:"t2",  title:"Complete monthly auto application compliance review",        priority:"high",     status:"open",        module:"compliance",  due_date:"Apr 30, 2026", assigned_to:"Jane Smith",  created_by:"system",      description:"Pull RAZ000BT report. Review all required auto app metrics. Review SAM report (RAZ000BV). Document findings.", created_at:"Apr 25" },
-  { id:"t3",  title:"Complete monthly Altered Monies history review",             priority:"high",     status:"open",        module:"financials",  due_date:"Apr 30, 2026", assigned_to:"Jane Smith",  created_by:"system",      description:"Review and document Altered Monies history for April. Required standing compliance item.", created_at:"Apr 25" },
-  { id:"t4",  title:"Manually post Instagram content — Monday April 27",          priority:"high",     status:"open",        module:"social",      due_date:"Apr 27, 2026", assigned_to:"Jane Smith",  created_by:"automations", description:"Behind the scenes at the agency this Monday morning. Coffee, team huddle, and a full week ahead. ☕ — scheduled for 11AM", created_at:"Today" },
-  { id:"t5",  title:"Review Q1 bank reconciliation",                               priority:"medium",   status:"open",        module:"financials",  due_date:"May 3, 2026",  assigned_to:"Jane Smith",  created_by:"claude",      description:"Q1 bank reconciliation is ready to review. Verify all GL entries match bank statements for January, February, and March.", created_at:"Apr 26" },
-  { id:"t6",  title:"Send Kimberly Yow reseller agreement for signature",          priority:"medium",   status:"in_progress", module:"general",     due_date:"May 5, 2026",  assigned_to:"Jane Smith",  created_by:"Jane Smith",  description:"Channel partner reseller agreement ready. Send via DocuSign and follow up within 3 business days.", created_at:"Apr 24" },
-  { id:"t7",  title:"Schedule discovery call with new prospect — Mike Anderson",   priority:"medium",   status:"open",        module:"general",     due_date:"May 1, 2026",  assigned_to:"Jane Smith",  created_by:"Jane Smith",  description:"Referred by Alyssa. Auto agency owner. Interested in BCC setup.", created_at:"Apr 23" },
-  { id:"t8",  title:"Post resume — April interview focus review with Marcus",      priority:"medium",   status:"open",        module:"hr",          due_date:"Apr 29, 2026", assigned_to:"Marcus T.",   created_by:"automations", description:"New applicant received — Jamie Chen. Claude score: 8/10. Review One Page Interview Focus together before scheduling interview.", created_at:"Apr 26" },
-  { id:"t9",  title:"Begin E&O insurance renewal process",                         priority:"low",      status:"open",        module:"compliance",  due_date:"May 1, 2026",  assigned_to:"Jane Smith",  created_by:"system",      description:"E&O insurance renews August 2026. Begin renewal process 90 days in advance. Contact Hartford for renewal quote.", created_at:"Apr 27" },
-  { id:"t10", title:"Update staff performance metrics for March",                  priority:"low",      status:"open",        module:"hr",          due_date:"May 3, 2026",  assigned_to:"Jane Smith",  created_by:"system",      description:"Log March KPIs for Marcus Thompson and Priya Patel in the staff performance table.", created_at:"Apr 1" },
-  { id:"t11", title:"Draft April social media batch for next week",                priority:"low",      status:"open",        module:"social",      due_date:"Apr 30, 2026", assigned_to:"Jane Smith",  created_by:"Jane Smith",  description:"Batch create May 4-8 social posts. Use content calendar framework: Mon Educate, Tue Community, Wed Connect, Thu Educate/Celebrate, Fri Invite.", created_at:"Apr 26" },
-
-  // Completed
-  { id:"t12", title:"Process April COMP_RECAP from State Farm",                   priority:"high",     status:"completed",   module:"financials",  due_date:"Apr 26, 2026", assigned_to:"Jane Smith",  created_by:"automations", description:"", created_at:"Apr 20", completed_at:"Apr 26" },
-  { id:"t13", title:"Run April payroll",                                           priority:"high",     status:"completed",   module:"financials",  due_date:"Apr 19, 2026", assigned_to:"Jane Smith",  created_by:"Jane Smith",  description:"", created_at:"Apr 15", completed_at:"Apr 19" },
-  { id:"t14", title:"Post Marcus work anniversary social content",                 priority:"medium",   status:"completed",   module:"social",      due_date:"Apr 25, 2026", assigned_to:"Jane Smith",  created_by:"Jane Smith",  description:"", created_at:"Apr 23", completed_at:"Apr 25" },
-  { id:"t15", title:"Complete Q1 staff performance review",                        priority:"medium",   status:"completed",   module:"hr",          due_date:"Apr 15, 2026", assigned_to:"Jane Smith",  created_by:"system",      description:"", created_at:"Apr 1",  completed_at:"Apr 14" },
-  { id:"t16", title:"March PFA bank statement reconciliation",                     priority:"high",     status:"completed",   module:"financials",  due_date:"Apr 14, 2026", assigned_to:"Jane Smith",  created_by:"system",      description:"", created_at:"Apr 1",  completed_at:"Apr 12" },
-];
-
-const MOCK_GOALS = [
-  {
-    id:"g1", title:"Hit AIPP Target — 2026",
-    description:"Achieve full AIPP payout for 2026 program year",
-    category:"aipp", unit:"dollars",
-    target_value:142000, current_value:67450,
-    target_date:"Dec 31, 2026",
-    status:"active",
-    notes:"On track — 47.5% achieved with 8 months remaining. Prior year final was $138,200.",
-    monthly_data:[15200,14800,18650,18800,0,0,0,0,0,0,0,0],
-  },
-  {
-    id:"g2", title:"Annual Revenue Target — 2026",
-    description:"Total agency gross revenue for the year",
-    category:"revenue", unit:"dollars",
-    target_value:580000, current_value:187420,
-    target_date:"Dec 31, 2026",
-    status:"active",
-    notes:"YTD $187,420 through April. On pace for $562K at current run rate — slightly below target. May need to push new business in Q2.",
-    monthly_data:[41200,38900,44600,48240,0,0,0,0,0,0,0,0],
-  },
-  {
-    id:"g3", title:"New Business Premium Growth — 15%",
-    description:"Grow new business premium by 15% vs 2025",
-    category:"growth", unit:"percentage",
-    target_value:15, current_value:9,
-    target_date:"Dec 31, 2026",
-    status:"active",
-    notes:"Currently at 9% growth YTD. Need to accelerate new business production in Q2-Q3.",
-    monthly_data:null,
-  },
-  {
-    id:"g4", title:"Add One Licensed Team Member — Q3",
-    description:"Hire and license one additional team member by September 2026",
-    category:"team", unit:"count",
-    target_value:1, current_value:0,
-    target_date:"Sep 30, 2026",
-    status:"active",
-    notes:"Resume Scanner is active. Jamie Chen interview in progress (score 8/10). Marcus can help onboard.",
-    monthly_data:null,
-  },
-  {
-    id:"g5", title:"Reduce Operating Expense Ratio Below 45%",
-    description:"Keep total operating expenses below 45% of gross income",
-    category:"revenue", unit:"percentage",
-    target_value:45, current_value:43.2,
-    target_date:"Dec 31, 2026",
-    status:"active",
-    notes:"Currently at 43.2% — ahead of target. Monitor payroll ratio as team grows.",
-    monthly_data:null,
-  },
-  {
-    id:"g6", title:"Complete Annual Compliance Training",
-    description:"Complete all required State Farm annual compliance and ethics training",
-    category:"compliance", unit:"count",
-    target_value:1, current_value:0,
-    target_date:"Dec 31, 2026",
-    status:"active",
-    notes:"Due by December 31. Schedule Q3 to allow time for completion.",
-    monthly_data:null,
-  },
-];
 
 // ─── Helpers ──────────────────────────────────────────────────
 const pct = (curr, target) => { if (!target || curr == null) return 0; const p = Math.round((Number(curr) / Number(target)) * 100); return Number.isFinite(p) ? Math.min(100, p) : 0; };
@@ -751,4 +664,3 @@ export default function TasksGoals({ onNavigate }) {
     </div>
   );
 }
-
