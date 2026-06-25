@@ -351,7 +351,7 @@ All 5 issues that were listed here were SHIPPED 2026-06-24. None outstanding.
 - Issue #5 took the conservative path: replaced active `MOCK_*` references in `Automations.jsx` and `Documents.jsx` with empty arrays so internal empty states render. `ComplianceCenter.jsx`'s `MOCK_CHECKLIST` was KEPT (static AA05 26-item policy checklist, not transactional data). `Settings.jsx` per-field `MOCK_AGENCY` fallbacks were KEPT (placeholder behavior when a DB field is null). Orphan `MOCK_*` declarations in modules where they're no longer rendered were LEFT as harmless dead code; a follow-up cleanup commit can remove them when convenient.
 
 **Follow-up work (not blocking; tracked in persistent_memory, category=agency_profile):**
-- Document Processor Groq parsing: needs Groq API key OR formal skip + dependency removal
+- Document Processor Groq parsing: **FORMALLY SKIPPED 2026-06-24.** The `groq_prompt` pipeline described above is the master-template architecture, but in this agency's actual operation, source-document parsing happens in `COMPOSIO_REMOTE_WORKBENCH` sessions when Claude is in the loop (smart_file_extract + invoke_llm). The Document Processor recipe still files originals to Drive and updates `processing_status`, but the LLM classification step is intentionally a no-op. To revisit: add an HTTP-callable LLM in an Edge Function (Anthropic API direct, ~$5-10/mo at this volume). Not on the roadmap. See persistent_memory entry "2026-06-24 EVENING — Groq formally DROPPED; LLM parsing is workbench-driven".
 - Facebook and LinkedIn social recipes: pending Composio OAuth connections
 - Score+/PYC document parser: blocked on receiving first sample document
 - Optional: 60s response caching on the two new Edge Functions if load increases
