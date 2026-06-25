@@ -859,7 +859,7 @@ const ProducerScoreboardWidget = ({ data, onNavigate }) => {
 // Pre-Q3 (before Jul 1): countdown + targets-only display
 // During Q3: per-producer actual vs target with pace flag
 // Post-Q3 (after Sep 30): archive view
-const Q3ProgressWidget = ({ data, onNavigate }) => {
+const Q3ProgressWidget = ({ data, onNavigate, unifiedMode = false }) => {
   const rows = Array.isArray(data?.q3Rows) ? data.q3Rows : [];
   const teamGoal = data?.q3TeamGoal || null;
   const phase = data?.q3Phase || "pre"; // 'pre' | 'live' | 'post'
@@ -892,19 +892,8 @@ const Q3ProgressWidget = ({ data, onNavigate }) => {
       ? `Day ${daysIntoQ3} of ${q3TotalWorkingDays} working days — ${daysRemaining} remaining`
       : `Q3 2026 closed — archive view`;
 
-  return (
-    <Card>
-      <SectionTitle
-        icon="🎯"
-        title="Q3 2026 Progress — FS Pivot Targets"
-        action={<button onClick={() => onNavigate("tasksgoals")} style={{fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>Goals →</button>}
-      />
-
-      {/* Phase banner */}
-      <div style={{padding:"8px 10px", background:bannerBg, borderLeft:`3px solid ${bannerColor}`, borderRadius:3, marginBottom:10, fontSize:11, fontWeight:600, color:bannerColor}}>
-        {bannerText}
-      </div>
-
+  const innerContent = (
+    <>
       {rows.length === 0 ? (
         <EmptyRow message="No Q3 2026 goals found in the database." />
       ) : (
@@ -1000,8 +989,24 @@ const Q3ProgressWidget = ({ data, onNavigate }) => {
           </div>
         </>
       )}
-    
-</Card>
+    </>
+  );
+
+  if (unifiedMode) return innerContent;
+
+  return (
+    <Card>
+      <SectionTitle
+        icon="🎯"
+        title="Q3 2026 Progress — FS Pivot Targets"
+        action={<button onClick={() => onNavigate("tasksgoals")} style={{fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>Goals →</button>}
+      />
+      {/* Phase banner */}
+      <div style={{padding:"8px 10px", background:bannerBg, borderLeft:`3px solid ${bannerColor}`, borderRadius:3, marginBottom:10, fontSize:11, fontWeight:600, color:bannerColor}}>
+        {bannerText}
+      </div>
+      {innerContent}
+    </Card>
   );
 };
 
@@ -1010,7 +1015,7 @@ const Q3ProgressWidget = ({ data, onNavigate }) => {
 // Mirror of Q3ProgressWidget pattern but for the retention goals
 // added 2026-06-17. Shows team touches vs target, AMUTL commission
 // outcome, and per-producer touch progress.
-const Q3RetentionWidget = ({ data, onNavigate }) => {
+const Q3RetentionWidget = ({ data, onNavigate, unifiedMode = false }) => {
   const r = data?.q3Retention || null;
   if (!r) return null;
   const teamTarget = r.teamTarget || 325;
@@ -1026,17 +1031,14 @@ const Q3RetentionWidget = ({ data, onNavigate }) => {
     }))
     .sort((a,b) => b.touches - a.touches);
 
-  return (
-    <Card>
-      <SectionTitle
-        icon="🔄"
-        title="Q3 2026 Retention Progress"
-        action={<button onClick={()=>onNavigate("financials")} style={{fontSize:11, color:T.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600}}>View Comp →</button>}
-      />
-      <div style={{fontSize:10, color:T.slate500, marginBottom:14}}>
-        AMUTL retention touches + commission outcome · Jul 1 – Sep 30, 2026
-        {r.isPreQ3 ? <span style={{color:T.amber, fontWeight:600, marginLeft:6}}>· Pre-Q3 build window</span> : null}
-      </div>
+  const innerContent = (
+    <>
+      {!unifiedMode && (
+        <div style={{fontSize:10, color:T.slate500, marginBottom:14}}>
+          AMUTL retention touches + commission outcome · Jul 1 – Sep 30, 2026
+          {r.isPreQ3 ? <span style={{color:T.amber, fontWeight:600, marginLeft:6}}>· Pre-Q3 build window</span> : null}
+        </div>
+      )}
 
       {/* Team touches headline */}
       <div style={{padding:"10px 12px", borderRadius:8, border:`1px solid ${T.slate200}`, background:T.slate50, marginBottom:10}}>
@@ -1098,6 +1100,91 @@ const Q3RetentionWidget = ({ data, onNavigate }) => {
           No retention touches logged yet for Q3. Program kicks off Monday — Patti owns the workflow. Once daily activity logging includes renewal_touches, this view populates.
         </div>
       )}
+    </>
+  );
+
+  if (unifiedMode) return innerContent;
+
+  return (
+    <Card>
+      <SectionTitle
+        icon="🔄"
+        title="Q3 2026 Retention Progress"
+        action={<button onClick={()=>onNavigate("financials")} style={{fontSize:11, color:T.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600}}>View Comp →</button>}
+      />
+      {innerContent}
+    </Card>
+  );
+};
+
+
+// ── Widget: Q3 2026 Unified Strategic Progress ──────────────────────
+// Single-Card unified view combining FS Pivot offense and Retention defense.
+// One phase banner, two clearly labeled sub-sections (Offense / Defense).
+// Built 2026-06-24 to consolidate the dashboard's two Q3 widgets per the
+// Q3 ScoreBoard L&H Multiplier strategic memo cadence.
+const Q3UnifiedWidget = ({ data, onNavigate }) => {
+  const phase = data?.q3Phase || "pre";
+  const daysUntilQ3 = data?.q3DaysUntil || 0;
+  const daysIntoQ3 = data?.q3DaysInto || 0;
+  const q3TotalWorkingDays = 65;
+  const daysRemaining = Math.max(0, q3TotalWorkingDays - daysIntoQ3);
+  const hasRetention = !!data?.q3Retention;
+  const hasProgress = Array.isArray(data?.q3Rows) && data.q3Rows.length > 0;
+
+  const bannerBg = phase === "pre" ? `${T.blue}10` : phase === "live" ? `${T.green}10` : `${T.slate200}`;
+  const bannerColor = phase === "pre" ? T.blue : phase === "live" ? T.green : T.slate500;
+  const bannerText = phase === "pre"
+    ? `Q3 2026 starts in ${daysUntilQ3} day${daysUntilQ3 === 1 ? "" : "s"} — both pillars go live July 1`
+    : phase === "live"
+      ? `Day ${daysIntoQ3} of ${q3TotalWorkingDays} working days — ${daysRemaining} remaining`
+      : `Q3 2026 closed — archive view`;
+
+  const sectionHeader = (label, sub, color) => (
+    <div style={{margin:"14px 0 8px", display:"flex", alignItems:"baseline", justifyContent:"space-between"}}>
+      <div style={{display:"flex", alignItems:"baseline", gap:8}}>
+        <span style={{fontSize:11, fontWeight:800, color:color, textTransform:"uppercase", letterSpacing:0.6}}>{label}</span>
+        <span style={{fontSize:10, color:T.slate500}}>{sub}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <Card>
+      <SectionTitle
+        icon="🎯"
+        title="Q3 2026 Strategic Progress"
+        action={
+          <div style={{display:"flex", gap:10}}>
+            <button onClick={() => onNavigate("tasksgoals")} style={{fontSize:11, color:T.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600}}>Goals →</button>
+            <button onClick={() => onNavigate("financials")} style={{fontSize:11, color:T.blue, background:"none", border:"none", cursor:"pointer", fontWeight:600}}>Comp →</button>
+          </div>
+        }
+      />
+
+      {/* Single unified phase banner */}
+      <div style={{padding:"8px 10px", background:bannerBg, borderLeft:`3px solid ${bannerColor}`, borderRadius:3, marginBottom:6, fontSize:11, fontWeight:600, color:bannerColor}}>
+        {bannerText}
+      </div>
+
+      {/* Sub-section: Pivots (Offense) */}
+      {sectionHeader("Pivots — Offense", "FS Pivot targets · L&H multiplier driver", T.blue)}
+      {hasProgress
+        ? <Q3ProgressWidget data={data} onNavigate={onNavigate} unifiedMode={true} />
+        : <EmptyRow message="No Q3 FS Pivot goals found." />
+      }
+
+      {/* Visual divider */}
+      <div style={{height:1, background:T.slate200, margin:"16px 0 4px"}} />
+
+      {/* Sub-section: Retention (Defense) */}
+      {sectionHeader("Retention — Defense", "AMUTL touches + commission outcome · Jul 1 – Sep 30, 2026", T.amber)}
+      {hasRetention
+        ? <Q3RetentionWidget data={data} onNavigate={onNavigate} unifiedMode={true} />
+        : <div style={{padding:"12px 14px", background:T.slate50, borderRadius:8, fontSize:11, color:T.slate600, borderLeft:`3px solid ${T.amber}`}}>
+            Retention data not loaded yet for Q3.
+          </div>
+      }
     </Card>
   );
 };
@@ -1669,14 +1756,9 @@ export default function Dashboard({ onNavigate = () => {} }) {
         <ProducerScoreboardWidget data={dashData} onNavigate={onNavigate} />
       </div>
 
-      {/* Fifth Row — Q3 2026 Progress (full width) */}
+      {/* Fifth Row — Q3 2026 Unified Strategic Progress (Pivots + Retention) */}
       <div style={{marginBottom:14}}>
-        <Q3ProgressWidget data={dashData} onNavigate={onNavigate} />
-      </div>
-
-      {/* Sixth Row — Q3 2026 Retention Progress (full width) */}
-      <div style={{marginBottom:14}}>
-        <Q3RetentionWidget data={dashData} onNavigate={onNavigate} />
+        <Q3UnifiedWidget data={dashData} onNavigate={onNavigate} />
       </div>
 
       {/* Bottom Row — Open Items (full width) */}
