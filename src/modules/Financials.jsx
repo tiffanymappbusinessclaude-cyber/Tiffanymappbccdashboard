@@ -75,6 +75,7 @@ function useFinancialsData() {
           compRes, bankRes, ccRes, glRes,
           payrollRunsRes, payrollDetailRes,
           aippRes, scoreboardRes,
+          reconRes,
         ] = await Promise.all([
           // Current year P&L — CPA monthly + YTD (period_month=13)
           supabase.from("cpa_pnl_monthly")
@@ -138,6 +139,15 @@ function useFinancialsData() {
             .select("program_year,period,metric_name,target,actual,achievement_percentage,notes")
             .eq("agency_id", AGENCY_ID)
             .order("program_year", { ascending: false }).limit(20),
+
+          // BCC vs CPA Commission reconciliation (view from migration 020).
+          // Monthly net_payable vs CPA SF-earned. Surfaces Phase 2 data gaps.
+          supabase.from("vw_bcc_vs_cpa_commission_variance")
+            .select("period_year,period_month,cpa_sf_earned,cpa_non_sf,bcc_net_payable,bcc_line_items_only,variance_netpay_minus_cpa,variance_netpay_pct")
+            .eq("agency_id", AGENCY_ID)
+            .order("period_year", { ascending: false })
+            .order("period_month", { ascending: false })
+            .limit(36),
         ]);
 
         const pnlCur   = pnlCurRes.data   || [];
@@ -330,6 +340,19 @@ function useFinancialsData() {
           credit:      parseFloat(g.credit || 0),
         }));
 
+        // ─── BCC vs CPA Commission Reconciliation ───
+        // Maps view rows to a UI-friendly shape. Most-recent month first.
+        const reconciliation = (reconRes.data || []).map(r => ({
+          year:           r.period_year,
+          month:          r.period_month,
+          monthLabel:     `${months[(r.period_month - 1) % 12] || "?"} ${r.period_year}`,
+          cpaSfEarned:    (r.cpa_sf_earned    != null) ? parseFloat(r.cpa_sf_earned)    : null,
+          bccNetPayable:  (r.bcc_net_payable  != null) ? parseFloat(r.bcc_net_payable)  : null,
+          bccLineItems:   (r.bcc_line_items_only != null) ? parseFloat(r.bcc_line_items_only) : null,
+          variance:       (r.variance_netpay_minus_cpa != null) ? parseFloat(r.variance_netpay_minus_cpa) : null,
+          variancePct:    (r.variance_netpay_pct != null) ? parseFloat(r.variance_netpay_pct) : null,
+        }));
+
         setData({
           asOfLabel: ytdLabel,
           currentYear,
@@ -365,6 +388,7 @@ function useFinancialsData() {
           creditAccounts,
           glEntries,
           payroll,
+          reconciliation,
         });
       } catch (e) {
         console.error("Financials load error:", e);
@@ -395,6 +419,7 @@ const EMPTY_DATA = {
   creditAccounts: [],
   glEntries: [],
   payroll: [],
+  reconciliation: [],
 };
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -1093,6 +1118,105 @@ const GLSection = ({ data }) => (
   </Card>
 );
 
+const ReconciliationSection = ({ data }) => {
+  const rows = Array.isArray(data?.reconciliation) ? data.reconciliation : [];
+
+  // Aggregate diagnostics (most-recent 12 months with CPA data present).
+  const cpaCoveredRows = rows.filter(r => Number.isFinite(r.cpaSfEarned) && r.cpaSfEarned !== 0);
+  const totalCpa  = cpaCoveredRows.reduce((s, r) => s + (r.cpaSfEarned   || 0), 0);
+  const totalBcc  = cpaCoveredRows.reduce((s, r) => s + (r.bccNetPayable || 0), 0);
+  const totalVar  = totalBcc - totalCpa;
+  const totalPct  = totalCpa ? Math.round((totalVar / totalCpa) * 1000) / 10 : null;
+
+  return (
+    <>
+      <Card style={{ marginBottom: 14 }}>
+        <CardHeader
+          title="BCC vs CPA — Commission Income Reconciliation"
+          sub={`Monthly variance, BCC net_payable vs CPA SF-earned. View vw_bcc_vs_cpa_commission_variance (migration 020).`}
+          action={<AskBtn context={`I'm reviewing the BCC vs CPA commission reconciliation. Across the most recent ${cpaCoveredRows.length} months with CPA data, BCC net_payable totals $${Math.round(totalBcc).toLocaleString()} vs CPA SF-earned $${Math.round(totalCpa).toLocaleString()}, for a cumulative variance of $${Math.round(totalVar).toLocaleString()} (${totalPct ?? "—"}%). Help me think about what this means.`} />}
+        />
+        <div style={{ fontSize: 12, color: T.slate600, marginTop: 4, marginBottom: 12 }}>
+          BCC net_payable is what State Farm actually deposited per the bi-monthly comp recap PDFs.
+          CPA SF-earned is your CPA's accrual-basis Commission Income (Total Commission Income minus Non State Farm subline).
+          A negative variance generally reflects deductions your CPA expenses rather than netting from revenue (PFA reductions, life premium loans, etc.) plus the basis shift between earned and paid.
+        </div>
+
+        {cpaCoveredRows.length > 0 && (
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 12, marginBottom: 14,
+          }}>
+            <div style={{ background: T.slate50, border: `1px solid ${T.slate200}`, borderRadius: 8, padding: "10px 12px" }}>
+              <div style={{ fontSize: 11, color: T.slate500, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>CPA SF-earned</div>
+              <div style={{ fontSize: 18, color: T.slate900, fontWeight: 700, marginTop: 4 }}>{fmt(totalCpa)}</div>
+              <div style={{ fontSize: 11, color: T.slate500, marginTop: 2 }}>across {cpaCoveredRows.length} mo</div>
+            </div>
+            <div style={{ background: T.slate50, border: `1px solid ${T.slate200}`, borderRadius: 8, padding: "10px 12px" }}>
+              <div style={{ fontSize: 11, color: T.slate500, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>BCC net_payable</div>
+              <div style={{ fontSize: 18, color: T.slate900, fontWeight: 700, marginTop: 4 }}>{fmt(totalBcc)}</div>
+              <div style={{ fontSize: 11, color: T.slate500, marginTop: 2 }}>same {cpaCoveredRows.length} mo</div>
+            </div>
+            <div style={{
+              background: totalVar < 0 ? "#fff7ed" : "#f0fdf4",
+              border: `1px solid ${totalVar < 0 ? "#fed7aa" : "#bbf7d0"}`,
+              borderRadius: 8, padding: "10px 12px",
+            }}>
+              <div style={{ fontSize: 11, color: T.slate500, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Cumulative variance</div>
+              <div style={{ fontSize: 18, color: totalVar < 0 ? "#9a3412" : "#166534", fontWeight: 700, marginTop: 4 }}>{fmt(totalVar)}</div>
+              <div style={{ fontSize: 11, color: T.slate500, marginTop: 2 }}>{totalPct != null ? `${totalPct}%` : "—"}</div>
+            </div>
+          </div>
+        )}
+
+        {rows.length === 0 ? (
+          <div style={{ fontSize: 13, color: T.slate500, padding: "20px 0" }}>
+            No reconciliation rows yet. View is empty — likely no overlap between comp_recap and cpa_pnl_monthly periods.
+          </div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${T.slate200}`, color: T.slate500, textAlign: "left" }}>
+                <th style={{ padding: "8px 10px", fontWeight: 600 }}>Month</th>
+                <th style={{ padding: "8px 10px", fontWeight: 600, textAlign: "right" }}>CPA SF-earned</th>
+                <th style={{ padding: "8px 10px", fontWeight: 600, textAlign: "right" }}>BCC net_payable</th>
+                <th style={{ padding: "8px 10px", fontWeight: 600, textAlign: "right" }}>Variance</th>
+                <th style={{ padding: "8px 10px", fontWeight: 600, textAlign: "right" }}>%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => {
+                const v = r.variance;
+                const isMissing = !Number.isFinite(r.cpaSfEarned) || r.cpaSfEarned === 0;
+                return (
+                  <tr key={`${r.year}-${r.month}-${i}`} style={{ borderBottom: `1px solid ${T.slate100}` }}>
+                    <td style={{ padding: "8px 10px", color: T.slate800, fontWeight: 500 }}>{r.monthLabel}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", color: isMissing ? T.slate400 : T.slate800 }}>{isMissing ? "—" : fmt(r.cpaSfEarned)}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", color: Number.isFinite(r.bccNetPayable) ? T.slate800 : T.slate400 }}>{Number.isFinite(r.bccNetPayable) ? fmt(r.bccNetPayable) : "—"}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 500, color: !Number.isFinite(v) ? T.slate400 : (v < 0 ? "#c2410c" : v > 0 ? "#15803d" : T.slate800) }}>{Number.isFinite(v) ? fmt(v) : "—"}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", color: T.slate500 }}>{Number.isFinite(r.variancePct) ? `${r.variancePct}%` : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader title="Open question for CPA" sub="Tracked in bundle email task d5509d37" />
+        <div style={{ fontSize: 13, color: T.slate700, lineHeight: 1.55, marginTop: 6 }}>
+          What sources besides the bi-monthly comp recap PDFs feed your Commission Income account?
+          Specifically — are AIPP annual payments, ScoreBoard, Life production bonuses, or other
+          State Farm payment streams included there? Once we have that answer the GL Entry Writer
+          accrual refactor (sprint Item 9) can resume.
+        </div>
+      </Card>
+    </>
+  );
+};
+
+
 // ─── Main Financials Module ───────────────────────────────────
 export default function Financials() {
   const [section, setSection] = useState("overview");
@@ -1108,6 +1232,7 @@ export default function Financials() {
     { id: "bank",      label: "Bank Accounts"   },
     { id: "credit",    label: "Credit & Debt"   },
     { id: "gl",        label: "General Ledger"  },
+    { id: "recon",     label: "BCC vs CPA"      },
   ];
 
   return (
@@ -1151,6 +1276,7 @@ export default function Financials() {
       {section === "bank"     && <BankSection data={liveData || EMPTY_DATA} />}
       {section === "credit"   && <CreditSection data={liveData || EMPTY_DATA} />}
       {section === "gl"       && <GLSection data={liveData || EMPTY_DATA} />}
+      {section === "recon"    && <ReconciliationSection data={liveData || EMPTY_DATA} />}
     </div>
   );
 }
