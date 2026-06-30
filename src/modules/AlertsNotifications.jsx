@@ -62,6 +62,8 @@ const T = {
 const ALERT_TYPES = {
   compliance:   { label:"Compliance",   color:T.red,    bg:T.redLt,    icon:"🛡️" },
   automation:   { label:"Automation",   color:T.teal,   bg:T.tealLt,   icon:"⚡" },
+  recipe_silent_failure:
+                { label:"Automation Stale", color:T.teal,   bg:T.tealLt,   icon:"⚡" },
   financial:    { label:"Financial",    color:T.blue,   bg:T.blueLt,   icon:"💰" },
   hr:           { label:"HR",           color:T.green,  bg:T.greenLt,  icon:"👥" },
   document:     { label:"Documents",    color:T.amber,  bg:T.amberLt,  icon:"📁" },
@@ -82,6 +84,20 @@ const Card = ({ children, style={} }) => (
     {children}
   </div>
 );
+
+
+// Format an ISO timestamp like "Jun 29, 9:26pm" — degrades gracefully on
+// missing/invalid input so the UI never crashes on a stray null.
+const formatTimestamp = (iso) => {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase().replace(" ", "");
+    return `${dateStr}, ${timeStr}`;
+  } catch { return ""; }
+};
 
 const AskBtn = ({ context, size = "normal", demoMode = false }) => {
   const [open, setOpen] = useState(false);
@@ -188,15 +204,15 @@ const AlertCard = ({ alert, onRead, onResolve, onNavigate }) => {
             {alert.message}
           </div>
           {alert.resolved_at && (
-            <div style={{ fontSize:11, color:T.green, marginBottom:10 }}>✓ Resolved {alert.resolved_at}</div>
+            <div style={{ fontSize:11, color:T.green, marginBottom:10 }}>✓ Resolved {formatTimestamp(alert.resolved_at)}</div>
           )}
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            {alert.action_module && !alert.is_resolved && (
+            {alert.module_reference && !alert.is_resolved && (
               <button
-                onClick={() => onNavigate(alert.action_module)}
+                onClick={() => onNavigate(alert.module_reference)}
                 style={{ padding:"6px 14px", fontSize:11, fontWeight:600, color:T.white, background:T.navy, border:"none", borderRadius:7, cursor:"pointer" }}
               >
-                {alert.action_label || "Open Module"}
+                Open Module
               </button>
             )}
             {!alert.is_resolved && (
@@ -477,12 +493,21 @@ export default function AlertsNotifications({ onNavigate }) {
   useEffect(() => {
     if (Array.isArray(liveAlerts)) setAlerts(liveAlerts);
   }, [liveAlerts]);
-  useEffect(() => {
-    if (Array.isArray(liveAlerts)) setAlerts(liveAlerts);
-  }, [liveAlerts]);
 
-  const markRead    = (id) => setAlerts(p => p.map(a => a.id===id ? {...a, is_read:true} : a));
-  const markResolved= (id) => setAlerts(p => p.map(a => a.id===id ? {...a, is_resolved:true, resolved_at:"Just now"} : a));
+  // Persist mark-read and mark-resolved to the database. Local state is
+  // updated optimistically so the UI feels instant; the Supabase write
+  // happens in the background. Errors silently revert on next refresh.
+  const markRead = async (id) => {
+    setAlerts(p => p.map(a => a.id === id ? { ...a, is_read: true } : a));
+    try { await supabase.from("alerts").update({ is_read: true }).eq("id", id); }
+    catch (e) { console.error("Failed to mark alert read:", e); }
+  };
+  const markResolved = async (id) => {
+    const nowIso = new Date().toISOString();
+    setAlerts(p => p.map(a => a.id === id ? { ...a, is_resolved: true, resolved_at: nowIso } : a));
+    try { await supabase.from("alerts").update({ is_resolved: true, resolved_at: nowIso }).eq("id", id); }
+    catch (e) { console.error("Failed to resolve alert:", e); }
+  };
 
   if (alertsLoading) return <div style={{padding:40,textAlign:"center",fontSize:13,color:"#64748B"}}>Loading alerts…</div>;
   if (alerts.length === 0) return <EmptyState module="alerts" />;
