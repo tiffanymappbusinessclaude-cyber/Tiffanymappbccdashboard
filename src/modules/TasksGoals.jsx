@@ -302,7 +302,7 @@ const NewTaskModal = ({ onSave, onCancel }) => {
             </div>
             <div>
               <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>DUE DATE</label>
-              <input type="text" value={form.due_date} onChange={e => set("due_date", e.target.value)} placeholder="May 1, 2026"
+              <input type="date" value={form.due_date} onChange={e => set("due_date", e.target.value)}
                 style={{ width:"100%", padding:"8px 10px", fontSize:12, color:T.slate800, border:`1px solid ${T.slate200}`, borderRadius:8, outline:"none", boxSizing:"border-box" }} />
             </div>
             <div>
@@ -314,7 +314,7 @@ const NewTaskModal = ({ onSave, onCancel }) => {
         </div>
         <div style={{ padding:"12px 20px", borderTop:`1px solid ${T.slate200}`, display:"flex", justifyContent:"flex-end", gap:8 }}>
           <button onClick={onCancel} style={{ padding:"7px 14px", fontSize:11, fontWeight:600, color:T.slate600, background:T.slate100, border:"none", borderRadius:7, cursor:"pointer" }}>Cancel</button>
-          <button onClick={() => form.title.trim() && onSave({ ...form, id:`t${Date.now()}`, status:"open", created_by:"Jane Smith", created_at:"Today" })}
+          <button onClick={() => form.title.trim() && onSave(form)}
             disabled={!form.title.trim()}
             style={{ padding:"7px 16px", fontSize:11, fontWeight:600, color:T.white, background:form.title.trim()?T.navy:"#94A3B8", border:"none", borderRadius:7, cursor:form.title.trim()?"pointer":"not-allowed" }}>
             Create Task
@@ -618,14 +618,64 @@ export default function TasksGoals({ onNavigate }) {
   if (tasksLoading || goalsLoading) return <div style={{padding:40,textAlign:"center",fontSize:13,color:"#64748B"}}>Loading tasks and goals…</div>;
   if (tasks.length === 0 && goals.length === 0) return <EmptyState module="tasks" />;
 
-  const completeTask = (id) => {
-    setTasks(prev => prev.map(t => t.id === id
-      ? { ...t, status:"completed", completed_at:new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) }
-      : t
-    ));
+  const completeTask = async (id) => {
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) {
+        console.error("Complete task failed:", error);
+        alert("Complete task failed: " + error.message);
+        return;
+      }
+      setTasks(prev => prev.map(t => t.id === id
+        ? { ...t, status:"completed", completed_at:new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) }
+        : t
+      ));
+    } catch (e) {
+      console.error("Complete task error:", e);
+      alert("Complete task failed: " + (e?.message || String(e)));
+    }
   };
 
-  const addTask = (task) => setTasks(prev => [task, ...prev]);
+  const addTask = async (form) => {
+    try {
+      const payload = {
+        agency_id: AGENCY_ID,
+        title: form.title,
+        description: form.description || null,
+        priority: form.priority || "medium",
+        status: "open",
+        module_reference: form.module || "general",
+        due_date: form.due_date || null,
+        created_by: form.assigned_to || "user",
+      };
+      const { data: newTask, error } = await supabase
+        .from("tasks")
+        .insert(payload)
+        .select()
+        .single();
+      if (error) {
+        console.error("Add task failed:", error);
+        alert("Add task failed: " + error.message);
+        return;
+      }
+      setTasks(prev => [{
+        ...newTask,
+        module: newTask.module_reference || "general",
+        due_date: newTask.due_date
+          ? new Date(newTask.due_date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})
+          : "",
+        completed_at: newTask.completed_at
+          ? new Date(newTask.completed_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})
+          : "",
+      }, ...prev]);
+    } catch (e) {
+      console.error("Add task error:", e);
+      alert("Add task failed: " + (e?.message || String(e)));
+    }
+  };
 
   const sections = [
     { id:"overview",  label:"Overview"   },
