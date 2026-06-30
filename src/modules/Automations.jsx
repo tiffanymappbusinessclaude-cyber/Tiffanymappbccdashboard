@@ -57,147 +57,6 @@ const T = {
 };
 
 // ─── Mock Data ────────────────────────────────────────────────
-const MOCK_RECIPES = [
-  {
-    id:"r1", recipe_name:"Daily Briefing Email",
-    recipe_description:"Generates and sends a morning briefing email at 6AM with revenue snapshot, AIPP progress, open tasks, active alerts, compliance deadlines, and today's social posts.",
-    trigger_type:"cron", cron_expression:"0 6 * * *", cron_label:"Daily at 6:00 AM",
-    composio_action:"GMAIL_SEND_EMAIL", composio_connection:"gmail",
-    uses_groq:true, category:"communication",
-    is_active:true, last_run_at:"Today 6:02 AM", last_run_status:"failed",
-    run_count_30d:28, success_rate:96,
-  },
-  {
-    id:"r2", recipe_name:"Gmail Organizer",
-    recipe_description:"Scans inbox hourly, labels and files emails by category (SF Comp, Documents, Clients, Resumes), flags anything requiring agent attention.",
-    trigger_type:"cron", cron_expression:"0 * * * *", cron_label:"Every hour",
-    composio_action:"GMAIL_LIST_THREADS", composio_connection:"gmail",
-    uses_groq:false, category:"email",
-    is_active:true, last_run_at:"Today 7:14 AM", last_run_status:"success",
-    run_count_30d:712, success_rate:99,
-  },
-  {
-    id:"r3", recipe_name:"Document Importer",
-    recipe_description:"Monitors Gmail for financial documents — COMP_RECAP, payroll exports, bank statements. Saves to Google Drive, parses with the Composio-hosted LLM, routes data to correct Supabase tables.",
-    trigger_type:"cron", cron_expression:"0 * * * *", cron_label:"Every hour",
-    composio_action:"GMAIL_LIST_THREADS", composio_connection:"gmail",
-    uses_groq:true, category:"documents",
-    is_active:true, last_run_at:"Yesterday 2:30 PM", last_run_status:"partial",
-    run_count_30d:712, success_rate:94,
-  },
-  {
-    id:"r4", recipe_name:"Resume Scanner",
-    recipe_description:"Scans Gmail daily for incoming resumes. Auto-creates applicant records, scores candidates with the Composio-hosted LLM, generates One Page Interview Focus, fires new applicant alert.",
-    trigger_type:"cron", cron_expression:"0 7 * * *", cron_label:"Daily at 7:00 AM",
-    composio_action:"GMAIL_LIST_THREADS", composio_connection:"gmail",
-    uses_groq:true, category:"hr",
-    is_active:true, last_run_at:"Today 7:00 AM", last_run_status:"success",
-    run_count_30d:28, success_rate:100,
-  },
-  {
-    id:"r5", recipe_name:"Drive Filer",
-    recipe_description:"Nightly sweep ensuring all processed documents are correctly filed in Google Drive by year, month, and document type.",
-    trigger_type:"cron", cron_expression:"0 23 * * *", cron_label:"Daily at 11:00 PM",
-    composio_action:"GDRIVE_CREATE_FILE", composio_connection:"gdrive",
-    uses_groq:false, category:"documents",
-    is_active:true, last_run_at:"Yesterday 11:00 PM", last_run_status:"success",
-    run_count_30d:28, success_rate:100,
-  },
-  {
-    id:"r6", recipe_name:"Facebook Post Scheduler",
-    recipe_description:"Posts scheduled Facebook content from the content calendar. Writes post_url back to content_calendar on success.",
-    trigger_type:"cron", cron_expression:"0 8 * * *", cron_label:"Daily at 8:00 AM",
-    composio_action:"FACEBOOK_CREATE_POST", composio_connection:"facebook",
-    uses_groq:false, category:"social",
-    is_active:true, last_run_at:"Yesterday 9:00 AM", last_run_status:"success",
-    run_count_30d:28, success_rate:96,
-  },
-  {
-    id:"r7", recipe_name:"LinkedIn Post Scheduler",
-    recipe_description:"Posts scheduled LinkedIn content from the content calendar. Writes post_url back on success.",
-    trigger_type:"cron", cron_expression:"0 8 * * *", cron_label:"Daily at 8:00 AM",
-    composio_action:"LINKEDIN_CREATE_POST", composio_connection:"linkedin",
-    uses_groq:false, category:"social",
-    is_active:true, last_run_at:"Yesterday 12:00 PM", last_run_status:"success",
-    run_count_30d:28, success_rate:93,
-  },
-  {
-    id:"r8", recipe_name:"Instagram Manual Post Reminder",
-    recipe_description:"Instagram cannot be auto-posted via API. Checks for scheduled Instagram posts daily and creates a reminder alert for manual posting.",
-    trigger_type:"cron", cron_expression:"0 8 * * *", cron_label:"Daily at 8:00 AM",
-    composio_action:null, composio_connection:null,
-    uses_groq:false, category:"social",
-    is_active:true, last_run_at:"Today 8:00 AM", last_run_status:"success",
-    run_count_30d:28, success_rate:100,
-  },
-  {
-    id:"r9", recipe_name:"Compliance Deadline Monitor",
-    recipe_description:"Checks compliance calendar daily and fires alerts for upcoming deadlines based on each rule's alert_days_before setting.",
-    trigger_type:"cron", cron_expression:"0 7 * * *", cron_label:"Daily at 7:00 AM",
-    composio_action:null, composio_connection:null,
-    uses_groq:false, category:"compliance",
-    is_active:true, last_run_at:"Today 7:00 AM", last_run_status:"success",
-    run_count_30d:28, success_rate:100,
-  },
-  {
-    id:"r10", recipe_name:"Monthly Performance Reminder",
-    recipe_description:"Fires on the 1st of each month reminding agent to log staff performance metrics for the prior month.",
-    trigger_type:"cron", cron_expression:"0 8 1 * *", cron_label:"1st of month at 8:00 AM",
-    composio_action:null, composio_connection:null,
-    uses_groq:false, category:"hr",
-    is_active:true, last_run_at:"Apr 1 8:00 AM", last_run_status:"success",
-    run_count_30d:1, success_rate:100,
-  },
-];
-
-const MOCK_RUN_LOG = [
-  { id:"l1",  recipe_name:"Gmail Organizer",          run_at:"Today 7:14 AM",        status:"success", records_processed:14, duration_seconds:3,  output_summary:"14 emails labeled and filed. 2 flagged for agent review." },
-  { id:"l2",  recipe_name:"Daily Briefing Email",     run_at:"Today 6:02 AM",        status:"failed",  records_processed:0,  duration_seconds:8,  output_summary:"Error: Gmail connection timeout. Authentication may need refresh.", error_message:"Gmail OAuth token expired — reconnect in Composio Settings" },
-  { id:"l3",  recipe_name:"Compliance Deadline Monitor",run_at:"Today 7:00 AM",     status:"success", records_processed:3,  duration_seconds:1,  output_summary:"3 upcoming deadlines checked. 1 alert created (E&O renewal 96 days out)." },
-  { id:"l4",  recipe_name:"Resume Scanner",           run_at:"Today 7:00 AM",        status:"success", records_processed:0,  duration_seconds:4,  output_summary:"No new resumes detected in inbox." },
-  { id:"l5",  recipe_name:"Instagram Reminder",       run_at:"Today 8:00 AM",        status:"success", records_processed:1,  duration_seconds:1,  output_summary:"1 Instagram post scheduled today — manual posting reminder alert created." },
-  { id:"l6",  recipe_name:"Facebook Post Scheduler",  run_at:"Yesterday 9:00 AM",    status:"success", records_processed:1,  duration_seconds:6,  output_summary:"1 post published successfully. post_url saved to content_calendar." },
-  { id:"l7",  recipe_name:"LinkedIn Post Scheduler",  run_at:"Yesterday 12:00 PM",   status:"success", records_processed:1,  duration_seconds:5,  output_summary:"1 post published successfully. post_url saved to content_calendar." },
-  { id:"l8",  recipe_name:"Document Importer",        run_at:"Yesterday 2:30 PM",    status:"partial", records_processed:1,  duration_seconds:22, output_summary:"1 document detected (payroll export). LLM classification: payroll_export. 2 tables updated. 1 file could not be parsed — saved to Drive for manual review." },
-  { id:"l9",  recipe_name:"Drive Filer",              run_at:"Yesterday 11:00 PM",   status:"success", records_processed:3,  duration_seconds:4,  output_summary:"3 documents filed to correct Drive folders. BCC/2026/April/ structure verified." },
-  { id:"l10", recipe_name:"Gmail Organizer",          run_at:"Yesterday 6:14 PM",    status:"success", records_processed:7,  duration_seconds:3,  output_summary:"7 emails labeled and filed." },
-  { id:"l11", recipe_name:"Gmail Organizer",          run_at:"Yesterday 5:14 PM",    status:"success", records_processed:2,  duration_seconds:2,  output_summary:"2 emails labeled and filed." },
-  { id:"l12", recipe_name:"Daily Briefing Email",     run_at:"Yesterday 6:01 AM",    status:"success", records_processed:1,  duration_seconds:11, output_summary:"Briefing email sent to tmapp09@gmail.com. Subject: Your Agency Snapshot." },
-];
-
-const MOCK_CONNECTIONS = [
-  { id:"c1", platform:"Gmail",        icon:"📧", status:"error",   connected_account:"tiffanymapp.businessclaude@gmail.com", last_sync:"Today 6:00 AM",    note:"OAuth token expired — needs reconnection in Composio" },
-  { id:"c2", platform:"Google Drive", icon:"📁", status:"healthy", connected_account:"tiffanymapp.businessclaude@gmail.com", last_sync:"Yesterday 11:00 PM", note:"All Drive operations running normally" },
-  { id:"c3", platform:"Google Calendar",icon:"📅",status:"healthy",connected_account:"tiffanymapp.businessclaude@gmail.com", last_sync:"Today 7:00 AM",    note:"Calendar sync active" },
-  { id:"c4", platform:"Facebook",     icon:"👥", status:"healthy", connected_account:"Smith Insurance Agency Page", last_sync:"Yesterday 9:00 AM", note:"Page posting active" },
-  { id:"c5", platform:"LinkedIn",     icon:"💼", status:"healthy", connected_account:"Tiffany Mapp",           last_sync:"Yesterday 12:00 PM", note:"Profile posting active" },
-  { id:"c6", platform:"Instagram",    icon:"📸", status:"manual",  connected_account:"@tiffanymappstatefarm",      last_sync:"N/A",              note:"Instagram requires manual daily posting — no API scheduling available" },
-];
-
-const MOCK_BRIEFINGS = [
-  {
-    id:"b1", date:"Apr 26, 2026", sent_at:"6:01 AM", delivered:true, opened:true,
-    content:"Good morning Tiffany — here's your agency snapshot for Sunday April 26.\n\n💰 Revenue MTD: $48,240 (↑12% vs last year)\n🎯 AIPP: 47.5% of $142,000 target — on track\n📋 Tasks: 7 open, 2 due this week\n⚠️ Alerts: 3 active (1 critical — SF social media audit due May 11)\n📱 Social: 2 posts scheduled today (Facebook 9AM, LinkedIn 12PM) + Instagram manual needed\n🔴 Automation: Drive Filer ran successfully last night\n\nHave a great day."
-  },
-  {
-    id:"b2", date:"Apr 25, 2026", sent_at:"6:01 AM", delivered:true, opened:true,
-    content:"Good morning Tiffany — here's your agency snapshot for Saturday April 25.\n\n💰 Revenue MTD: $48,240 (↑12% vs last year)\n🎯 AIPP: 47.5% of $142,000 target — on track\n📋 Tasks: 7 open, 2 due this week\n⚠️ Alerts: 2 active\n📱 Social: Facebook post scheduled 9AM\n✅ All automations ran successfully overnight."
-  },
-  {
-    id:"b3", date:"Apr 24, 2026", sent_at:"6:01 AM", delivered:true, opened:false,
-    content:"Good morning Tiffany — here's your agency snapshot for Friday April 24.\n\n💰 Revenue MTD: $42,400 (↑9% vs last year)\n🎯 AIPP: 44.2% of $142,000 target\n📋 Tasks: 8 open, 3 due this week\n⚠️ Alerts: 2 active\n📱 Social: Facebook and LinkedIn posts scheduled\n✅ All automations ran successfully overnight."
-  },
-];
-
-const MOCK_IMPORTS = [
-  { id:"i1", date:"Apr 25, 2026", file_name:"april_payroll_export.csv",   source:"Email from Gusto",            status:"complete", groq_type:"payroll_export",  tables:["payroll_runs","payroll_detail"], records:4 },
-  { id:"i2", date:"Apr 20, 2026", file_name:"SF_COMP_April_2026.pdf",     source:"Email from State Farm",       status:"complete", groq_type:"comp_recap",      tables:["comp_recap","aipp_tracking"],   records:5 },
-  { id:"i3", date:"Apr 15, 2026", file_name:"chase_march_statement.pdf",  source:"Email from Chase",            status:"partial",  groq_type:"bank_statement",  tables:["journal_entries"],              records:18 },
-  { id:"i4", date:"Apr 10, 2026", file_name:"resume_marcus_t.pdf",        source:"Email from candidate",        status:"complete", groq_type:"resume",          tables:["applicants","documents"],       records:1  },
-  { id:"i5", date:"Apr 5, 2026",  file_name:"SF_COMP_March_2026.pdf",     source:"Email from State Farm",       status:"complete", groq_type:"comp_recap",      tables:["comp_recap","aipp_tracking"],   records:4  },
-  { id:"i6", date:"Apr 1, 2026",  file_name:"q1_tax_estimate_2026.pdf",   source:"Email from Club Capital Tax", status:"complete", groq_type:"tax_document",    tables:["documents"],                    records:0  },
-];
-
 // ─── Shared Components ────────────────────────────────────────
 const Card = ({ children, style={} }) => (
   <div style={{ background:T.white, border:`1px solid ${T.slate200}`, borderRadius:12, padding:"16px 18px", ...style }}>
@@ -231,6 +90,73 @@ const CategoryBadge = ({ category }) => {
   };
   const s = map[category] || { color:T.slate500, bg:T.slate100, label:category };
   return <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:s.bg, color:s.color }}>{s.label}</span>;
+};
+
+
+// ─── Live-data Synthesis Helpers ──────────────────────────────────────────
+// Convert raw DB rows into the display-friendly shape the UI was originally
+// designed around. Replaces fields that used to come from MOCK_RECIPES
+// (cron_label, category) and joins run_log rows to recipes by recipe_id.
+
+// Cron expression → human-readable cadence. Degrades to raw expression.
+const formatCron = (expr) => {
+  if (!expr || typeof expr !== "string") return "—";
+  const m = expr.trim().match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/);
+  if (!m) return expr;
+  const [, min, hr, dom, mon, dow] = m;
+  const stepMin = (min.match(/^\*\/(\d+)$/) || [])[1];
+  if (stepMin && hr === "*" && dom === "*" && mon === "*" && dow === "*") {
+    return `Every ${stepMin} min`;
+  }
+  if (/^\d+,\d+$/.test(min) && hr === "*") return "Twice an hour";
+  if (/^\d+$/.test(min) && /^\d+$/.test(hr) && dom === "*" && mon === "*" && dow === "*") {
+    return `Daily ${hr.padStart(2,"0")}:${min.padStart(2,"0")} UTC`;
+  }
+  if (/^\d+$/.test(min) && /^\d+$/.test(hr) && dom === "*" && mon === "*" && /^\d+$/.test(dow)) {
+    const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    return `Weekly ${days[parseInt(dow,10)] || `day ${dow}`} ${hr.padStart(2,"0")}:${min.padStart(2,"0")} UTC`;
+  }
+  if (/^\d+$/.test(min) && /^\d+$/.test(hr) && /^\d+$/.test(dom) && mon === "*" && dow === "*") {
+    return `Monthly day ${dom} ${hr.padStart(2,"0")}:${min.padStart(2,"0")} UTC`;
+  }
+  return expr;
+};
+
+const recipeCategory = (r) => {
+  const h = (r?.internal_handler || "").toLowerCase();
+  const a = (r?.composio_action  || "").toLowerCase();
+  if (/(gl|payroll|bank|cc|credit|comp_recap)/.test(h)) return "Financial";
+  if (/(document|doc_|drive|archive)/.test(h))           return "Documents";
+  if (/(briefing|email|mail|notif)/.test(h) || /gmail/.test(a)) return "Communication";
+  if (/(compliance|close|monitor|frontrunner|underperformance|silent_failure|goals)/.test(h)) return "Operations";
+  if (/(facebook|linkedin|instagram|social)/.test(h) || /(facebook|linkedin)/.test(a)) return "Social";
+  return "System";
+};
+
+const recipeStats = (recipeId, runLog) => {
+  if (!Array.isArray(runLog)) return { runs: 0, success_rate: 0 };
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const rows = runLog.filter(r => r.recipe_id === recipeId && new Date(r.run_at).getTime() >= cutoff);
+  const runs = rows.length;
+  const ok = rows.filter(r => r.status === "success").length;
+  return { runs, success_rate: runs > 0 ? Math.round((ok / runs) * 100) : 0 };
+};
+
+const recipeNameFor = (recipeId, recipes) => {
+  if (!Array.isArray(recipes)) return "(unknown)";
+  const r = recipes.find(r => r.id === recipeId);
+  return r?.recipe_name || "(unknown)";
+};
+
+const formatTimestamp = (iso) => {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase().replace(" ", "");
+    return `${dateStr}, ${timeStr}`;
+  } catch { return "—"; }
 };
 
 const AskBtn = ({ context, size = "normal", demoMode = false }) => {
@@ -344,8 +270,8 @@ const AutomationOverview = ({ recipes, runLog, connections }) => {
           {recentRuns.map((run,i) => (
             <div key={run.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"7px 0", borderBottom:i<recentRuns.length-1?`1px solid ${T.slate100}`:"none" }}>
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:12, fontWeight:500, color:T.slate800, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{run.recipe_name}</div>
-                <div style={{ fontSize:10, color:T.slate400 }}>{run.run_at} · {run.duration_seconds}s</div>
+                <div style={{ fontSize:12, fontWeight:500, color:T.slate800, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{recipeNameFor(run.recipe_id, recipes)}</div>
+                <div style={{ fontSize:10, color:T.slate400 }}>{formatTimestamp(run.run_at)} · {run.duration_seconds}s</div>
               </div>
               <StatusPill status={run.status} />
             </div>
@@ -413,7 +339,7 @@ const RunLog = ({ runLog }) => {
               >
                 <div style={{ flex:1 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
-                    <span style={{ fontSize:12, fontWeight:600, color:T.slate800 }}>{run.recipe_name}</span>
+                    <span style={{ fontSize:12, fontWeight:600, color:T.slate800 }}>{recipeNameFor(run.recipe_id, recipes)}</span>
                     <StatusPill status={run.status} />
                   </div>
                   <div style={{ fontSize:10, color:T.slate400 }}>
@@ -434,7 +360,7 @@ const RunLog = ({ runLog }) => {
                     </div>
                   )}
                   <div style={{ marginTop:8 }}>
-                    <AskBtn size="small" context={`Automation run details:\nRecipe: ${run.recipe_name}\nStatus: ${run.status}\nTime: ${run.run_at}\nDuration: ${run.duration_seconds}s\nRecords processed: ${run.records_processed}\nSummary: ${run.output_summary}${run.error_message?"\nError: "+run.error_message:""}\n\nHelp me understand this result and what action I should take.`} />
+                    <AskBtn size="small" context={`Automation run details:\nRecipe: ${recipeNameFor(run.recipe_id, recipes)}\nStatus: ${run.status}\nTime: ${run.run_at}\nDuration: ${run.duration_seconds}s\nRecords processed: ${run.records_processed}\nSummary: ${run.output_summary}${run.error_message?"\nError: "+run.error_message:""}\n\nHelp me understand this result and what action I should take.`} />
                   </div>
                 </div>
               )}
@@ -466,13 +392,10 @@ const Recipes = ({ recipes, onToggle }) => {
                 <div style={{ flex:1, cursor:"pointer" }} onClick={() => setExpanded(isExpanded?null:recipe.id)}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" }}>
                     <span style={{ fontSize:13, fontWeight:600, color:recipe.is_active?T.slate900:T.slate400 }}>{recipe.recipe_name}</span>
-                    <CategoryBadge category={recipe.category} />
-                    {recipe.uses_groq && (
-                      <span style={{ fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:20, background:T.tealLt, color:T.teal }}>LLM</span>
-                    )}
-                  </div>
+                    <CategoryBadge category={recipeCategory(recipe)} />
+              </div>
                   <div style={{ fontSize:11, color:T.slate400 }}>
-                    {recipe.cron_label} · Last run: {recipe.last_run_at} · {recipe.run_count_30d} runs/30 days · {recipe.success_rate}% success
+                    {formatCron(recipe.cron_expression)} · Last run: {formatTimestamp(recipe.last_run_at)} · {recipeStats(recipe.id, runLog).runs} runs/30d · {recipeStats(recipe.id, runLog).success_rate}% success
                   </div>
                 </div>
 
@@ -507,18 +430,17 @@ const Recipes = ({ recipes, onToggle }) => {
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:8, marginBottom:12 }}>
                     {[
-                      { label:"Trigger",    value:recipe.cron_label },
+                      { label:"Trigger",    value:formatCron(recipe.cron_expression) },
                       { label:"Action",     value:recipe.composio_action || "Internal only" },
                       { label:"Connection", value:recipe.composio_connection ? recipe.composio_connection.charAt(0).toUpperCase()+recipe.composio_connection.slice(1) : "None needed" },
-                      { label:"Processing", value:recipe.uses_groq?"Composio LLM (free)":"None" },
-                    ].map((detail,i) => (
+                        ].map((detail,i) => (
                       <div key={i} style={{ background:T.slate50, borderRadius:8, padding:"8px 10px" }}>
                         <div style={{ fontSize:10, color:T.slate400, marginBottom:2 }}>{detail.label}</div>
                         <div style={{ fontSize:11, fontWeight:500, color:T.slate700 }}>{detail.value}</div>
                       </div>
                     ))}
                   </div>
-                  <AskBtn size="small" context={`Automation recipe details:\nName: ${recipe.recipe_name}\nDescription: ${recipe.recipe_description}\nTrigger: ${recipe.cron_label}\nComposio Action: ${recipe.composio_action || "None"}\nConnection: ${recipe.composio_connection || "None"}\nUses Composio LLM parsing: ${recipe.uses_groq}\nSuccess Rate: ${recipe.success_rate}%\n\nHelp me understand what this automation does and whether it's configured optimally for my agency.`} />
+                  <AskBtn size="small" context={`Automation recipe details:\nName: ${recipe.recipe_name}\nDescription: ${recipe.recipe_description}\nTrigger: ${formatCron(recipe.cron_expression)}\nComposio Action: ${recipe.composio_action || "None"}\nConnection: ${recipe.composio_connection || "None"}\nRuns (30d): ${recipeStats(recipe.id, runLog).runs} at ${recipeStats(recipe.id, runLog).success_rate}% success\n\nHelp me understand what this automation does and whether it's configured optimally for my agency.`} />
                 </div>
               )}
             </div>
@@ -832,8 +754,18 @@ export default function Automations() {
     loadConnections();
   }, []);
 
-  const toggleRecipe = (id) => {
-    setRecipes(prev => prev.map(r => r.id === id ? { ...r, is_active: !r.is_active } : r));
+  // Toggle is_active with optimistic local update + DB persist. Errors
+  // log to console; next refresh reflects authoritative DB state either way.
+  const toggleRecipe = async (id) => {
+    const current = recipes.find(r => r.id === id);
+    if (!current) return;
+    const next = !current.is_active;
+    setRecipes(prev => prev.map(r => r.id === id ? { ...r, is_active: next } : r));
+    try {
+      await supabase.from("automation_recipes").update({ is_active: next }).eq("id", id);
+    } catch (e) {
+      console.error("Failed to toggle recipe:", e);
+    }
   };
 
   if (recipesLoading) return <div style={{padding:40,textAlign:"center",fontSize:13,color:"#64748B"}}>Loading automations…</div>;
@@ -842,7 +774,7 @@ export default function Automations() {
   const sections = [
     { id:"overview",  label:"Overview"          },
     { id:"runlog",    label:"Run Log"            },
-    { id:"recipes",   label:"Recipes (10)"       },
+    { id:"recipes",   label:`Recipes (${recipes.length})` },
     { id:"connections",label:"Connections"       },
     { id:"briefing",  label:"Daily Briefing"     },
     { id:"importer",  label:"Doc Importer"       },
@@ -855,7 +787,7 @@ export default function Automations() {
         <div>
           <div style={{ fontSize:20, fontWeight:700, color:T.slate900, letterSpacing:"-0.02em" }}>Automations</div>
           <div style={{ fontSize:12, color:T.slate500, marginTop:3 }}>
-            10 active recipes · Composio executes · Composio LLM parses · All results logged here
+            {recipes.filter(r => r.is_active).length} active recipes · Composio + Supabase execute · All results logged here
           </div>
         </div>
         <AskBtn context="I'm reviewing my BCC automations. Give me a health check — what's running well, what needs attention, and are there any automation improvements I should consider for my agency?" />
