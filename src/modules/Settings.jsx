@@ -71,14 +71,6 @@ const MOCK_USERS = [
   { id:"u4", name:"Steven Bonventre",email:"steven@clubcapitaltax.com",role:"accountant",last_login:"Apr 14, 2026",  is_active:true,  is_current:false },
 ];
 
-const MOCK_CONNECTIONS = [
-  { id:"c1", platform:"Gmail",          icon:"📧", status:"error",   account:"jane@smithagency.com",        last_sync:"Today 6:00 AM",    note:"OAuth token expired — reconnect required" },
-  { id:"c2", platform:"Google Drive",   icon:"📁", status:"healthy", account:"jane@smithagency.com",        last_sync:"Yesterday 11:00 PM",note:"Active" },
-  { id:"c3", platform:"Google Calendar",icon:"📅", status:"healthy", account:"jane@smithagency.com",        last_sync:"Today 7:00 AM",    note:"Active" },
-  { id:"c4", platform:"Facebook",       icon:"👥", status:"healthy", account:"Smith Insurance Agency Page", last_sync:"Yesterday 9:00 AM", note:"Active" },
-  { id:"c5", platform:"LinkedIn",       icon:"💼", status:"healthy", account:"Jane Smith",                  last_sync:"Yesterday 12:00 PM",note:"Active" },
-  { id:"c6", platform:"Instagram",      icon:"📸", status:"manual",  account:"@smithinsurance",             last_sync:"N/A",              note:"Manual posting required — no API scheduling" },
-];
 
 const MOCK_AGENCY = {
   name:          "Smith Insurance Agency",
@@ -95,18 +87,6 @@ const MOCK_AGENCY = {
   setup_date:    "April 15, 2026",
 };
 
-const MOCK_CONFIG = {
-  timezone:          "America/Chicago",
-  fiscal_year_start: "January 1",
-  accounting_method: "Cash Basis",
-  currency:          "USD",
-  briefing_time:     "6:00 AM",
-  briefing_email:    "jane@smithagency.com",
-  briefing_enabled:  true,
-  aipp_target:       142000,
-  aipp_year:         2026,
-  dashboard_period:  "mtd",
-};
 
 // ─── Shared Components ────────────────────────────────────────
 const Card = ({ children, style={} }) => (
@@ -263,21 +243,74 @@ const TeamAccess = ({ users }) => {
   const [showInvite,  setShowInvite]  = useState(false);
   const [editingRole, setEditingRole] = useState(null);
 
-  const handleInvite = (form) => {
-    setAllUsers(prev => [...prev, {
-      id:`u${Date.now()}`, name:form.name, email:form.email,
-      role:form.role, last_login:"Never", is_active:true, is_current:false, pending:true,
-    }]);
-    setShowInvite(false);
+  const handleInvite = async (form) => {
+    try {
+      const { data: newUser, error } = await supabase
+        .from("users")
+        .insert({
+          agency_id: AGENCY_ID,
+          email: form.email,
+          full_name: form.name,
+          role: form.role,
+          is_active: true,
+          invited_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      if (error) {
+        console.error("Invite failed:", error);
+        alert("Invite failed: " + error.message);
+        return;
+      }
+      setAllUsers(prev => [...prev, {
+        ...newUser,
+        name: newUser.full_name || form.name,
+        last_login: "Never",
+        is_current: false,
+        pending: true,
+      }]);
+      setShowInvite(false);
+    } catch (e) {
+      console.error("Invite error:", e);
+      alert("Invite failed: " + (e?.message || String(e)));
+    }
   };
 
-  const handleRevoke = (id) => {
-    setAllUsers(prev => prev.map(u => u.id===id ? {...u, is_active:false} : u));
+  const handleRevoke = async (id) => {
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({ is_active: false })
+        .eq("id", id);
+      if (error) {
+        console.error("Revoke failed:", error);
+        alert("Revoke failed: " + error.message);
+        return;
+      }
+      setAllUsers(prev => prev.map(u => u.id===id ? {...u, is_active:false} : u));
+    } catch (e) {
+      console.error("Revoke error:", e);
+      alert("Revoke failed: " + (e?.message || String(e)));
+    }
   };
 
-  const handleRoleChange = (id, role) => {
-    setAllUsers(prev => prev.map(u => u.id===id ? {...u, role} : u));
-    setEditingRole(null);
+  const handleRoleChange = async (id, role) => {
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({ role })
+        .eq("id", id);
+      if (error) {
+        console.error("Role change failed:", error);
+        alert("Role change failed: " + error.message);
+        return;
+      }
+      setAllUsers(prev => prev.map(u => u.id===id ? {...u, role} : u));
+      setEditingRole(null);
+    } catch (e) {
+      console.error("Role change error:", e);
+      alert("Role change failed: " + (e?.message || String(e)));
+    }
   };
 
   return (
@@ -1115,7 +1148,14 @@ export default function Settings() {
 
       {/* Section Content */}
       {section === "profile"     && <AgencyProfile      agency={realAgency} />}
-      {section === "team"        && <TeamAccess         users={usersData.length > 0 ? usersData : MOCK_USERS} />}
+      {section === "team"        && <TeamAccess         users={usersData.length > 0
+        ? usersData.map(u => ({
+            ...u,
+            name: u.full_name || u.email || "Unknown",
+            pending: !u.auth_user_id,
+            is_current: false,  // TODO: compare to auth.uid() when auth wiring lands
+          }))
+        : MOCK_USERS} />}
       {section === "connections" && <ConnectedAccounts />}
       {section === "config"      && <BCCConfiguration />}
       {section === "about"       && <About              agency={realAgency} />}
