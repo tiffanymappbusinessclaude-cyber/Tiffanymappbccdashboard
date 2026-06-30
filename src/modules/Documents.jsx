@@ -77,138 +77,7 @@ const DOC_TYPES = {
 };
 
 // ─── Mock Data ────────────────────────────────────────────────
-const MOCK_DOCUMENTS = [
-  {
-    id:"d1",  file_name:"SF_COMP_April_2026.pdf",
-    file_type:"pdf", doc_type:"comp_recap",
-    upload_source:"email_auto", drive_url:"#",
-    processing_status:"complete", processing_type:"database_import",
-    groq_classification:"comp_recap",
-    tables_updated:["comp_recap","aipp_tracking"],
-    records_created:5, uploaded_at:"Apr 26 2:28 PM",
-    processed_at:"Apr 26 2:30 PM",
-    notes:"April 2026 COMP_RECAP. Total: $48,240. AIPP updated to 47.5%.",
-    size:"284 KB",
-  },
-  {
-    id:"d2",  file_name:"april_payroll_export.csv",
-    file_type:"csv", doc_type:"payroll_export",
-    upload_source:"email_auto", drive_url:"#",
-    processing_status:"complete", processing_type:"database_import",
-    groq_classification:"payroll_export",
-    tables_updated:["payroll_runs","payroll_detail"],
-    records_created:4, uploaded_at:"Apr 25 10:14 AM",
-    processed_at:"Apr 25 10:16 AM",
-    notes:"April 1-15 payroll. 3 staff. Gross: $6,200. Taxes: $744.",
-    size:"18 KB",
-  },
-  {
-    id:"d3",  file_name:"chase_march_statement.pdf",
-    file_type:"pdf", doc_type:"bank_statement",
-    upload_source:"email_auto", drive_url:"#",
-    processing_status:"partial", processing_type:"database_import",
-    groq_classification:"bank_statement",
-    tables_updated:["journal_entries"],
-    records_created:18, uploaded_at:"Apr 15 2:58 PM",
-    processed_at:"Apr 15 3:01 PM",
-    notes:"March bank statement. 18 of 21 transactions loaded. 3 pages could not be parsed — saved to Drive for manual review.",
-    size:"1.2 MB",
-  },
-  {
-    id:"d4",  file_name:"resume_jamie_chen.pdf",
-    file_type:"pdf", doc_type:"resume",
-    upload_source:"email_auto", drive_url:"#",
-    processing_status:"complete", processing_type:"database_import",
-    groq_classification:"resume",
-    tables_updated:["applicants","documents"],
-    records_created:1, uploaded_at:"Apr 26 9:12 AM",
-    processed_at:"Apr 26 9:14 AM",
-    notes:"Applicant: Jamie Chen. Score: 8/10. One Page Interview Focus generated. Position: Licensed Sales Agent.",
-    size:"142 KB",
-  },
-  {
-    id:"d5",  file_name:"SF_COMP_March_2026.pdf",
-    file_type:"pdf", doc_type:"comp_recap",
-    upload_source:"email_auto", drive_url:"#",
-    processing_status:"complete", processing_type:"database_import",
-    groq_classification:"comp_recap",
-    tables_updated:["comp_recap","aipp_tracking"],
-    records_created:4, uploaded_at:"Apr 5 11:20 AM",
-    processed_at:"Apr 5 11:22 AM",
-    notes:"March 2026 COMP_RECAP. Total: $44,600.",
-    size:"276 KB",
-  },
-  {
-    id:"d6",  file_name:"q1_tax_estimate_2026.pdf",
-    file_type:"pdf", doc_type:"tax_document",
-    upload_source:"email_auto", drive_url:"#",
-    processing_status:"complete", processing_type:"database_import",
-    groq_classification:"tax_document",
-    tables_updated:["documents"],
-    records_created:0, uploaded_at:"Apr 1 3:45 PM",
-    processed_at:"Apr 1 3:47 PM",
-    notes:"Q1 2026 estimated tax document from Club Capital Tax. Archived to Drive. No data extracted.",
-    size:"89 KB",
-  },
-  {
-    id:"d7",  file_name:"EO_Policy_2025_2026.pdf",
-    file_type:"pdf", doc_type:"eo_insurance",
-    upload_source:"direct_upload", drive_url:"#",
-    processing_status:"complete", processing_type:"archive",
-    groq_classification:"eo_insurance",
-    tables_updated:["documents"],
-    records_created:0, uploaded_at:"Aug 15, 2025",
-    processed_at:"Aug 15, 2025",
-    notes:"E&O policy Hartford. Policy #HRT-8821-IL. Renews August 2026. Archived to Drive.",
-    size:"412 KB",
-  },
-  {
-    id:"d8",  file_name:"IL_License_Renewal_2024.pdf",
-    file_type:"pdf", doc_type:"license",
-    upload_source:"direct_upload", drive_url:"#",
-    processing_status:"complete", processing_type:"archive",
-    groq_classification:"license",
-    tables_updated:["documents"],
-    records_created:0, uploaded_at:"Oct 15, 2024",
-    processed_at:"Oct 15, 2024",
-    notes:"IL Producer License renewal certificate. Expires October 2026.",
-    size:"156 KB",
-  },
-  {
-    id:"d9",  file_name:"feb_payroll_export.csv",
-    file_type:"csv", doc_type:"payroll_export",
-    upload_source:"email_auto", drive_url:"#",
-    processing_status:"complete", processing_type:"database_import",
-    groq_classification:"payroll_export",
-    tables_updated:["payroll_runs","payroll_detail"],
-    records_created:4, uploaded_at:"Mar 5 9:30 AM",
-    processed_at:"Mar 5 9:32 AM",
-    notes:"February 16-28 payroll. 3 staff.",
-    size:"17 KB",
-  },
-  {
-    id:"d10", file_name:"mystery_document.pdf",
-    file_type:"pdf", doc_type:"other",
-    upload_source:"email_auto", drive_url:"#",
-    processing_status:"failed", processing_type:"database_import",
-    groq_classification:null,
-    tables_updated:[],
-    records_created:0, uploaded_at:"Apr 20 4:15 PM",
-    processed_at:"Apr 20 4:17 PM",
-    notes:"Groq could not classify this document. File saved to Drive for manual review.",
-    size:"2.1 MB",
-  },
-];
 
-const MOCK_INTAKE_LOG = [
-  { id:"i1", date:"Apr 26", time:"2:28 PM", file:"SF_COMP_April_2026.pdf",     source:"Email — State Farm",          status:"complete", type:"comp_recap",      tables:["comp_recap","aipp_tracking"],   records:5  },
-  { id:"i2", date:"Apr 26", time:"9:12 AM", file:"resume_jamie_chen.pdf",       source:"Email — Jamie Chen",          status:"complete", type:"resume",          tables:["applicants","documents"],       records:1  },
-  { id:"i3", date:"Apr 25", time:"10:14 AM",file:"april_payroll_export.csv",    source:"Email — Gusto",               status:"complete", type:"payroll_export",  tables:["payroll_runs","payroll_detail"],records:4  },
-  { id:"i4", date:"Apr 20", time:"4:15 PM", file:"mystery_document.pdf",        source:"Email — Unknown",             status:"failed",   type:null,              tables:[],                               records:0  },
-  { id:"i5", date:"Apr 15", time:"2:58 PM", file:"chase_march_statement.pdf",   source:"Email — Chase",               status:"partial",  type:"bank_statement",  tables:["journal_entries"],              records:18 },
-  { id:"i6", date:"Apr 5",  time:"11:20 AM",file:"SF_COMP_March_2026.pdf",      source:"Email — State Farm",          status:"complete", type:"comp_recap",      tables:["comp_recap","aipp_tracking"],   records:4  },
-  { id:"i7", date:"Apr 1",  time:"3:45 PM", file:"q1_tax_estimate_2026.pdf",    source:"Email — Club Capital Tax",    status:"complete", type:"tax_document",    tables:["documents"],                    records:0  },
-];
 
 // ─── Helpers ──────────────────────────────────────────────────
 const statusConfig = (s) => ({
@@ -304,7 +173,7 @@ const DocCard = ({ doc, onNavigate }) => {
   const [expanded, setExpanded] = useState(false);
   const sc  = statusConfig(doc.processing_type === "archive" ? "archive" : doc.processing_status);
   const src = sourceConfig(doc.upload_source);
-  const dt  = DOC_TYPES[doc.doc_type] || DOC_TYPES.other;
+  const dt  = DOC_TYPES[doc.document_type] || DOC_TYPES.other;
 
   return (
     <div style={{
@@ -324,9 +193,9 @@ const DocCard = ({ doc, onNavigate }) => {
             {doc.file_name}
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-            <DocTypeBadge type={doc.doc_type} />
+            <DocTypeBadge type={doc.document_type} />
             <span style={{ fontSize:9, fontWeight:600, padding:"2px 6px", borderRadius:20, background:src.color+"20", color:src.color }}>{src.icon} {src.label}</span>
-            <span style={{ fontSize:10, color:T.slate400 }}>{doc.uploaded_at} · {doc.size}</span>
+            <span style={{ fontSize:10, color:T.slate400 }}>{doc.uploaded_at} · {doc.file_type || ""}</span>
           </div>
         </div>
 
@@ -391,10 +260,10 @@ const DocCard = ({ doc, onNavigate }) => {
 
           {/* Actions */}
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            {(doc.drive_url || doc.google_drive_file_id) && (
+            {(doc.drive_url || doc.drive_file_id) && (
               <button 
                 onClick={() => {
-                  const url = doc.drive_url || (doc.google_drive_file_id ? `https://drive.google.com/file/d/${doc.google_drive_file_id}/view` : null);
+                  const url = doc.drive_url || (doc.drive_file_id ? `https://drive.google.com/file/d/${doc.drive_file_id}/view` : null);
                   if (url) window.open(url, "_blank");
                   else alert("No Google Drive link available for this document.");
                 }}
@@ -402,7 +271,7 @@ const DocCard = ({ doc, onNavigate }) => {
                 📁 Open in Drive
               </button>
             )}
-            <AskBtn size="small" context={`Document in my BCC:\nFile: ${doc.file_name}\nType: ${DOC_TYPES[doc.doc_type]?.label||doc.doc_type}\nSource: ${doc.upload_source}\nStatus: ${doc.processing_status}\nProcessed: ${doc.processed_at}\nTables updated: ${doc.tables_updated?.join(", ")||"None"}\nRecords created: ${doc.records_created}\nNotes: ${doc.notes}\n\nHelp me understand this document and verify the data was imported correctly. Are there any follow-up actions needed?`} />
+            <AskBtn size="small" context={`Document in my BCC:\nFile: ${doc.file_name}\nType: ${DOC_TYPES[doc.document_type]?.label||doc.document_type}\nSource: ${doc.upload_source}\nStatus: ${doc.processing_status}\nProcessed: ${doc.processed_at}\nTables updated: ${doc.tables_updated?.join(", ")||"None"}\nRecords created: ${doc.records_created}\nNotes: ${doc.notes}\n\nHelp me understand this document and verify the data was imported correctly. Are there any follow-up actions needed?`} />
           </div>
         </div>
       )}
@@ -418,7 +287,7 @@ const DocumentsOverview = ({ documents, onNavigate }) => {
   const total    = documents.length;
 
   const byType = Object.keys(DOC_TYPES).map(type => ({
-    type, count:documents.filter(d => d.doc_type === type).length,
+    type, count:documents.filter(d => d.document_type === type).length,
   })).filter(t => t.count > 0);
 
   const recent = documents.slice(0, 5);
@@ -457,14 +326,14 @@ const DocumentsOverview = ({ documents, onNavigate }) => {
             <AskBtn size="small" context="Review my recent document imports. Are there any documents that need follow-up? Any data that should be verified against the GL?" />
           </div>
           {recent.map((doc,i) => {
-            const dt = DOC_TYPES[doc.doc_type] || DOC_TYPES.other;
+            const dt = DOC_TYPES[doc.document_type] || DOC_TYPES.other;
             const sc = statusConfig(doc.processing_type === "archive" ? "archive" : doc.processing_status);
             return (
               <div key={doc.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:i<recent.length-1?`1px solid ${T.slate100}`:"none" }}>
                 <span style={{ fontSize:20, flexShrink:0 }}>{dt.icon}</span>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:12, fontWeight:500, color:T.slate800, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{doc.file_name}</div>
-                  <div style={{ fontSize:10, color:T.slate400 }}>{doc.uploaded_at} · {doc.size}</div>
+                  <div style={{ fontSize:10, color:T.slate400 }}>{doc.uploaded_at} · {doc.file_type || ""}</div>
                 </div>
                 <span style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:20, background:sc.bg, color:sc.color, flexShrink:0 }}>{sc.label}</span>
               </div>
@@ -506,7 +375,7 @@ const DocumentLibrary = ({ documents }) => {
   const [search,       setSearch]       = useState("");
 
   const filtered = useMemo(() => documents.filter(d => {
-    if (typeFilter   !== "all" && d.doc_type       !== typeFilter)   return false;
+    if (typeFilter   !== "all" && d.document_type       !== typeFilter)   return false;
     if (sourceFilter !== "all" && d.upload_source  !== sourceFilter) return false;
     if (statusFilter !== "all" && d.processing_status !== statusFilter) return false;
     if (search) {
@@ -833,7 +702,20 @@ export default function Documents() {
       {/* Section Content */}
       {section === "overview" && <DocumentsOverview documents={documents} />}
       {section === "library"  && <DocumentLibrary  documents={documents} />}
-      {section === "intake"   && <IntakeLog         log={[]} />}
+      {section === "intake"   && <IntakeLog         log={documents.map(d => {
+        const ts = d.uploaded_at ? new Date(d.uploaded_at) : null;
+        return {
+          id:      d.id,
+          date:    ts ? ts.toLocaleDateString() : "—",
+          time:    ts ? ts.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "",
+          file:    d.file_name,
+          source:  d.upload_source,
+          type:    d.document_type,
+          tables:  Array.isArray(d.tables_updated) ? d.tables_updated : [],
+          records: d.records_created,
+          status:  d.processing_status,
+        };
+      })} />}
       {section === "upload"   && <UploadSection />}
     </div>
   );
