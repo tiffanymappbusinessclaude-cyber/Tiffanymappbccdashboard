@@ -442,19 +442,71 @@ export default function PersistentMemory() {
     return acc;
   }, {});
 
-  const handleSave = (item) => {
-    if (item.id) {
-      setMemories(prev => prev.map(m => m.id === item.id ? item : m));
-    } else {
-      setMemories(prev => [...prev, { ...item, id: Date.now().toString(), added_by: "owner", source: "manual" }]);
+  const handleSave = async (item) => {
+    try {
+      if (item.id) {
+        const { data: updated, error } = await supabase
+          .from("persistent_memory")
+          .update({
+            title: item.title,
+            content: item.content,
+            category: item.category,
+          })
+          .eq("id", item.id)
+          .select()
+          .single();
+        if (error) {
+          console.error("Update memory failed:", error);
+          alert("Update memory failed: " + error.message);
+          return;
+        }
+        setMemories(prev => prev.map(m => m.id === item.id ? updated : m));
+      } else {
+        const { data: newRow, error } = await supabase
+          .from("persistent_memory")
+          .insert({
+            agency_id: AGENCY_ID,
+            category: item.category,
+            title: item.title,
+            content: item.content,
+            is_active: true,
+            added_by: "owner",
+            source: "manual",
+          })
+          .select()
+          .single();
+        if (error) {
+          console.error("Add memory failed:", error);
+          alert("Add memory failed: " + error.message);
+          return;
+        }
+        setMemories(prev => [...prev, newRow]);
+      }
+      setEditingItem(null);
+      setShowNewModal(false);
+    } catch (e) {
+      console.error("Save memory error:", e);
+      alert("Save memory failed: " + (e?.message || String(e)));
     }
-    setEditingItem(null);
-    setShowNewModal(false);
   };
 
-  const handleDelete = (id) => {
-    setMemories(prev => prev.map(m => m.id === id ? { ...m, is_active: false } : m));
-    setEditingItem(null);
+  const handleDelete = async (id) => {
+    try {
+      const { error } = await supabase
+        .from("persistent_memory")
+        .update({ is_active: false })
+        .eq("id", id);
+      if (error) {
+        console.error("Delete memory failed:", error);
+        alert("Delete memory failed: " + error.message);
+        return;
+      }
+      setMemories(prev => prev.map(m => m.id === id ? { ...m, is_active: false } : m));
+      setEditingItem(null);
+    } catch (e) {
+      console.error("Delete memory error:", e);
+      alert("Delete memory failed: " + (e?.message || String(e)));
+    }
   };
 
   const allContext = memories
