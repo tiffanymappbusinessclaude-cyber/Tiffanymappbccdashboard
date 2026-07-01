@@ -311,17 +311,33 @@ const StageBadge = ({ status }) => {
 };
 
 // ─── Section: Overview ────────────────────────────────────────
-const HROverview = ({ applicants, staff, onboarding }) => {
+const HROverview = ({ applicants, staff, onboarding, onAdd = () => {} }) => {
   const [showAddEmployee, setShowAddEmployee] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [newEmployee, setNewEmployee] = useState({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2"});
 
   const saveEmployee = async () => {
-    if (!newEmployee.first_name || !newEmployee.last_name) return;
-    if (supabase) {
-      await supabase.from("staff").insert({ ...newEmployee, agency_id: AGENCY_ID, is_active: true });
+    if (!newEmployee.first_name || !newEmployee.last_name || saving) return;
+    setSaving(true);
+    try {
+      // Coerce empty date string to null (staff.start_date is a date column)
+      const payload = { ...newEmployee, agency_id: AGENCY_ID, is_active: true };
+      if (!payload.start_date) delete payload.start_date;
+      const { data, error } = await supabase
+        .from("staff")
+        .insert(payload)
+        .select()
+        .single();
+      if (error) throw error;
+      onAdd(data);
+      setShowAddEmployee(false);
+      setNewEmployee({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2"});
+    } catch (e) {
+      console.error("staff insert error:", e);
+      alert("Could not save employee: " + (e?.message || "unknown error"));
+    } finally {
+      setSaving(false);
     }
-    setShowAddEmployee(false);
-    setNewEmployee({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2"});
   };
 
   const active      = applicants.filter(a => !["hired","rejected"].includes(a.status));
@@ -329,7 +345,10 @@ const HROverview = ({ applicants, staff, onboarding }) => {
   const inInterview = applicants.filter(a => a.status === "interview").length;
   const inOffer     = applicants.filter(a => a.status === "offer").length;
   const activeStaff = staff.filter(s => s.is_active).length;
-  const flagged     = staff.filter(s => s.compliance_flag).length;
+  // The staff table doesn't currently track a compliance_flag column, so surface
+  // a data-hygiene metric instead: active staff missing email or phone. Actionable
+  // and truthful. Log a follow-up to add real licensing/compliance columns.
+  const missingContact = staff.filter(s => s.is_active && (!s.email || !s.phone)).length;
 
   return (
     <div>
@@ -341,7 +360,7 @@ const HROverview = ({ applicants, staff, onboarding }) => {
           { label:"In Interviews",     value:inInterview,     color:T.purple,border:T.purple },
           { label:"Offers Pending",    value:inOffer,         color:T.green, border:T.green },
           { label:"Active Staff",      value:activeStaff,     color:T.navy,  border:T.navy  },
-          { label:"Compliance Flags",  value:flagged,         color:flagged>0?T.red:T.green, border:flagged>0?T.red:T.green },
+          { label:"Missing Contact",   value:missingContact,  color:missingContact>0?T.amber:T.green, border:missingContact>0?T.amber:T.green },
         ].map((k,i) => (
           <div key={i} style={{ background:T.white, border:`1px solid ${T.slate200}`, borderTop:`3px solid ${k.border}`, borderRadius:12, padding:"14px 16px" }}>
             <div style={{ fontSize:11, color:T.slate500, fontWeight:500, marginBottom:6 }}>{k.label}</div>
@@ -383,7 +402,7 @@ const HROverview = ({ applicants, staff, onboarding }) => {
           </div>
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <button onClick={()=>setShowAddEmployee(false)} style={{padding:"6px 14px",fontSize:12,background:"#F1F5F9",color:"#334155",border:"none",borderRadius:6,cursor:"pointer"}}>Cancel</button>
-            <button onClick={saveEmployee} style={{padding:"6px 14px",fontSize:12,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontWeight:600}}>Save Employee</button>
+            <button onClick={saveEmployee} disabled={saving} style={{padding:"6px 14px",fontSize:12,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:6,cursor:saving?"not-allowed":"pointer",fontWeight:600,opacity:saving?0.6:1}}>{saving ? "Saving…" : "Save Employee"}</button>
           </div>
         </div>
       )}
@@ -572,16 +591,18 @@ const StaffDirectory = ({ staff, loading = false }) => {
           <Card key={member.id} style={{ border:`1px solid ${isExpanded?T.blue:T.slate200}` }}>
             <div style={{ display:"flex", alignItems:"center", gap:14, cursor:"pointer" }} onClick={() => setExpanded(isExpanded?null:member.id)}>
               {/* Avatar */}
-              <div style={{ width:48, height:48, borderRadius:12, background:member.licensed?T.navy:T.slate200, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:member.licensed?T.white:T.slate500, flexShrink:0 }}>
-                {member.first_name[0]}{member.last_name[0]}
+              <div style={{ width:48, height:48, borderRadius:12, background:member.licensed===true?T.navy:T.slate200, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:member.licensed===true?T.white:T.slate500, flexShrink:0 }}>
+                {(member.first_name || "?")[0]}{(member.last_name || "?")[0]}
               </div>
 
               <div style={{ flex:1 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
                   <span style={{ fontSize:14, fontWeight:700, color:T.slate900 }}>{member.first_name} {member.last_name}</span>
-                  {member.licensed
+                  {member.licensed === true
                     ? <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:T.greenLt, color:"#065F46" }}>Licensed</span>
-                    : <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:T.slate100, color:T.slate500 }}>Unlicensed — cannot perform licensed activities</span>
+                    : member.licensed === false
+                      ? <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:T.slate100, color:T.slate500 }}>Unlicensed — cannot perform licensed activities</span>
+                      : <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:T.slate100, color:T.slate500 }}>License status not tracked</span>
                   }
                   {member.compliance_flag && (
                     <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:T.amberLt, color:"#92400E" }}>⚠ CPA Flag</span>
@@ -608,7 +629,7 @@ const StaffDirectory = ({ staff, loading = false }) => {
                   {[
                     { label:"Email",      value:member.email },
                     { label:"Phone",      value:member.phone||"—" },
-                    { label:"Licensed States", value:member.license_states?.length ? member.license_states.join(", ") : "None" },
+                    { label:"Licensed States", value:Array.isArray(member.license_states) && member.license_states.length ? member.license_states.join(", ") : "Not tracked" },
                     { label:"Start Date", value:member.start_date },
                   ].map((d,i) => (
                     <div key={i} style={{ background:T.slate50, borderRadius:8, padding:"7px 10px" }}>
@@ -627,7 +648,7 @@ const StaffDirectory = ({ staff, loading = false }) => {
                     ⚠ {member.compliance_flag}
                   </div>
                 )}
-                <AskBtn size="small" context={`Staff member profile:\nName: ${member.first_name} ${member.last_name}\nRole: ${member.role}\nEmployment: ${member.employment_type}\nPay: ${member.pay_type} — ${member.pay_type==="hourly"?"$"+member.pay_rate+"/hr":"$"+member.pay_rate.toLocaleString()+"/yr"}\nLicensed: ${member.licensed?"Yes — "+(member.license_states||[]).join(", "):"No"}\nStart: ${member.start_date}\nNotes: ${member.notes}\n${member.compliance_flag?"Compliance flag: "+member.compliance_flag:""}\n\nHelp me review this team member's profile. Are there any compliance concerns or HR items I should address?`} />
+                <AskBtn size="small" context={`Staff member profile:\nName: ${member.first_name} ${member.last_name}\nRole: ${member.role || "—"}\nEmployment: ${member.employment_type || "—"}\nPay: ${member.pay_type || "—"} — ${member.pay_rate == null ? "—" : member.pay_type === "hourly" ? "$" + member.pay_rate + "/hr" : "$" + Number(member.pay_rate).toLocaleString() + "/yr"}\nLicensed: ${member.licensed === true ? "Yes — " + (member.license_states || []).join(", ") : member.licensed === false ? "No" : "Not tracked"}\nStart: ${member.start_date || "—"}\nNotes: ${member.notes || "—"}\n${member.compliance_flag ? "Compliance flag: " + member.compliance_flag : ""}\n\nHelp me review this team member's profile. Are there any compliance concerns or HR items I should address?`} />
               </div>
             )}
           </Card>
@@ -1196,7 +1217,7 @@ export default function HRPeople() {
       </div>
 
       {/* Section Content */}
-      {section === "overview"    && <HROverview        applicants={applicants} staff={staff} onboarding={onboarding} />}
+      {section === "overview"    && <HROverview        applicants={applicants} staff={staff} onboarding={onboarding} onAdd={(row) => setStaff(prev => [row, ...prev].sort((a,b) => (a.last_name||"").localeCompare(b.last_name||"")))} />}
       {section === "recruiting"  && <RecruitingPipeline applicants={applicants} onUpdate={updateApplicantStage} />}
       {section === "staff"       && <StaffDirectory     staff={staff} loading={staffLoading} />}
       {section === "onboarding"  && <OnboardingSection  onboarding={onboarding} />}
