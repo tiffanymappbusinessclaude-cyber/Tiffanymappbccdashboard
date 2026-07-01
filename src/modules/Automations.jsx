@@ -637,6 +637,22 @@ export default function Automations() {
   const [section, setSection] = useState("overview");
   const { data: liveRecipes, loading: recipesLoading } = useSupabaseTable("automation_recipes", AGENCY_ID, { orderBy: "created_at", ascending: false });
   const { data: liveRunLog }   = useSupabaseTable("automation_run_log", AGENCY_ID, { orderBy: "run_at", ascending: false });
+  const { data: liveDocs }     = useSupabaseTable("documents", AGENCY_ID, { orderBy: "uploaded_at", ascending: false });
+
+  // Normalize documents rows to the shape DocImporter expects. Internal keys
+  // in DocImporter (groq_type, tables, status, records, source, date) predate
+  // the schema; we bridge here at the boundary rather than refactor the
+  // component. Kept to the 25 most-recent for a lightweight recent-history view.
+  const docImports = (Array.isArray(liveDocs) ? liveDocs : []).slice(0, 25).map(d => ({
+    id:        d.id,
+    file_name: d.file_name || d.source_filename || "(unnamed)",
+    groq_type: d.document_type || d.groq_classification || "other",
+    date:      d.uploaded_at ? new Date(d.uploaded_at).toLocaleString("en-US", { month:"short", day:"numeric", year:"numeric", hour:"numeric", minute:"2-digit" }) : "—",
+    source:    d.upload_source || "—",
+    records:   d.records_created ?? 0,
+    status:    d.processing_status || "pending",
+    tables:    Array.isArray(d.tables_updated) ? d.tables_updated : [],
+  }));
 
   const [recipes, setRecipes] = useState([]);
   useEffect(() => {
@@ -808,7 +824,7 @@ export default function Automations() {
       {section === "recipes"     && <Recipes recipes={recipes} onToggle={toggleRecipe} />}
       {section === "connections" && <Connections connections={connections} />}
       {section === "briefing"    && <DailyBriefingSection briefings={[]} />}
-      {section === "importer"    && <DocImporter imports={[]} />}
+      {section === "importer"    && <DocImporter imports={docImports} />}
     </div>
   );
 }
