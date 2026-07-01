@@ -219,23 +219,36 @@ const InviteModal = ({ onSave, onCancel }) => {
 };
 
 // ─── Section: Agency Profile ──────────────────────────────────
-const AgencyProfile = ({ agency }) => (
-  <Card>
-    <SectionHeader title="Agency Profile" sub="Core agency information stored in your Supabase database" />
-    <FieldRow label="Agency Name"       value={agency.name}                                           editable />
-    <FieldRow label="Owner Name"        value={agency.owner_name}                                     editable />
-    <FieldRow label="Entity Type"       value={agency.entity_type}                                    />
-    <FieldRow label="EIN / Tax ID"      value={agency.tax_id}       hint="Stored encrypted"          />
-    <FieldRow label="SF Agent Code"     value={agency.sf_agent_code}                                  />
-    <FieldRow label="Licensed States"   value={(agency.licensing_states || []).join(", ")}                   editable />
-    <FieldRow label="Primary Email"     value={agency.primary_email} hint="Personal — not @statefarm.com" editable />
-    <FieldRow label="Phone"             value={agency.phone}                                          editable />
-    <FieldRow label="Address"           value={agency.address}                                        editable />
-    <FieldRow label="Google Account"    value={agency.google_account} hint="Ties Vercel, Supabase, Composio" />
-    <FieldRow label="BCC URL"           value={agency.vercel_url}    hint="Your permanent BCC address" />
-    <FieldRow label="Setup Date"        value={agency.setup_date}    />
-  </Card>
-);
+// onUpdate receives (column, value) where column is the REAL agency-table
+// column name. Licensed States is a text[] array in the DB; the FieldRow
+// edits a comma-separated string, so we round-trip on the boundary.
+const AgencyProfile = ({ agency, onUpdate }) => {
+  const save = (col) => (val) => onUpdate && onUpdate(col, val);
+  const saveStates = (val) => {
+    const arr = String(val || "")
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean);
+    return onUpdate && onUpdate("licensing_states", arr);
+  };
+  return (
+    <Card>
+      <SectionHeader title="Agency Profile" sub="Core agency information stored in your Supabase database" />
+      <FieldRow label="Agency Name"       value={agency.name}                                           editable onChange={save("name")} />
+      <FieldRow label="Owner Name"        value={agency.owner_name}                                     editable onChange={save("owner_name")} />
+      <FieldRow label="Entity Type"       value={agency.entity_type}                                    />
+      <FieldRow label="EIN / Tax ID"      value={agency.tax_id}       hint="Stored encrypted"          />
+      <FieldRow label="SF Agent Code"     value={agency.sf_agent_code}                                  />
+      <FieldRow label="Licensed States"   value={(agency.licensing_states || []).join(", ")}            editable onChange={saveStates} hint="Comma-separated (e.g. FL, GA, AL)" />
+      <FieldRow label="Primary Email"     value={agency.primary_email} hint="Personal — not @statefarm.com" editable onChange={save("primary_email")} />
+      <FieldRow label="Phone"             value={agency.phone}                                          editable onChange={save("phone")} />
+      <FieldRow label="Address"           value={agency.address}                                        editable onChange={save("address")} />
+      <FieldRow label="Google Account"    value={agency.google_account_email} hint="Ties Vercel, Supabase, Composio" />
+      <FieldRow label="BCC URL"           value={agency.vercel_url}    hint="Your permanent BCC address" />
+      <FieldRow label="Setup Date"        value={agency.setup_date}    />
+    </Card>
+  );
+};
 
 // ─── Section: Team Access ─────────────────────────────────────
 const TeamAccess = ({ users }) => {
@@ -1103,6 +1116,26 @@ export default function Settings() {
 
   const [section, setSection] = useState("profile");
 
+  // Persist a single agency-table column back to Supabase.
+  // Called by AgencyProfile FieldRow Save buttons.
+  const handleAgencyUpdate = async (column, value) => {
+    try {
+      // Coerce empty string to null so DB nulls are honored consistently.
+      const payload = { [column]: value === "" ? null : value };
+      const { data, error } = await supabase
+        .from("agency")
+        .update(payload)
+        .eq("id", AGENCY_ID)
+        .select()
+        .single();
+      if (error) throw error;
+      setAgencyData(data);
+    } catch (e) {
+      console.error("agency update error:", e);
+      alert("Could not save " + column + ": " + (e?.message || "unknown error"));
+    }
+  };
+
   // Map real Supabase agency row to the shape AgencyProfile/About expect
   const realAgency = agencyData ? {
     name:              agencyData.name             || MOCK_AGENCY.name,
@@ -1147,7 +1180,7 @@ export default function Settings() {
       </div>
 
       {/* Section Content */}
-      {section === "profile"     && <AgencyProfile      agency={realAgency} />}
+      {section === "profile"     && <AgencyProfile      agency={realAgency} onUpdate={handleAgencyUpdate} />}
       {section === "team"        && <TeamAccess         users={usersData.length > 0
         ? usersData.map(u => ({
             ...u,
