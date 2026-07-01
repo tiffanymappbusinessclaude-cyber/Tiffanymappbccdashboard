@@ -16,9 +16,12 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 //   7. Credit & Debt   — Cards, loans, lines of credit
 //   8. General Ledger  — Full transaction ledger
 //
-// DATA: Reads from Supabase via props (passed from BCCApp)
-// In production replace MOCK_DATA with Supabase queries:
-//   const { data } = await supabase.from('comp_recap')...
+// DATA: Reads directly from Supabase via useFinancialsData() below.
+//       Sources: cpa_pnl_monthly, comp_recap, bank_accounts,
+//       credit_accounts, journal_lines (+ journal_entries +
+//       chart_of_accounts), payroll_runs, payroll_detail,
+//       aipp_tracking, scoreboard_tracking, and the
+//       vw_bcc_vs_cpa_commission_variance view (migration 020).
 // ============================================================
 
 
@@ -754,7 +757,7 @@ const CompRecapSection = ({ data }) => {
       <CardHeader
         title="SF COMP_RECAP Detail"
         sub="State Farm compensation breakdown by period"
-        action={<AskBtn context={`My SF COMP_RECAP for ${period}: Total $${total}. AIPP eligible: $${aippTotal}. Help me reconcile this to my GL and confirm my AIPP calculation.`} />}
+        action={<AskBtn context={`My SF COMP_RECAP for ${period}: Total ${fmt(total)}. AIPP eligible: ${fmt(aippTotal)}. Help me reconcile this to my GL and confirm my AIPP calculation.`} />}
       />
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         {periods.map(p => (
@@ -822,7 +825,7 @@ const AIPPSection = ({ data }) => {
         <Card>
           <CardHeader
             title={`AIPP ${year} — Annual Incentive Progress`}
-            action={<AskBtn context={`AIPP ${year}: Target $${target}, Earned YTD $${earned}, Achievement ${achievement}%, Projected $${projected}, Prior Year $${priorYear}. Am I on track? What do I need to focus on?`} />}
+            action={<AskBtn context={`AIPP ${year}: Target ${fmt(target)}, Earned YTD ${fmt(earned)}, Achievement ${achievement}%, Projected ${fmt(projected)}, Prior Year ${fmt(priorYear)}. Am I on track? What do I need to focus on?`} />}
           />
           <div style={{ fontSize: 32, fontWeight: 700, color: T.green, letterSpacing: "-0.03em", marginBottom: 4 }}>
             {achievement}%
@@ -864,9 +867,9 @@ const AIPPSection = ({ data }) => {
         {/* ScoreBoard */}
         <Card>
           <CardHeader
-            title="ScoreBoard Metrics — 2026"
+            title={`ScoreBoard Metrics — ${year}`}
             sub="Progress toward performance recognition"
-            action={<AskBtn context="My ScoreBoard metrics for 2026: reviewing progress toward SF performance recognition. Help me identify which metrics need the most attention." />}
+            action={<AskBtn context={`My ScoreBoard metrics for ${year}: reviewing progress toward SF performance recognition. Help me identify which metrics need the most attention.`} />}
           />
           {scoreboard.map((m, i) => (
             <div key={i} style={{ marginBottom: 14 }}>
