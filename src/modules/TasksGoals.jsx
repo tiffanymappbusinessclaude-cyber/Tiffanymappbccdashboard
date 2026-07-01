@@ -222,7 +222,7 @@ const TaskCard = ({ task, onComplete, onNavigate }) => {
             <span style={{ fontSize:9, fontWeight:600, padding:"2px 7px", borderRadius:20, background:pr.bg, color:pr.color }}>{pr.label}</span>
             <span style={{ fontSize:9, fontWeight:600, padding:"2px 7px", borderRadius:20, background:mod.color+"20", color:mod.color }}>{mod.icon} {mod.label}</span>
             <span style={{ fontSize:10, color:overdue?T.red:days<=3?T.amber:T.slate400, fontWeight:overdue||days<=3?600:400 }}>
-              {isCompleted ? `Completed ${task.completed_at}` : overdue ? `Overdue — ${task.due_date}` : days===0 ? "Due today" : days===1 ? "Due tomorrow" : `Due ${task.due_date}`}
+              {isCompleted ? `Completed ${task.completed_at_display}` : overdue ? `Overdue — ${task.due_date_display}` : days===0 ? "Due today" : days===1 ? "Due tomorrow" : `Due ${task.due_date_display}`}
             </span>
             {task.assigned_to && <span style={{ fontSize:10, color:T.slate400 }}>→ {task.assigned_to}</span>}
             <span style={{ fontSize:9, color:T.slate400, fontStyle:"italic" }}>by {task.created_by}</span>
@@ -250,7 +250,7 @@ const TaskCard = ({ task, onComplete, onNavigate }) => {
           <div style={{ fontSize:12, color:T.slate600, lineHeight:1.6, marginTop:8, marginBottom:8 }}>
             {task.description}
           </div>
-          <AskBtn size="small" context={`Task context:\nTitle: ${task.title}\nPriority: ${task.priority}\nDue: ${task.due_date}\nModule: ${task.module}\nAssigned to: ${task.assigned_to}\nDescription: ${task.description}\n\nHelp me think through how to complete this task efficiently.`} />
+          <AskBtn size="small" context={`Task context:\nTitle: ${task.title}\nPriority: ${task.priority}\nDue: ${task.due_date_display}\nModule: ${task.module}\nAssigned to: ${task.assigned_to}\nDescription: ${task.description}\n\nHelp me think through how to complete this task efficiently.`} />
         </div>
       )}
     </div>
@@ -357,7 +357,7 @@ const TasksOverview = ({ tasks, goals, onComplete, onNavigate }) => {
         <Card>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
             <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Due this week</span>
-            <AskBtn size="small" context={`My tasks due this week:\n${dueThisWeek.map(t=>`• ${t.title} (${t.priority}, due ${t.due_date}, module: ${t.module})`).join("\n")}\n\nHelp me prioritize these tasks and create an action plan for the week.`} />
+            <AskBtn size="small" context={`My tasks due this week:\n${dueThisWeek.map(t=>`• ${t.title} (${t.priority}, due ${t.due_date_display}, module: ${t.module})`).join("\n")}\n\nHelp me prioritize these tasks and create an action plan for the week.`} />
           </div>
           {dueThisWeek.length === 0 ? (
             <div style={{ fontSize:12, color:T.slate400, textAlign:"center", padding:"16px 0" }}>Nothing due this week 🎉</div>
@@ -384,7 +384,7 @@ const TasksOverview = ({ tasks, goals, onComplete, onNavigate }) => {
         <Card>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
             <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Goal progress</span>
-            <AskBtn size="small" context={`My top agency goals and progress:\n${topGoals.map(g=>`• ${g.title}: ${fmt(g.current_value,g.unit)} of ${fmt(g.target_value,g.unit)} (${pct(g.current_value,g.target_value)}%)\n  ${g.notes}`).join("\n\n")}\n\nAnalyze my goal progress. Which goals need the most attention? What actions should I take this week to stay on track?`} />
+            <AskBtn size="small" context={`My top agency goals and progress:\n${topGoals.map(g=>`• ${g.title}: ${fmt(g.current_value,g.unit)} of ${fmt(g.target_value,g.unit)} (${pct(g.current_value,g.target_value)}%)${g.notes ? "\n  " + g.notes : ""}`).join("\n\n")}\n\nAnalyze my goal progress. Which goals need the most attention? What actions should I take this week to stay on track?`} />
           </div>
           {topGoals.map((goal,i) => {
             const cat = GOAL_CATS[goal.category] || GOAL_CATS.personal;
@@ -490,7 +490,7 @@ const GoalsSection = ({ goals }) => {
         <div style={{ fontSize:13, color:T.slate500 }}>
           Track your agency goals and progress toward each target for {new Date().getFullYear()}.
         </div>
-        <AskBtn context={`My full goal progress for 2026:\n${goals.map(g=>`• ${g.title} (${g.category}): ${fmt(g.current_value,g.unit)} of ${fmt(g.target_value,g.unit)} = ${pct(g.current_value,g.target_value)}% — ${g.notes}`).join("\n")}\n\nGive me a comprehensive goal review. Which goals are at risk? What specific actions would move the needle most this month?`} />
+        <AskBtn context={`My full goal progress for 2026:\n${goals.map(g=>`• ${g.title} (${g.category}): ${fmt(g.current_value,g.unit)} of ${fmt(g.target_value,g.unit)} = ${pct(g.current_value,g.target_value)}%${g.notes ? " — " + g.notes : ""}`).join("\n")}\n\nGive me a comprehensive goal review. Which goals are at risk? What specific actions would move the needle most this month?`} />
       </div>
 
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -548,9 +548,9 @@ const GoalsSection = ({ goals }) => {
               {isExpanded && (
                 <div style={{ padding:"0 18px 16px", borderTop:`1px solid ${T.slate100}` }}>
                   <div style={{ fontSize:12, color:T.slate600, lineHeight:1.7, marginTop:10, marginBottom:10 }}>
-                    {goal.notes}
+                    {goal.notes || <span style={{ color:T.slate400 }}>—</span>}
                   </div>
-                  <AskBtn size="small" context={`Goal deep dive:\nTitle: ${goal.title}\nCategory: ${goal.category}\nTarget: ${fmt(goal.target_value,goal.unit)}\nCurrent: ${fmt(goal.current_value,goal.unit)}\nProgress: ${p}%\nDue: ${goal.target_date}\nNotes: ${goal.notes}\n\nHelp me build a specific action plan to hit this goal. What do I need to do this month?`} />
+                  <AskBtn size="small" context={`Goal deep dive:\nTitle: ${goal.title}\nCategory: ${goal.category}\nTarget: ${fmt(goal.target_value,goal.unit)}\nCurrent: ${fmt(goal.current_value,goal.unit)}\nProgress: ${p}%\nDue: ${goal.target_date}\nNotes: ${goal.notes || "—"}\n\nHelp me build a specific action plan to hit this goal. What do I need to do this month?`} />
                 </div>
               )}
             </div>
@@ -583,7 +583,7 @@ const CompletedSection = ({ tasks }) => {
               </div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:12, color:T.slate600, textDecoration:"line-through", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{task.title}</div>
-                <div style={{ fontSize:10, color:T.slate400, marginTop:1 }}>{mod.icon} {mod.label} · Completed {task.completed_at}</div>
+                <div style={{ fontSize:10, color:T.slate400, marginTop:1 }}>{mod.icon} {mod.label} · Completed {task.completed_at_display}</div>
               </div>
               <span style={{ fontSize:9, fontWeight:600, padding:"2px 7px", borderRadius:20, background:pr.bg, color:pr.color, flexShrink:0 }}>{pr.label}</span>
             </div>
@@ -603,12 +603,17 @@ export default function TasksGoals({ onNavigate }) {
   const [tasks, setTasks] = useState([]);
   useEffect(() => {
     if (Array.isArray(liveTasks)) {
-      // Alias schema fields so existing render code (task.module, task.due_date, etc.) keeps working
+      // Alias schema fields so existing render code keeps working, BUT preserve
+      // raw ISO timestamps so date comparisons and sorts stay correct.
+      // Previously due_date/completed_at were overwritten with display strings,
+      // which broke any future sort/filter by date (flagged in task 80fbfdf9).
       setTasks(liveTasks.map(t => ({
         ...t,
-        module:       t.module_reference || t.module || "general",
-        due_date:     t.due_date ? new Date(t.due_date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "",
-        completed_at: t.completed_at ? new Date(t.completed_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "",
+        module:              t.module_reference || t.module || "general",
+        // Display-only strings for the render layer:
+        due_date_display:    t.due_date     ? new Date(t.due_date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "",
+        completed_at_display:t.completed_at ? new Date(t.completed_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "",
+        // Raw ISO timestamps stay on due_date / completed_at as they came from DB.
       })));
     }
   }, [liveTasks]);
