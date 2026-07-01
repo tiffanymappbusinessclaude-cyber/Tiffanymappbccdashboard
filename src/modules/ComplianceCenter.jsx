@@ -13,21 +13,17 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 //   4. Calendar      — Compliance deadlines and recurring items
 //   5. Audit Log     — Record of reviews, flags, completions
 //
-// DATA: Reads compliance_rules, compliance_calendar,
-//       compliance_log tables in Supabase
-// In production replace MOCK_DATA with:
-//   const { data } = await supabase
-//     .from('compliance_rules')
-//     .select('*')
-//     .eq('agency_id', agencyId)
-//     .eq('is_active', true)
-//     .order('category')
+// DATA: Reads compliance_rules, compliance_calendar, compliance_log
+//       tables in Supabase. Live queries wired in the main useEffect.
+//       PrePostChecklist is intentionally derived from static reference
+//       content (Social Chef Compliance KB), not from a table.
 // ============================================================
 
 
 // ─── Design Tokens ────────────────────────────────────────────
 const T = {
   navy:    "#1B2B4B",
+  navyLt:  "#E7EDFA",
   blue:    "#2D7DD2",
   blueLt:  "#EFF6FF",
   green:   "#10B981",
@@ -43,6 +39,7 @@ const T = {
   slate50: "#F8FAFC",
   slate100:"#F1F5F9",
   slate200:"#E2E8F0",
+  slate300:"#CBD5E1",
   slate400:"#94A3B8",
   slate500:"#64748B",
   slate600:"#475569",
@@ -213,7 +210,7 @@ const TabBar = ({ tabs, active, onChange }) => (
 );
 
 // ─── Section: Compliance Dashboard ───────────────────────────
-const ComplianceDashboard = ({ rules = [], calendar = [] }) => {
+const ComplianceDashboard = ({ rules = [], calendar = [], recentLogs = [] }) => {
   const critical = rules.filter(r => r.severity === "critical").length;
   const dueItems = calendar.filter(c => c.status === "due" || c.days_remaining <= 14).length;
   const overdueItems = calendar.filter(c => c.status === "overdue").length;
@@ -264,32 +261,52 @@ const ComplianceDashboard = ({ rules = [], calendar = [] }) => {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
             <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Critical rules — quick reference</span>
           </div>
-          {[
-            { code:"AA05-002", rule:'Say "customer" — never "client" (AA05 I.B)' },
-            { code:"AA05-003", rule:'Say "agent" — never "expert" or "specialist" (AA05 I.O)' },
-            { code:"AD-001",   rule:"ALL SF-referencing ads require prior approval (AA05 I.H)" },
-            { code:"SM-005",   rule:"All content in English — FINRA archiving required" },
-            { code:"FIN-001",  rule:"PFA must stay separate — never commingled" },
-            { code:"FIN-002",  rule:"PFA is NOT a business asset — never on balance sheet" },
-            { code:"GIVE-001", rule:'No "enter to win" — every participant must receive item' },
-            { code:"TM-004",   rule:"GBP: insurance products only — no financial services" },
-          ].map((r,i) => (
-            <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"6px 0", borderBottom:i<7?`1px solid ${T.slate100}`:"none" }}>
-              <div style={{ width:6, height:6, borderRadius:"50%", background:T.red, flexShrink:0, marginTop:5 }} />
-              <div>
-                <span style={{ fontSize:11, color:T.slate700, lineHeight:1.5 }}>{r.rule}</span>
+          {(() => {
+            const criticalRules = rules.filter(r => r.severity === "critical").slice(0, 8);
+            if (criticalRules.length === 0) {
+              return (
+                <div style={{ fontSize:12, color:T.slate500, padding:"12px 0", textAlign:"center" }}>
+                  No critical rules loaded. Add rules in the Rules Library tab.
+                </div>
+              );
+            }
+            return criticalRules.map((r, i) => (
+              <div key={r.id} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"6px 0", borderBottom:i<criticalRules.length-1?`1px solid ${T.slate100}`:"none" }}>
+                <div style={{ width:6, height:6, borderRadius:"50%", background:T.red, flexShrink:0, marginTop:5 }} />
+                <div>
+                  <span style={{ fontSize:10, fontFamily:"monospace", color:T.slate400, marginRight:6 }}>{r.rule_code}</span>
+                  <span style={{ fontSize:11, color:T.slate700, lineHeight:1.5 }}>{r.title}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            ));
+          })()}
         </Card>
       </div>
 
       {/* Recent Audit Log */}
       <Card style={{ marginTop:12 }}>
         <div style={{ fontSize:13, fontWeight:600, color:T.slate800, marginBottom:12 }}>Recent compliance activity</div>
-        <div style={{ fontSize:12, color:T.slate500, padding:"12px 0", textAlign:"center" }}>
-          No activity logged yet. Use the Audit Log tab to record reviews and actions.
-        </div>
+        {recentLogs.length === 0 ? (
+          <div style={{ fontSize:12, color:T.slate500, padding:"12px 0", textAlign:"center" }}>
+            No activity logged yet. Use the Audit Log tab to record reviews and actions.
+          </div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+            {recentLogs.slice(0,5).map((log, i) => {
+              const ec = eventConfig(log.event_type);
+              const when = log.created_at ? new Date(log.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
+              return (
+                <div key={log.id} style={{ display:"flex", gap:10, padding:"8px 0", borderBottom:i<Math.min(recentLogs.length,5)-1?`1px solid ${T.slate100}`:"none" }}>
+                  <div style={{ width:24, height:24, borderRadius:6, background:T.slate50, border:`1px solid ${T.slate200}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:12 }}>{ec.icon}</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:12, color:T.slate800, lineHeight:1.5 }}>{log.description}</div>
+                    <div style={{ fontSize:10, color:T.slate400, marginTop:2 }}>{when} · {(log.event_type||"review").replace(/_/g," ")}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
     </div>
   );
@@ -408,10 +425,10 @@ const PrePostChecklist = () => {
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
         <div>
           <div style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Social Media Pre-Post Compliance Checklist</div>
-          <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>Run every piece of content through all 26 items before publishing · {sessionDate}</div>
+          <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>Run every piece of content through all {MOCK_CHECKLIST.length} items before publishing · {sessionDate}</div>
         </div>
         <div style={{ display:"flex", gap:8 }}>
-          <AskBtn context={`I just completed the social media pre-post compliance checklist. ${checkedCount} of 26 items passed. ${allPassed ? "All items cleared." : "Some items need attention."} Help me review any compliance concerns before I publish this content.`} />
+          <AskBtn context={`I just completed the social media pre-post compliance checklist. ${checkedCount} of ${MOCK_CHECKLIST.length} items passed. ${allPassed ? "All items cleared." : "Some items need attention."} Help me review any compliance concerns before I publish this content.`} />
           <button onClick={resetChecklist} style={{ padding:"7px 14px", fontSize:11, fontWeight:600, color:T.slate600, background:T.slate100, border:"none", borderRadius:7, cursor:"pointer" }}>Reset</button>
         </div>
       </div>
@@ -419,7 +436,7 @@ const PrePostChecklist = () => {
       {/* Progress */}
       <div style={{ background:T.white, border:`1px solid ${T.slate200}`, borderRadius:12, padding:"14px 18px", marginBottom:16 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-          <span style={{ fontSize:12, fontWeight:600, color:T.slate700 }}>{checkedCount} of 26 items verified</span>
+          <span style={{ fontSize:12, fontWeight:600, color:T.slate700 }}>{checkedCount} of {MOCK_CHECKLIST.length} items verified</span>
           {allPassed
             ? <span style={{ fontSize:11, fontWeight:600, padding:"3px 10px", borderRadius:20, background:T.greenLt, color:"#065F46" }}>✓ All Clear — Safe to Post</span>
             : criticalPassed
@@ -428,7 +445,7 @@ const PrePostChecklist = () => {
           }
         </div>
         <div style={{ height:8, background:T.slate100, borderRadius:4, overflow:"hidden" }}>
-          <div style={{ height:"100%", width:`${(checkedCount/26)*100}%`, background:allPassed?T.green:criticalPassed?T.amber:T.blue, borderRadius:4, transition:"width 0.3s ease" }} />
+          <div style={{ height:"100%", width:`${(checkedCount/MOCK_CHECKLIST.length)*100}%`, background:allPassed?T.green:criticalPassed?T.amber:T.blue, borderRadius:4, transition:"width 0.3s ease" }} />
         </div>
       </div>
 
@@ -483,7 +500,7 @@ const PrePostChecklist = () => {
       {/* Post-checklist note */}
       {allPassed && (
         <div style={{ marginTop:14, padding:"12px 16px", background:T.greenLt, border:`1px solid #BBF7D0`, borderRadius:10, fontSize:12, color:"#065F46" }}>
-          ✓ All 26 compliance items verified. This content is cleared for publishing. Log this review in the audit log before posting.
+          ✓ All {MOCK_CHECKLIST.length} compliance items verified. This content is cleared for publishing. Log this review in the audit log before posting.
         </div>
       )}
     </div>
@@ -527,7 +544,7 @@ const ComplianceCalendar = ({ calendar = [] }) => {
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
         {filtered.map((item,i) => {
           const sc = statusConfig(item.status);
-          const sev = severityConfig(item.severity);
+          const sev = severityConfig(item.status === "overdue" ? "critical" : item.status === "due" ? "warning" : "info");
           const urgent = item.days_remaining <= 14;
           return (
             <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", background:urgent?T.redLt:T.white, border:`1px solid ${urgent?"#FECACA":T.slate200}`, borderRadius:10 }}>
@@ -551,20 +568,29 @@ const ComplianceCalendar = ({ calendar = [] }) => {
 };
 
 // ─── Section: Audit Log ───────────────────────────────────────
-const AuditLog = () => {
+const AuditLog = ({ logs = [], setLogs = () => {} }) => {
   const [newNote, setNewNote] = useState("");
-  const [logs, setLogs] = useState([]);
+  const [saving, setSaving] = useState(false);
 
-  const addLog = () => {
-    if (!newNote.trim()) return;
-    setLogs(prev => [{
-      id: `a${Date.now()}`,
-      date: new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}),
-      event_type: "review",
-      description: newNote.trim(),
-      created_by: "Jane Smith",
-    }, ...prev]);
-    setNewNote("");
+  const addLog = async () => {
+    if (!newNote.trim() || saving) return;
+    setSaving(true);
+    try {
+      const { data, error } = await supabase.from("compliance_log").insert({
+        agency_id: AGENCY_ID,
+        event_type: "review",
+        description: newNote.trim(),
+        created_by: "Tiffany Mapp",
+      }).select().single();
+      if (error) throw error;
+      setLogs(prev => [data, ...prev]);
+      setNewNote("");
+    } catch (e) {
+      console.error("compliance_log insert error:", e);
+      alert("Could not save compliance log entry: " + (e?.message || "unknown error"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -584,9 +610,9 @@ const AuditLog = () => {
         <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
           <button
             onClick={addLog}
-            disabled={!newNote.trim()}
-            style={{ padding:"6px 14px", fontSize:11, fontWeight:600, color:T.white, background:T.navy, border:"none", borderRadius:7, cursor:newNote.trim()?"pointer":"not-allowed", opacity:newNote.trim()?1:0.5 }}
-          >Log Activity</button>
+            disabled={!newNote.trim() || saving}
+            style={{ padding:"6px 14px", fontSize:11, fontWeight:600, color:T.white, background:T.navy, border:"none", borderRadius:7, cursor:(newNote.trim() && !saving)?"pointer":"not-allowed", opacity:(newNote.trim() && !saving)?1:0.5 }}
+          >{saving ? "Saving…" : "Log Activity"}</button>
         </div>
       </div>
 
@@ -602,7 +628,7 @@ const AuditLog = () => {
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:12, color:T.slate800, lineHeight:1.5 }}>{log.description}</div>
                 <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>
-                  {log.date} · {log.created_by} · {log.event_type.replace(/_/g," ")}
+                  {log.created_at ? new Date(log.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : ""} · {log.created_by || "—"} · {(log.event_type || "review").replace(/_/g," ")}
                 </div>
               </div>
             </div>
@@ -620,13 +646,14 @@ export default function ComplianceCenter() {
   // ── Live data from Supabase ─────────────────────────────────
   const [rules,    setRules]    = useState([]);
   const [calendar, setCalendar] = useState([]);
+  const [logs,     setLogs]     = useState([]);
   const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [rulesRes, calRes] = await Promise.all([
+        const [rulesRes, calRes, logsRes] = await Promise.all([
           supabase.from("compliance_rules")
             .select("*")
             .eq("agency_id", AGENCY_ID)
@@ -636,6 +663,11 @@ export default function ComplianceCenter() {
             .select("*")
             .eq("agency_id", AGENCY_ID)
             .order("due_date", { ascending: true }),
+          supabase.from("compliance_log")
+            .select("*")
+            .eq("agency_id", AGENCY_ID)
+            .order("created_at", { ascending: false })
+            .limit(50),
         ]);
         if (cancelled) return;
         const today = new Date(); today.setHours(0,0,0,0);
@@ -652,6 +684,7 @@ export default function ComplianceCenter() {
         });
         setRules(rulesRes?.data || []);
         setCalendar(calEnriched);
+        setLogs(logsRes?.data || []);
       } catch (e) {
         if (!cancelled) console.error("ComplianceCenter load error:", e);
       } finally {
@@ -667,17 +700,19 @@ export default function ComplianceCenter() {
 
   const saveRule = async () => {
     if (!newRule.title) return;
-    const { error } = await supabase.from("compliance_rules").insert([{
-      ...newRule,
-      agency_id: AGENCY_ID,
-      status: "active",
-      created_at: new Date().toISOString()
-    }]);
-    if (!error) {
+    try {
+      const { data, error } = await supabase.from("compliance_rules").insert({
+        ...newRule,
+        agency_id: AGENCY_ID,
+        is_active: true,
+      }).select().single();
+      if (error) throw error;
+      setRules(prev => [data, ...prev]);
       setShowAddRule(false);
       setNewRule({title:"", category:"", description:"", severity:"info"});
-      // Trigger refetch
-      window.location.reload();
+    } catch (e) {
+      console.error("compliance_rules insert error:", e);
+      alert("Could not save rule: " + (e?.message || "unknown error"));
     }
   };
 
@@ -763,11 +798,11 @@ export default function ComplianceCenter() {
       )}
 
       {/* Section Content */}
-      {section === "dashboard" && <ComplianceDashboard rules={rules} calendar={calendar} />}
+      {section === "dashboard" && <ComplianceDashboard rules={rules} calendar={calendar} recentLogs={logs} />}
       {section === "rules"     && <RulesLibrary rules={rules} />}
       {section === "checklist" && <PrePostChecklist />}
       {section === "calendar"  && <ComplianceCalendar calendar={calendar} />}
-      {section === "log"       && <AuditLog />}
+      {section === "log"       && <AuditLog logs={logs} setLogs={setLogs} />}
     </div>
   );
 }
