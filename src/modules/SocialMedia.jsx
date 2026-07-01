@@ -45,6 +45,7 @@ const T = {
   slate50: "#F8FAFC",
   slate100:"#F1F5F9",
   slate200:"#E2E8F0",
+  slate300:"#CBD5E1",
   slate400:"#94A3B8",
   slate500:"#64748B",
   slate600:"#475569",
@@ -190,8 +191,12 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
   const failedRecent = safePosts.filter(p => p.status === "failed").length;
   const manualNeeded = safePosts.filter(p => p.status === "scheduled" && p.requires_manual).length;
 
-  // Safe analytics — falls back to zeros when no data yet
-  const ana = analytics || { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0 }, by_platform:[], by_pillar:[] };
+  // Safe analytics — falls back to zeros when no aggregated data yet.
+  // The `analytics` prop may currently hold a raw social_analytics row (per-post metrics)
+  // instead of an aggregate; the this_week/last_week/by_platform shape is not yet built
+  // client-side. Guard both shapes so the UI never crashes on unexpected data.
+  const emptyAgg = { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, by_platform:[], by_pillar:[] };
+  const ana = (analytics && analytics.this_week && analytics.last_week) ? analytics : emptyAgg;
   const weekChange = {
     reach: ana.last_week.total_reach > 0 ? Math.round(((ana.this_week.total_reach - ana.last_week.total_reach) / ana.last_week.total_reach) * 100) : 0,
     likes: ana.last_week.total_likes > 0 ? Math.round(((ana.this_week.total_likes - ana.last_week.total_likes) / ana.last_week.total_likes) * 100) : 0,
@@ -230,7 +235,7 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
       {failedRecent > 0 && (
         <div style={{ background:T.redLt, border:`1px solid #FECACA`, borderLeft:`4px solid ${T.red}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
           <div style={{ fontSize:12, fontWeight:700, color:"#991B1B", marginBottom:2 }}>⚠️ Failed post detected</div>
-          <div style={{ fontSize:11, color:"#991B1B" }}>1 Instagram post failed on Apr 25. Review the calendar and repost manually.</div>
+          <div style={{ fontSize:11, color:"#991B1B" }}>{failedRecent} post{failedRecent===1?"":"s"} failed recently. Review the calendar and repost manually.</div>
         </div>
       )}
 
@@ -293,7 +298,7 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
                 }
                 await savePost({
                   platform: newPost.platform || "facebook",
-                  content_pillar: newPost.content_pillar || "educate",
+                  content_type: newPost.content_pillar || "educate",
                   scheduled_date: newPost.scheduled_date,
                   caption: newPost.caption,
                   status: "draft",
@@ -312,7 +317,7 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
 
 <Card>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-            <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Today — Monday April 27</span>
+            <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Today — {new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" })}</span>
             <AskBtn size="small" context={`Today's social media posts:\n${todayPosts.map(p=>`${(p.platform || 'POST').toUpperCase()} at ${p.time}: "${p.caption}" — Status: ${p.status}${p.requires_manual?" (MANUAL POSTING REQUIRED)":""}`).join("\n")}\n\nHelp me review today's content for compliance and engagement quality. Check against the 80/20 rule and the pre-post checklist.`} />
           </div>
           {todayPosts.length === 0 ? (
@@ -530,11 +535,16 @@ const Analytics = ({ analytics, posts, loading }) => {
     <div style={{ textAlign:"center", padding:48, color:T.slate400, fontSize:13 }}>Loading analytics…</div>
   );
 
-  // If no analytics data yet, show empty state
-  const ana = analytics || { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, by_platform:[], by_pillar:[] };
+  // If no aggregated analytics data yet, show empty state.
+  // Same shape-guard as Overview — the load currently sets analytics from a single
+  // raw social_analytics row; the aggregation into this_week/last_week/by_platform
+  // is a pending follow-up. Guard defensively.
+  const emptyAgg = { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, by_platform:[], by_pillar:[] };
+  const ana = (analytics && analytics.this_week && analytics.last_week) ? analytics : emptyAgg;
   const safePosts = Array.isArray(posts) ? posts : [];
+  const hasRealAggregate = !!(analytics && analytics.this_week);
 
-  if (!analytics && safePosts.length === 0) return (
+  if (!hasRealAggregate && safePosts.length === 0) return (
     <div style={{ textAlign:"center", padding:48, color:T.slate500 }}>
       <div style={{ fontSize:32, marginBottom:12 }}>📊</div>
       <div style={{ fontSize:15, fontWeight:600, color:T.slate700, marginBottom:6 }}>No analytics data yet</div>
@@ -829,7 +839,7 @@ export default function SocialMedia() {
 
   const [editingPost, setEditingPost] = useState(null);
   const [showScheduler, setShowScheduler] = useState(false);
-  const [newPost, setNewPost] = useState({platform:"facebook", content:"", post_date:"", status:"draft"});
+  const [newPost, setNewPost] = useState({platform:"facebook", caption:"", scheduled_date:"", content_pillar:"educate", status:"draft"});
 
   // ── Live data from Supabase ──────────────────────────────────
   const [posts, setPosts]           = useState([]);
@@ -883,17 +893,51 @@ export default function SocialMedia() {
   }, []);
 
   const savePost = async (post) => {
-    const { error } = await supabase.from("content_calendar").upsert([{
-      ...post,
-      agency_id: AGENCY_ID,
-      updated_at: new Date().toISOString()
-    }]);
-    if (!error) { setEditingPost(null); setShowScheduler(false); window.location.reload(); }
+    try {
+      const { data, error } = await supabase
+        .from("content_calendar")
+        .upsert({ ...post, agency_id: AGENCY_ID })
+        .select()
+        .single();
+      if (error) throw error;
+      // Normalize into the shape the render code expects
+      const normalized = {
+        id: data.id,
+        platform: data.platform,
+        date: data.scheduled_date
+          ? new Date(data.scheduled_date).toLocaleDateString("en-US", { month:"short", day:"numeric" })
+          : "",
+        time: data.scheduled_time || "",
+        status: data.status,
+        pillar: data.content_type || "educate",
+        caption: data.caption || "",
+        requires_manual: data.requires_manual || false,
+        engagement: null,
+      };
+      setPosts(prev => {
+        const rest = prev.filter(p => p.id !== normalized.id);
+        return [normalized, ...rest];
+      });
+      setEditingPost(null);
+      setShowScheduler(false);
+    } catch (e) {
+      console.error("content_calendar upsert error:", e);
+      alert("Could not save post: " + (e?.message || "unknown error"));
+    }
   };
 
   const approvePost = async (postId) => {
-    await supabase.from("content_calendar").update({status:"approved", approved_at: new Date().toISOString()}).eq("id", postId);
-    window.location.reload();
+    try {
+      const { error } = await supabase
+        .from("content_calendar")
+        .update({ status: "approved" })
+        .eq("id", postId);
+      if (error) throw error;
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: "approved" } : p));
+    } catch (e) {
+      console.error("content_calendar approve error:", e);
+      alert("Could not approve post: " + (e?.message || "unknown error"));
+    }
   };
 
   return (
