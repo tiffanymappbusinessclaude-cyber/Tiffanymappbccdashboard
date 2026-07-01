@@ -3,6 +3,8 @@ import { useState, useEffect, createContext, useContext } from "react";
 import Dashboard from "./src/modules/Dashboard.jsx";
 import Financials from "./src/modules/Financials.jsx";
 import PersistentMemory from "./src/modules/PersistentMemory.jsx";
+import SystemMap from "./src/modules/SystemMap.jsx";
+import PlaybookGuide from "./src/modules/PlaybookGuide.jsx";
 import ComplianceCenter from "./src/modules/ComplianceCenter.jsx";
 import Automations from "./src/modules/Automations.jsx";
 import SocialMedia from "./src/modules/SocialMedia.jsx";
@@ -84,6 +86,8 @@ const NAV_ITEMS = [
   { id: "dashboard",   label: "Dashboard",       icon: "grid",        roles: ["owner","manager","staff","readonly","accountant"] },
   { id: "financials",  label: "Financials",       icon: "dollar",      roles: ["owner","manager","accountant"] },
   { id: "memory",      label: "Memory",           icon: "brain",       roles: ["owner","manager"] },
+  { id: "systemmap",   label: "Wiki & System Map",icon: "map",         roles: ["owner","manager","staff","readonly","accountant"] },
+  { id: "playbook",    label: "Playbook & Guide", icon: "book",        roles: ["owner","manager","staff","readonly","accountant"] },
   { id: "compliance",  label: "Compliance",       icon: "shield",      roles: ["owner","manager"] },
   { id: "automations", label: "Automations",      icon: "zap",         roles: ["owner","manager"] },
   { id: "social",      label: "Social Media",     icon: "share",       roles: ["owner","manager","staff"] },
@@ -119,7 +123,9 @@ const Icon = ({ name, size = 16, color = "currentColor", strokeWidth = 1.75 }) =
     x:          <svg style={s} viewBox="0 0 24 24" {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
     lightning:  <svg style={s} viewBox="0 0 24 24" fill={color} stroke="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
     externalLink:<svg style={s} viewBox="0 0 24 24" {...p}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>,
-  };
+      map:        <svg style={s} viewBox="0 0 24 24" {...p}><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>,
+    book:       <svg style={s} viewBox="0 0 24 24" {...p}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+};
   return icons[name] || null;
 };
 
@@ -370,6 +376,8 @@ const ModuleRouter = ({ active, onNavigate }) => {
     dashboard:   <ErrorBoundary name="Dashboard"><Dashboard onNavigate={onNavigate} /></ErrorBoundary>,
     financials:  <ErrorBoundary name="Financials"><Financials /></ErrorBoundary>,
     memory:      <ErrorBoundary name="Memory"><PersistentMemory /></ErrorBoundary>,
+    systemmap:   <ErrorBoundary name="Wiki & System Map"><SystemMap /></ErrorBoundary>,
+    playbook:    <ErrorBoundary name="Playbook & Guide"><PlaybookGuide /></ErrorBoundary>,
     compliance:  <ErrorBoundary name="Compliance"><ComplianceCenter /></ErrorBoundary>,
     automations: <ErrorBoundary name="Automations"><Automations /></ErrorBoundary>,
     social:      <ErrorBoundary name="Social Media"><SocialMedia /></ErrorBoundary>,
