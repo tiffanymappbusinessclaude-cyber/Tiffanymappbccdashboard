@@ -599,7 +599,13 @@ const BCCConfiguration = () => {
         const [agencyResp, settingsResp, aippResp] = await Promise.all([
           supabase.from("agency").select("*").eq("id", AGENCY_ID).maybeSingle(),
           supabase.from("settings").select("setting_key,setting_value").eq("agency_id", AGENCY_ID),
-          supabase.from("aipp_tracking").select("year,target_amount,earned_ytd").eq("agency_id", AGENCY_ID).eq("year", yearNow).maybeSingle(),
+          // aipp_tracking column is program_year (not year). Prior code silently
+          // returned no data.
+          supabase.from("aipp_tracking")
+            .select("program_year,target_amount,earned_ytd")
+            .eq("agency_id", AGENCY_ID)
+            .eq("program_year", yearNow)
+            .maybeSingle(),
         ]);
         if (cancelled) return;
 
@@ -617,23 +623,24 @@ const BCCConfiguration = () => {
           fiscal_year_start: "January 1",
           currency:          "USD",
           timezone:          settingsMap.timezone || "America/New_York",
-          // Briefing
-          briefing_time:     settingsMap.daily_briefing_time   || "12:00 UTC",
-          briefing_email:    settingsMap.daily_briefing_email  || "tmapp09@gmail.com",
-          briefing_enabled:  (settingsMap.daily_briefing_enabled ?? "true") === "true",
-          // AIPP
-          aipp_year:         aipp?.year || yearNow,
+          // Briefing — settings keys are `briefing_*`, not `daily_briefing_*`.
+          briefing_time:     settingsMap.briefing_time   || "12:00 UTC",
+          briefing_email:    settingsMap.briefing_email  || "tmapp09@gmail.com",
+          briefing_enabled:  (settingsMap.briefing_enabled ?? "true") === "true",
+          // AIPP — column is program_year.
+          aipp_year:         aipp?.program_year || yearNow,
           aipp_target:       aipp?.target_amount ?? null,
           aipp_target_is_placeholder: !aipp?.target_amount || Number(aipp?.target_amount) === 50000,
-          // Compensation
+          // Compensation — agency has smvc_rate_pc and blended_rate_other;
+          // there is no smvc_rate_life_health_fs column. Dropped that fallback.
           smvc_rate_pc:      agency.smvc_rate_pc       ?? null,
-          blended_rate:      agency.blended_rate_other ?? agency.smvc_rate_life_health_fs ?? null,
+          blended_rate:      agency.blended_rate_other ?? null,
           a005_loaded:       Boolean(agency.smvc_rate_pc && Number(agency.smvc_rate_pc) !== 0.10),
           // Entity
           entity_type:       agency.entity_type || "S-Corp",
           lapse_rate:        agency.lapse_rate_annual,
-          // Dashboard
-          dashboard_period:  settingsMap.dashboard_period || "mtd",
+          // Dashboard — settings key is `dashboard_revenue_period`.
+          dashboard_period:  settingsMap.dashboard_revenue_period || "mtd",
         });
         setLoading(false);
       } catch (e) {
@@ -643,9 +650,60 @@ const BCCConfiguration = () => {
     return () => { cancelled = true; };
   }, []);
 
-  const set = (k,v) => setCfg(c => c ? ({...c,[k]:v}) : c);
+  const [savingKey, setSavingKey] = useState(null);
   const pct = (x) => (x == null || x === "" ? "—" : `${(Number(x) * 100).toFixed(1)}%`);
   const money = (x) => (x == null || x === "" ? "—" : `$${Number(x).toLocaleString()}`);
+
+  // Persist a config change to the right table based on the key.
+  //   briefing_*, dashboard_period, timezone → settings (KV upsert, real DB keys below)
+  //   smvc_rate_pc, blended_rate, lapse_rate → agency (single UPDATE, DB column below)
+  //   aipp_target                            → aipp_tracking (upsert by agency_id + program_year)
+  // Local state updates optimistically after success; rolls back on error via re-set.
+  const save = async (k, v) => {
+    const prevCfg = cfg;
+    setCfg(c => c ? ({...c, [k]: v}) : c);   // optimistic
+    setSavingKey(k);
+    try {
+      if (k === "briefing_enabled" || k === "briefing_time" || k === "briefing_email" || k === "timezone" || k === "dashboard_period") {
+        const dbKeyMap = { dashboard_period: "dashboard_revenue_period" };
+        const dbKey = dbKeyMap[k] || k;
+        const dbVal = typeof v === "boolean" ? String(v) : String(v ?? "");
+        const setting_type = typeof v === "boolean" ? "boolean" : "string";
+        const { error } = await supabase
+          .from("settings")
+          .upsert(
+            { agency_id: AGENCY_ID, setting_key: dbKey, setting_value: dbVal, setting_type, updated_by: "webapp" },
+            { onConflict: "agency_id,setting_key" }
+          );
+        if (error) throw error;
+      } else if (k === "smvc_rate_pc" || k === "blended_rate" || k === "lapse_rate") {
+        const columnMap = { smvc_rate_pc: "smvc_rate_pc", blended_rate: "blended_rate_other", lapse_rate: "lapse_rate_annual" };
+        const num = v === "" || v == null ? null : Number(v);
+        if (num != null && !Number.isFinite(num)) throw new Error("Must be a number");
+        const { error } = await supabase
+          .from("agency")
+          .update({ [columnMap[k]]: num })
+          .eq("id", AGENCY_ID);
+        if (error) throw error;
+      } else if (k === "aipp_target") {
+        const num = v === "" || v == null ? null : Number(v);
+        if (num != null && !Number.isFinite(num)) throw new Error("Must be a number");
+        const { error } = await supabase
+          .from("aipp_tracking")
+          .upsert(
+            { agency_id: AGENCY_ID, program_year: cfg.aipp_year, target_amount: num },
+            { onConflict: "agency_id,program_year" }
+          );
+        if (error) throw error;
+      }
+    } catch (e) {
+      console.error("BCC config save error [" + k + "]:", e);
+      alert("Could not save " + k + ": " + (e?.message || "unknown error"));
+      setCfg(prevCfg);   // rollback
+    } finally {
+      setSavingKey(null);
+    }
+  };
 
   if (loading) {
     return <div style={{ fontSize:12, color:T.slate500, padding:"24px 8px" }}>Loading configuration…</div>;
@@ -663,7 +721,7 @@ const BCCConfiguration = () => {
             <div style={{ fontSize:13, fontWeight:700, color:T.slate900 }}>Daily Briefing Email</div>
             <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>Morning snapshot sent to your inbox every day</div>
           </div>
-          <Toggle value={cfg.briefing_enabled} onChange={() => set("briefing_enabled", !cfg.briefing_enabled)} />
+          <Toggle value={cfg.briefing_enabled} onChange={() => save("briefing_enabled", !cfg.briefing_enabled)} />
         </div>
         {cfg.briefing_enabled && (
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -672,10 +730,16 @@ const BCCConfiguration = () => {
               { label:"Delivery Email", key:"briefing_email", value:cfg.briefing_email, hint:"Where briefings are sent" },
             ].map(f => (
               <div key={f.key}>
-                <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>{f.label.toUpperCase()}</label>
-                <input value={f.value || ""} onChange={e => set(f.key, e.target.value)}
+                <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>
+                  {f.label.toUpperCase()}
+                  {savingKey === f.key && <span style={{ marginLeft:6, color:T.slate400, fontWeight:400 }}>saving…</span>}
+                </label>
+                <input
+                  defaultValue={f.value || ""}
+                  onBlur={e => { if (e.target.value !== (f.value || "")) save(f.key, e.target.value); }}
+                  onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
                   style={{ width:"100%", padding:"8px 10px", fontSize:12, color:T.slate800, border:`1px solid ${T.slate200}`, borderRadius:8, outline:"none", boxSizing:"border-box" }} />
-                <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{f.hint}</div>
+                <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{f.hint} · saves on blur / Enter</div>
               </div>
             ))}
           </div>
@@ -753,8 +817,8 @@ const BCCConfiguration = () => {
           <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:8 }}>DEFAULT REVENUE PERIOD</label>
           <div style={{ display:"flex", gap:6 }}>
             {[{id:"mtd",label:"Month to Date"},{id:"qtd",label:"Quarter to Date"},{id:"ytd",label:"Year to Date"}].map(opt => (
-              <button key={opt.id} onClick={() => set("dashboard_period", opt.id)}
-                style={{ padding:"7px 14px", fontSize:11, fontWeight:cfg.dashboard_period===opt.id?600:400, color:cfg.dashboard_period===opt.id?T.white:T.slate600, background:cfg.dashboard_period===opt.id?T.navy:T.white, border:`1px solid ${cfg.dashboard_period===opt.id?T.navy:T.slate200}`, borderRadius:7, cursor:"pointer" }}>
+              <button key={opt.id} disabled={savingKey === "dashboard_period"} onClick={() => save("dashboard_period", opt.id)}
+                style={{ padding:"7px 14px", fontSize:11, fontWeight:cfg.dashboard_period===opt.id?600:400, color:cfg.dashboard_period===opt.id?T.white:T.slate600, background:cfg.dashboard_period===opt.id?T.navy:T.white, border:`1px solid ${cfg.dashboard_period===opt.id?T.navy:T.slate200}`, borderRadius:7, cursor: savingKey === "dashboard_period" ? "wait" : "pointer", opacity: savingKey === "dashboard_period" ? 0.6 : 1 }}>
                 {opt.label}
               </button>
             ))}
