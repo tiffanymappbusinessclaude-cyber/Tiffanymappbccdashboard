@@ -332,18 +332,18 @@ The function is idempotent — a pre-check on `(agency_id, recipe_name)` prevent
 | 13 | **Credit Card GL Writer** | daily | GL | `cc_gl_writer` | ⚠ active — handler undefined at master |
 | 14 | **Producer Underperformance Watcher** | daily | HR | `producer_underperformance_watcher` | ✅ active |
 
-**⚠ INTERNAL HANDLER GAP — audit finding B8 (2026-07-02):**
+**⚠ INTERNAL HANDLER GAP — audit finding B8 (partial resolution 2026-07-02):**
 
-The seed function references 10 distinct `internal_handler` values across the 14 recipes. Only **3** of those handlers are defined in the master's `supabase/migrations/` folder as of ba0fb6f9: `gl_entry_writer`, `monthly_close_monitor`, and `producer_underperformance_watcher` (all in migration 012). The other **7** — `bank_gl_writer`, `cc_gl_writer`, `dispatch_document_processor`, `dispatch_email_archiver`, `instagram_manual_reminder`, `monthly_close_generator`, `payroll_gl_writer` — are referenced but not implemented anywhere in the master repo.
+The seed function references 10 distinct `internal_handler` values across the 14 recipes. **B8a (this commit) backported 4 handlers** from Kwame Tyler's fork as migration `014_missing_internal_handlers.sql`. Master now defines 7 of the 10 handlers: `gl_entry_writer`, `monthly_close_monitor`, `producer_underperformance_watcher` (migration 012, original) + `bank_gl_writer`, `cc_gl_writer`, `payroll_gl_writer`, `monthly_close_generator` (migration 014, backported).
 
-If setup Claude runs the seed function and enables all recipes without addressing this, **the 7 recipes using undefined handlers will error `function does not exist` at every fire.** They likely exist in Keith Thompson's live Supabase (the reference install) but were never captured back into a master migration.
+**3 handlers remain undefined at master (B8b, next session):** `dispatch_email_archiver`, `dispatch_document_processor`, `instagram_manual_reminder`. In Kwame's fork these were refactored into a two-stage `prepare_*_batch` / `log_*_result` helper pattern that requires runner code changes to orchestrate. That merge is deferred because it needs careful review to avoid reverting the 2026-07-02 direct-Groq migration.
 
-**Recommended action** (pending Rebecca's decision on the master fix):
+**If setup Claude runs the seed function and enables all recipes without addressing this**, the 3 recipes using still-undefined handlers (Email Archiver, Document Processor if seeded as INTERNAL, Instagram Manual Reminder) will error `function does not exist` at every fire.
 
-- **Short-term:** After seeding, disable the 7 affected recipes until their handlers ship. Only leave `SF Daily Comp Processor`, `Deduction Statement Processor`, `Bank Statement Processor`, `Monthly Close Monitor`, `GL Entry Writer`, and `Producer Underperformance Watcher` active — that's 6 working recipes on Day 1. Or:
-- **If Rebecca has captured the handlers from Keith Thompson's install into a follow-up migration:** apply that migration between Step 2 and this step, then all 14 fire cleanly.
+**Recommended action** (partial resolution shipped in migration 014):
 
-Track this via `system_status` (migration 013): mark the 7 affected recipes as `customization_pending` with `unlocks_when = 'Migration adding <handler_name> deployed'` so the client's Claude presents them as runway, not as broken.
+- **After migration 014:** 11 of 14 recipes work out of the box (all Composio-driven ones plus the 4 GL/close handlers backported in 014 plus the 3 original migration-012 handlers).
+- **Still disable at seed:** the 3 recipes whose handlers remain undefined at master — Email Archiver, Document Processor (if seeded with INTERNAL action), Instagram Manual Reminder. Set `is_active=false` on those three rows after seeding, or use `system_status` (migration 013) to mark them `customization_pending` with `unlocks_when = 'B8b: prepare/log helper pattern back-ported'`. That way the client's Claude presents them as runway, not as broken.
 
 ### Step 5 — Apply migration 011 and deploy the automation-runner Edge Function
 

@@ -103,6 +103,7 @@ If either is missing, enable it in Studio, then continue.
 | 011 | `011_automation_runner.sql` | The runner engine: `run_automation_recipe`, `run_due_automation_recipes`, `get_setting`, cron parser. Enables `pg_net`. | ✅ **Required for any automation to run** | ✅ Required |
 | 012 | `012_internal_recipe_handlers.sql` | 3 INTERNAL handlers (`gl_entry_writer`, `monthly_close_monitor`, `producer_underperformance_watcher`) + `run_internal_recipe()` dispatcher | ✅ **Required or P&L stays at $0** | ✅ Required |
 | 013 | `013_system_status.sql` | Classify every BCC component as `operational_green` / `customization_pending` / `deferred` / `needs_attention` — feeds the customization-runway pattern | ✅ Required | ✅ Required |
+| 014 | `014_missing_internal_handlers.sql` | 4 INTERNAL recipe handlers (`bank_gl_writer`, `cc_gl_writer`, `payroll_gl_writer`, `monthly_close_generator`) + `classification_rules` table + `journal_entries.classification_rule_id` + `credit_transactions.is_posted_to_gl` + suspense accounts. Backported from Kwame Tyler's fork 2026-07-02 (B8a resolution). | ✅ Required | ✅ Required |
 | 015 | `015_close_period_helpers.sql` | `open_close_period_all_entities` wrapper | ✅ Required | ✅ Required |
 | 016 | `016_enable_pgcron_pgnet.sql` | Belt-and-suspenders extension enable (Phase 6 prep) | ✅ Required | ✅ Required |
 | 017 | `017_pl_other_expense_v7.sql` | Adds `other_expense` column, fixes generated formulas, recreates dependent views | ✅ Required | ✅ Required |
@@ -125,7 +126,7 @@ If either is missing, enable it in Studio, then continue.
 | 050 | `050_run_health_checks_filter_resolved.sql` | Patches `run_health_checks` to ignore resolved rows | ✅ Required | ✅ Required |
 | — | `seed_bcc_automations.sql` | The one-call function that seeds all 14 canonical recipes atomically (see Step 5 for the actual invocation) | ✅ Applied but invoked in Step 5 | ✅ Applied but invoked in Step 5 |
 
-**Numbering gaps** (in case setup Claude wonders): `009`, `014`, `030`–`044`, `049` were reserved during development and never shipped. `009` was originally reserved for a SQL diagnostic query that now lives at `tools/schema_audit_query.sql`. The others were placeholder slots that got skipped when the actual work landed at higher numbers. The gaps are intentional; do not worry about them.
+**Numbering gaps** (in case setup Claude wonders): `009`, `030`–`044`, `049` were reserved during development and never shipped. (`014` was previously reserved but is now used by the missing-handlers backport landed 2026-07-02.) `009` was originally reserved for a SQL diagnostic query that now lives at `tools/schema_audit_query.sql`. The others were placeholder slots that got skipped when the actual work landed at higher numbers. The gaps are intentional; do not worry about them.
 
 Each migration is `IF NOT EXISTS` / `CREATE OR REPLACE` safe. Run them top-to-bottom in the SQL Editor. **Skip migration 008** on Path B (`bridge_generator.sql`) — that's for existing-database installs only.
 
