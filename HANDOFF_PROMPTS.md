@@ -77,21 +77,73 @@ Your BCC web app starter repo has just been pushed to your GitHub.
 
 **1. Read `CLAUDE.md`** at the repo root. This is your install bible — env vars, smoke test, the 10 hard-learned bugs from prior installs.
 
-**2. Apply migrations to [CLIENT-FIRST-NAME]'s empty Supabase, in order, in Supabase Studio SQL Editor:**
-- `supabase/migrations/001_bcc_master_schema.sql` — creates 37 master tables
-- `supabase/migrations/002_seed_compliance_rules.sql` — State Farm compliance calendar baseline
-- `supabase/migrations/003_seed_chart_of_accounts.sql` — standard COA for State Farm agencies
-- `supabase/migrations/004_seed_agency_record.sql` — base agency + settings record (Rebecca will personalize after deploy)
-- `supabase/migrations/005_anon_read_policies.sql` — anon role grants for the web app
-- `supabase/migrations/006_derived_financial_views.sql` — `v_income_statement` and `v_balance_sheet`
-- `supabase/migrations/007_monthly_close_checklist.sql` — monthly close infrastructure
-- `supabase/migrations/010_producer_roi_infrastructure.sql` — Producer ROI feature: SMVC/blended/lapse columns on agency, producer_production table
-- `supabase/migrations/011_automation_runner.sql` — **REQUIRED** — installs the engine that fires recipes (`run_due_automation_recipes`, `run_automation_recipe`, `get_setting`, cron parser). Enables `pg_net` extension. Without this migration, the 12 canonical recipes you seed in step 5.5 will sit inert and Layer 4 (Automations) does nothing
-- `supabase/migrations/012_internal_recipe_handlers.sql` — **REQUIRED** — ships the SQL handlers for the 3 INTERNAL recipes (#8 GL Entry Writer, #11 Monthly Close Monitor, #12 Producer Underperformance Watcher) plus the `run_internal_recipe()` dispatcher. Without this migration, those 3 recipes fail every time they fire (the runner has no path to dispatch INTERNAL actions). End-user impact: P&L stays at $0 even when comp data is flowing in
+**2. Apply migrations to [CLIENT-FIRST-NAME]'s empty Supabase, in order, in Supabase Studio SQL Editor.**
 
-Each migration is `IF NOT EXISTS` safe. Run them top-to-bottom. **Skip migration 008** (`bridge_generator.sql`) — that's for existing-database installs only.
+**⚠ Extension gotcha before you begin:** the master migration set assumes `pg_cron` and `pg_net` are enabled on the client's Supabase project. Migration 011 has `CREATE EXTENSION IF NOT EXISTS pg_net;` at the top, but if RLS or extension policy blocks that (common on fresh Supabase projects), the project owner must enable both extensions in **Supabase Studio → Database → Extensions** before running migration 011. Check first with:
 
-**There is no migration 009.** The number was reserved for a SQL diagnostic query that lives in `tools/schema_audit_query.sql` (not a DDL migration).
+```sql
+SELECT extname FROM pg_extension WHERE extname IN ('pg_cron', 'pg_net');
+```
+
+If either is missing, enable it in Studio, then continue.
+
+**The full ordered migration list (as of master HEAD ba0fb6f9, 2026-07-02):**
+
+| # | File | Purpose | Path A (existing DB) | Path B (clean install) |
+|---|---|---|---|---|
+| 001 | `001_bcc_master_schema.sql` | Core BCC schema — 37 tables (agency, staff, clients, tasks, comp_recap, journal lines, etc.) | ✅ IF NOT EXISTS safe | ✅ Required |
+| 002 | `002_seed_compliance_rules.sql` | 57 SF compliance rules baseline | ⚠ Check if empty first | ✅ Required |
+| 003 | `003_seed_chart_of_accounts.sql` | Standard COA for SF agencies | ⚠ Check if empty first | ✅ Required |
+| 004 | `004_seed_agency_record.sql` | Base agency + settings record (personalize after) | ⚠ Update with real data | ✅ Required |
+| 005 | `005_anon_read_policies.sql` | Anon role SELECT grants for web app | ✅ **YES — run FIRST on Path A** | ✅ Required |
+| 006 | `006_derived_financial_views.sql` | `v_income_statement`, `v_balance_sheet` | ✅ Required | ✅ Required |
+| 007 | `007_monthly_close_checklist.sql` | Monthly close checklist infra | ✅ Required | ✅ Required |
+| 008 | `008_bridge_generator.sql` | `bcc_generate_bridges()` for legacy-schema renaming | ✅ **Path A ONLY** | ❌ Skip |
+| 010 | `010_producer_roi_infrastructure.sql` | SMVC/blended/lapse columns + `producer_production` table (HR → Performance tab) | ✅ Required | ✅ Required |
+| 011 | `011_automation_runner.sql` | The runner engine: `run_automation_recipe`, `run_due_automation_recipes`, `get_setting`, cron parser. Enables `pg_net`. | ✅ **Required for any automation to run** | ✅ Required |
+| 012 | `012_internal_recipe_handlers.sql` | 3 INTERNAL handlers (`gl_entry_writer`, `monthly_close_monitor`, `producer_underperformance_watcher`) + `run_internal_recipe()` dispatcher | ✅ **Required or P&L stays at $0** | ✅ Required |
+| 013 | `013_system_status.sql` | Classify every BCC component as `operational_green` / `customization_pending` / `deferred` / `needs_attention` — feeds the customization-runway pattern | ✅ Required | ✅ Required |
+| 015 | `015_close_period_helpers.sql` | `open_close_period_all_entities` wrapper | ✅ Required | ✅ Required |
+| 016 | `016_enable_pgcron_pgnet.sql` | Belt-and-suspenders extension enable (Phase 6 prep) | ✅ Required | ✅ Required |
+| 017 | `017_pl_other_expense_v7.sql` | Adds `other_expense` column, fixes generated formulas, recreates dependent views | ✅ Required | ✅ Required |
+| 018 | `018_fix_total_equity_distributions_sign.sql` | Fixes `owner_distributions` sign in `total_equity` generated column | ✅ Required | ✅ Required |
+| 019 | `019_automation_runner_webhook_secret.sql` | `get_webhook_secret` RPC | ✅ Required | ✅ Required |
+| 020 | `020_automation_runner_cron.sql` | pg_cron job firing runner every minute | ✅ **Required or nothing schedules** | ✅ Required |
+| 021 | `021_client_context_bookkeeper_email_and_briefing_rpc.sql` | `client_context.bookkeeper_email` + `get_daily_briefing_context` RPC | ✅ Required | ✅ Required |
+| 022 | `022_team_access.sql` | Per-user module permissions | ✅ Required | ✅ Required |
+| 023 | `023_support_window_health_checks.sql` | Phase 13 support-window health checks + weekly status RPCs | ✅ Required | ✅ Required |
+| 024 | `024_gl_balance_check.sql` | GL balance check RPC | ✅ Required | ✅ Required |
+| 025 | `025_fix_get_my_module_access_volatile.sql` | Drops STABLE marker on `get_my_module_access` | ✅ Required (dependency of 022) | ✅ Required |
+| 026 | `026_dashboard_business_kpis_view.sql` | Single-row business KPI snapshot view | ✅ Required | ✅ Required |
+| 027 | `027_yoy_view_ytd_fix.sql` | Fixes `entity_year_over_year_view` to do YTD-vs-YTD | ✅ Required | ✅ Required |
+| 028 | `028_ingest_log_subject_pattern_method.sql` | Adds `subject_pattern` to `ingest_log.entity_identification_method` enum | ✅ Required | ✅ Required |
+| 029 | `029_documents_search_vector_field_aware.sql` | Field-aware `documents.search_vector` trigger | ✅ Required | ✅ Required |
+| 045 | `045_system_map.sql` | Wiki-style living documentation (pages, categories) | ✅ Required | ✅ Required |
+| 046 | `046_system_map_staleness_check.sql` | Weekly drift-protection for system_map (pages older than 45 days) | ✅ Required | ✅ Required |
+| 047 | `047_current_system_overview.sql` | Session-start "where do things stand" snapshot RPC | ✅ Required | ✅ Required |
+| 048 | `048_system_map_drift_cron.sql` | Schedules the weekly drift scan | ✅ Required | ✅ Required |
+| 050 | `050_run_health_checks_filter_resolved.sql` | Patches `run_health_checks` to ignore resolved rows | ✅ Required | ✅ Required |
+| — | `seed_bcc_automations.sql` | The one-call function that seeds all 14 canonical recipes atomically (see Step 5 for the actual invocation) | ✅ Applied but invoked in Step 5 | ✅ Applied but invoked in Step 5 |
+
+**Numbering gaps** (in case setup Claude wonders): `009`, `014`, `030`–`044`, `049` were reserved during development and never shipped. `009` was originally reserved for a SQL diagnostic query that now lives at `tools/schema_audit_query.sql`. The others were placeholder slots that got skipped when the actual work landed at higher numbers. The gaps are intentional; do not worry about them.
+
+Each migration is `IF NOT EXISTS` / `CREATE OR REPLACE` safe. Run them top-to-bottom in the SQL Editor. **Skip migration 008** on Path B (`bridge_generator.sql`) — that's for existing-database installs only.
+
+**Verification after applying all migrations:**
+
+```sql
+SELECT COUNT(*) AS tables FROM information_schema.tables
+WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
+
+SELECT COUNT(*) AS views FROM information_schema.tables
+WHERE table_schema = 'public' AND table_type = 'VIEW';
+
+SELECT COUNT(*) AS internal_functions FROM information_schema.routines
+WHERE routine_schema = 'public' AND routine_type = 'FUNCTION';
+```
+
+You should see roughly 38+ tables, 2+ views, and 15+ functions. If tables are missing, re-run migration 001. If views are missing, re-run migration 006.
+
 
 **3. Verify the schema landed cleanly.** In Studio:
 ```sql

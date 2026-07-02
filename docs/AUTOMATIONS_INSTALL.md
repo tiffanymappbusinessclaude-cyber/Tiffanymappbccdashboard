@@ -6,30 +6,32 @@
 ---
 
 
-> ## ⛔ STOP — READ THIS BEFORE TOUCHING CREDENTIALS
+> ## ✅ LLM POLICY (Updated 2026-07-02)
 >
-> **You do NOT need a Groq API key.** You do NOT need any external LLM API key.
-> The automation runner calls Groq via the Composio-hosted tool
-> `COMPOSIO_SEARCH_GROQ_CHAT`, which authenticates with the existing
-> `composio_api_key`. If you find yourself about to ask the agent for a Groq /
-> OpenAI / Anthropic / Gemini key — **stop**. The credentials list below is
-> complete as written. Adding a `groq_api_key` row is harmless but unused.
+> **You DO need a `GROQ_API_KEY` — free, 60 seconds to get.**
+> The automation runner calls Groq's free OpenAI-compatible REST API
+> directly (no Composio proxy). Get a free key at https://console.groq.com
+> (no credit card required) and set it as a Supabase Edge Function secret
+> via `supabase secrets set GROQ_API_KEY=<your-key>`, then redeploy the runner.
+> You do NOT need OpenAI / Anthropic / Gemini keys — Groq's free tier
+> covers every LLM call this BCC makes. **Not a `public.settings` row** —
+> this is an Edge Function secret, matching IA architecture as of 2026-07-02.
 
 > ## 📘 GLOSSARY — Read this before scanning the recipe table below
 >
 > Throughout this repo you will see the word **"Groq"** in three places:
 > 1. **`groq_prompt`** — a column in the `automation_recipes` table. It holds the LLM system prompt for that recipe. The column name is historical; the prompt is sent to whatever LLM Composio's hosted chat tool routes to.
-> 2. **`COMPOSIO_SEARCH_GROQ_CHAT`** — the Composio tool slug we call for LLM parsing. Authenticates with the existing `composio_api_key`. No separate auth.
-> 3. **"+ Composio LLM" in recipe tables** — shorthand meaning "this recipe pipes its Composio output through the Composio-hosted LLM tool for structured extraction."
+> 2. **Groq REST API** — `https://api.groq.com/openai/v1/chat/completions`, called directly by the runner with `Authorization: Bearer ${GROQ_API_KEY}` (Edge Function secret). No Composio proxy in the LLM path.
+> 3. **"+ Groq LLM" in recipe tables** — shorthand meaning "this recipe pipes its Composio output through Groq's free LLM API for structured JSON extraction."
 >
-> **There is no separate Groq account. No separate Groq key. No separate Groq billing.** Composio provides the LLM free as part of the recipe automation pipeline. If your Project Claude finds itself asking the agent for an LLM API key of any kind — stop and re-read this block.
+> **Groq's free tier covers every LLM call this BCC makes.** No credit card. One key per agency, set as a Supabase Edge Function secret (`supabase secrets set GROQ_API_KEY=<key>`), NOT a `public.settings` row. If your Project Claude finds itself asking the agent for an OpenAI / Anthropic / Gemini key — stop and re-read this block.
 
 
 
 
 ## **THE RECIPES ARE THE DOCUMENT IMPORTER (read this BEFORE anything else)**
 
-The 12 canonical recipes you seed in this doc ARE the document importer for the BCC. Together they read the agent's Gmail every day, parse comp recaps, deduction statements, payroll notifications, bank statements, credit card statements, and producer production reports via Groq, and write structured rows into the right Supabase tables — which then render in every BCC web app module.
+The 14 canonical recipes you seed in this doc ARE the document importer for the BCC. Together they read the agent's Gmail every day, parse comp recaps, deduction statements, payroll notifications, bank statements, credit card statements, and producer production reports via Groq, and write structured rows into the right Supabase tables — which then render in every BCC web app module.
 
 **Do NOT build a parallel importer.** Do not write a custom script to read the agent's Gmail and write to their database. The recipes do that.
 
@@ -57,21 +59,21 @@ Composio is the **execution layer**, not the storage layer.
 
 ---
 
-## The canonical 12 recipes — every BCC install starts with these
+## The canonical 14 recipes — every BCC install starts with these
 
 These are the real, working recipes from Keith Thompson's production BCC, adopted as the canonical install set. The Performance tab feature added two new recipes (Producer Underperformance Watcher and Producer Production Report Processor); the rest match what's running in live client systems today.
 
 | # | Recipe | Schedule | Composio Action | Category | Purpose |
 |---|---|---|---|---|---|
-| 1 | **SF Daily Comp Processor** | 10:00 AM CDT daily | GMAIL_FETCH_EMAILS + Composio LLM | income | Pulls SF daily comp emails, parses line items via Groq, writes to `comp_recap`. Primary daily income feed. |
-| 2 | **Deduction Statement Processor** | every 6 hours | GMAIL_FETCH_EMAILS + Composio LLM | Documents | Parses SF deduction statements, writes deductions (negative amounts) to `comp_recap` and `journal_entries`. |
-| 3 | **Bank Statement Processor** | every 6 hours | GMAIL_FETCH_EMAILS + Composio LLM | Documents | Parses bank statement emails, posts to `journal_entries`. Dedups via reference_number. |
-| 4 | **Credit Card Statement Processor** | every 6 hours | GMAIL_FETCH_EMAILS + Composio LLM | Documents | Parses credit card statements, writes to `credit_transactions`. Pairs with Bank Statement Processor for full cash-basis reconciliation. |
-| 5 | **Payroll Processor** | every 6 hours | GMAIL_FETCH_EMAILS + Composio LLM | Documents | Parses payroll provider notifications (Gusto, ADP), writes `payroll_runs` + `payroll_detail`. |
-| 6 | **Producer Production Report Processor** | Monthly (1st @ 4 AM CDT / 9 UTC) | GMAIL_FETCH_EMAILS + Composio LLM | hr_people | **Parses agent's monthly producer reports → writes to `producer_production`. THIS feeds the HR & People → Performance tab ROI projection.** |
+| 1 | **SF Daily Comp Processor** | 10:00 AM CDT daily | GMAIL_FETCH_EMAILS + Groq LLM | income | Pulls SF daily comp emails, parses line items via Groq, writes to `comp_recap`. Primary daily income feed. |
+| 2 | **Deduction Statement Processor** | every 6 hours | GMAIL_FETCH_EMAILS + Groq LLM | Documents | Parses SF deduction statements, writes deductions (negative amounts) to `comp_recap` and `journal_entries`. |
+| 3 | **Bank Statement Processor** | every 6 hours | GMAIL_FETCH_EMAILS + Groq LLM | Documents | Parses bank statement emails, posts to `journal_entries`. Dedups via reference_number. |
+| 4 | **Credit Card Statement Processor** | every 6 hours | GMAIL_FETCH_EMAILS + Groq LLM | Documents | Parses credit card statements, writes to `credit_transactions`. Pairs with Bank Statement Processor for full cash-basis reconciliation. |
+| 5 | **Payroll Processor** | every 6 hours | GMAIL_FETCH_EMAILS + Groq LLM | Documents | Parses payroll provider notifications (Gusto, ADP), writes `payroll_runs` + `payroll_detail`. |
+| 6 | **Producer Production Report Processor** | Monthly (1st @ 4 AM CDT / 9 UTC) | GMAIL_FETCH_EMAILS + Groq LLM | hr_people | **Parses agent's monthly producer reports → writes to `producer_production`. THIS feeds the HR & People → Performance tab ROI projection.** |
 | 7 | **Email Archiver** | 8:00 AM CDT daily | GMAIL_MODIFY_LABELS | Documents | Archives older email, files attachments to Drive based on subject/sender rules, logs each archived doc to `documents` with source links. Primary inbox-maintenance recipe. |
 | 8 | **GL Entry Writer** | 11:00 AM CDT daily | INTERNAL | financial | Daily reconciliation: takes processed comp_recap rows + bank/payroll/CC events from past 24h that don't yet have journal entries, writes the matching GL entries (cash basis), proper account splits per chart_of_accounts. |
-| 9 | **Daily Briefing Email** | 7:00 AM CDT daily | GMAIL_SEND_EMAIL + Composio LLM | Communication | Composes morning briefing via Groq from real data — revenue YTD, AIPP, top tasks, alerts, today's posts. Sends to agent's PERSONAL email (never @statefarm.com). |
+| 9 | **Daily Briefing Email** | 7:00 AM CDT daily | GMAIL_SEND_EMAIL + Groq LLM | Communication | Composes morning briefing via Groq from real data — revenue YTD, AIPP, top tasks, alerts, today's posts. Sends to agent's PERSONAL email (never @statefarm.com). |
 | 10 | **Social Media Scheduler** | 9:00 AM CDT daily | FACEBOOK_POST_TO_PAGE + LINKEDIN_CREATE_POST | Social Media | Pulls today's content_calendar items, posts to FB/LinkedIn, marks status=posted, saves post_url back. Creates alert for Instagram (no API auto-post). |
 | 11 | **Monthly Close Monitor** | 9:00 AM CDT daily | INTERNAL | financial | Daily check of `monthly_close_checklist` progress. Mid-month flags overdue items. End-of-month creates next month's checklist by template. |
 | 12 | **Producer Underperformance Watcher** | 12:00 UTC daily | INTERNAL | hr_people | Daily check of each producer's monthly issued production against their 3-month rolling average. Fires alert + persistent_memory entry when any producer falls below 70% of pace. Drives Performance tab status pills. |
@@ -256,8 +258,92 @@ The agent must have the Composio connector enabled in **Claude.ai → Settings �
 
 If any are missing, generate the Composio reauthorization link and give it to the agent.
 
-### Step 4 — Insert the canonical 12 recipes
-Use the SQL templates above. For each recipe, customize `[AGENCY_ID]` (from agency table), `[AGENT_NAME]` (first name), and `[AGENT_PERSONAL_EMAIL]` (for Daily Briefing — never @statefarm.com).
+### Step 4 — Seed the canonical 14 recipes with one function call
+
+**Do NOT hand-build recipe rows one at a time.** The seed function `public.seed_bcc_automations()` exists precisely to prevent that failure mode — it inserts all 14 recipes atomically, applies the correct payroll variant (single-entity vs two-entity), and returns a JSON summary of what was seeded.
+
+**Call the seed function:**
+
+```sql
+SELECT public.seed_bcc_automations(
+    p_agency_id      := '<client-agency-uuid>'::uuid,
+    p_config         := '{
+        "recipient_email": "operator@example.com",
+        "timezone": "America/New_York",
+        "payroll_cash_account_name": "Operating Cash",
+        "bank_income_account_code": "QBO-001",
+        "bank_expenses_account_code": "QBO-002",
+        "primary_card_label": "SF Card — Owner",
+        "primary_card_code": "QBO-010",
+        "secondary_card_label": null,
+        "secondary_card_code": null,
+        "personal_distribution_accounts": [],
+        "legacy_personal_cards": []
+    }'::jsonb,
+    p_payroll_variant := 'single_entity'   -- or 'two_entity' for parent-sub intercompany
+);
+```
+
+**Two-entity extra config** (only if `p_payroll_variant = 'two_entity'`):
+
+```json
+{
+    "parent_entity_name": "PaperNewt LLC",
+    "intercompany_account_name": "Due to PaperNewt LLC",
+    "payroll_costs_account_path": "0002 TEAM > Payroll Costs"
+}
+```
+
+**Placeholder-to-value mapping** (ask the agent for these during onboarding, or infer from their COA):
+
+| Placeholder | Where it comes from |
+|---|---|
+| `recipient_email` | The agent's operational email (**NOT** their @statefarm.com address — SF blocks external inbound; ask for personal Gmail) |
+| `timezone` | Agent's business timezone (`America/New_York`, `America/Chicago`, etc.) |
+| `payroll_cash_account_name` | From agent's chart_of_accounts — the operating cash account payroll debits |
+| `bank_income_account_code` | QBO income account code (e.g. `QBO-001`) for bank sweeps |
+| `bank_expenses_account_code` | QBO expense account code for bank fees |
+| `primary_card_label` / `primary_card_code` | Agent's primary business card (e.g. "SF Card — Owner" / `QBO-010`) |
+| `secondary_card_label` / `secondary_card_code` | Second business card if applicable; else null |
+| `personal_distribution_accounts` | List of chart_of_accounts codes that catch personal draws (empty array = none) |
+| `legacy_personal_cards` | List of card labels that should be filtered from bank imports (empty array = none) |
+
+The function is idempotent — a pre-check on `(agency_id, recipe_name)` prevents duplicate seeding. Calling it twice with the same agency_id returns the existing set unchanged.
+
+**Returns:** a JSON summary with `inserted_count`, `active_count`, `inactive_count`, `payroll_variant_used`, and `recipes[]` (each entry has `recipe_name`, `is_active`, `required_settings`).
+
+**What the 14 recipes are** (for reference — the seed function creates them; you do NOT hand-insert):
+
+| # | Recipe | Schedule | Category | Handler | Status |
+|---|---|---|---|---|---|
+| 1 | **SF Daily Comp Processor** | 10:00 AM CDT daily | income | Composio + Groq | ✅ active |
+| 2 | **Deduction Statement Processor** | every 6 hours | Documents | Composio + Groq | ✅ active |
+| 3 | **Bank Statement Processor** | daily | Financial | Composio + Groq | ✅ active |
+| 4 | **Email Archiver** | 13:00 UTC daily | Documents | `dispatch_email_archiver` | ⚠ active BUT handler undefined at master (see B8 note below) |
+| 5a | **Payroll GL Writer (single-entity)** | daily | GL | `payroll_gl_writer` | ⚠ active if variant='single_entity' — handler undefined at master |
+| 5b | **Payroll GL Writer (two-entity)** | daily | GL | `payroll_gl_writer` | ⚠ active if variant='two_entity' — handler undefined at master |
+| 6 | **Social — Instagram** | manual + prompt | Marketing | `instagram_manual_reminder` | ❌ inactive at seed — handler undefined |
+| 7 | **Monthly Close Monitor** | daily | Compliance | `monthly_close_monitor` | ✅ active |
+| 8 | **Social — Facebook** | scheduled | Marketing | Composio | ❌ inactive at seed |
+| 9 | **Social — LinkedIn** | scheduled | Marketing | Composio | ❌ inactive at seed |
+| 10 | **Monthly Close Generator** | 1st of month | Compliance | `monthly_close_generator` | ⚠ active — handler undefined at master |
+| 11 | **GL Entry Writer** | daily | GL | `gl_entry_writer` | ✅ active |
+| 12 | **Bank GL Writer** | daily | GL | `bank_gl_writer` | ⚠ active — handler undefined at master |
+| 13 | **Credit Card GL Writer** | daily | GL | `cc_gl_writer` | ⚠ active — handler undefined at master |
+| 14 | **Producer Underperformance Watcher** | daily | HR | `producer_underperformance_watcher` | ✅ active |
+
+**⚠ INTERNAL HANDLER GAP — audit finding B8 (2026-07-02):**
+
+The seed function references 10 distinct `internal_handler` values across the 14 recipes. Only **3** of those handlers are defined in the master's `supabase/migrations/` folder as of ba0fb6f9: `gl_entry_writer`, `monthly_close_monitor`, and `producer_underperformance_watcher` (all in migration 012). The other **7** — `bank_gl_writer`, `cc_gl_writer`, `dispatch_document_processor`, `dispatch_email_archiver`, `instagram_manual_reminder`, `monthly_close_generator`, `payroll_gl_writer` — are referenced but not implemented anywhere in the master repo.
+
+If setup Claude runs the seed function and enables all recipes without addressing this, **the 7 recipes using undefined handlers will error `function does not exist` at every fire.** They likely exist in Keith Thompson's live Supabase (the reference install) but were never captured back into a master migration.
+
+**Recommended action** (pending Rebecca's decision on the master fix):
+
+- **Short-term:** After seeding, disable the 7 affected recipes until their handlers ship. Only leave `SF Daily Comp Processor`, `Deduction Statement Processor`, `Bank Statement Processor`, `Monthly Close Monitor`, `GL Entry Writer`, and `Producer Underperformance Watcher` active — that's 6 working recipes on Day 1. Or:
+- **If Rebecca has captured the handlers from Keith Thompson's install into a follow-up migration:** apply that migration between Step 2 and this step, then all 14 fire cleanly.
+
+Track this via `system_status` (migration 013): mark the 7 affected recipes as `customization_pending` with `unlocks_when = 'Migration adding <handler_name> deployed'` so the client's Claude presents them as runway, not as broken.
 
 ### Step 5 — Apply migration 011 and deploy the automation-runner Edge Function
 
@@ -294,7 +380,18 @@ supabase functions deploy automation-runner --project-ref <client-project-ref> -
 
 The `--no-verify-jwt` flag is correct — the function does its own auth via a `shared_secret` field in the request body, validated against `settings.automation_runner_cron_secret` (agency-scoped). Postgres can post to the function without a JWT because pg_net runs internally.
 
-**5c. Insert the runner credentials into `settings` for the client's agency.**
+**5b.5. Set the `GROQ_API_KEY` Edge Function secret (for LLM-parsing recipes).**
+
+The runner reads its Groq credential as a Supabase Edge Function secret, NOT a `public.settings` row. Run this from a shell logged into the client's Supabase project (via `supabase login` + `supabase link --project-ref <ref>`):
+
+```bash
+supabase secrets set GROQ_API_KEY=<the-free-key-from-console.groq.com>
+supabase functions deploy automation-runner --no-verify-jwt
+```
+
+The redeploy is required so the running function picks up the new secret. If `GROQ_API_KEY` is missing when a `groq_prompt`-using recipe fires, the runner throws a clear error and logs `LLM parsing failed` to `automation_run_log`. Skip this step only if none of the seeded recipes use `groq_prompt` (rare — the document-importer recipes all use it).
+
+**5c. Insert the Composio runner credentials into `settings` for the client's agency.**
 
 Required rows (replace `AGENCY_UUID` and the fake values):
 
@@ -318,7 +415,6 @@ BEGIN
     (v_agency, 'composio_facebook_account_id',     'ca_xxxxxxxxxxxxx',                    'string', 'Composio Facebook connected_account_id', 'install'),
     (v_agency, 'composio_linkedin_account_id',     'ca_xxxxxxxxxxxxx',                    'string', 'Composio LinkedIn connected_account_id', 'install'),
     (v_agency, 'composio_instagram_account_id',    'ca_xxxxxxxxxxxxx',                    'string', 'Composio Instagram connected_account_id', 'install'),
-    -- NOTE: No groq_api_key needed. LLM calls route through COMPOSIO_SEARCH_GROQ_CHAT using composio_api_key.
     -- Optional — failure alerts:
     (v_agency, 'telegram_bot_token',               '',                                    'string', 'Telegram bot token (optional)', 'install'),
     (v_agency, 'telegram_chat_id',                 '',                                    'string', 'Telegram chat id (optional)', 'install')
@@ -389,7 +485,7 @@ FROM public.automation_recipes WHERE id = 'RECIPE_UUID';
 | Financials → P&L tab still shows $0 even though comp_recap has rows | GL Entry Writer recipe never fired or is failing | Check automation_run_log for `recipe_name='GL Entry Writer'`. If never run: confirm it's active and pg_cron tick is scheduled. If failing: read error_message in the run log |
 
 ### Step 7 — Walk the agent through the Automations module
-In the BCC web app, open **Automations**. The agent should see all 12 recipes with status, schedule, last run. The Run Log tab surfaces every execution. They can enable/disable, edit schedule, or trigger manually.
+In the BCC web app, open **Automations**. The agent should see all 14 recipes with status, schedule, last run. The Run Log tab surfaces every execution. They can enable/disable, edit schedule, or trigger manually.
 
 When something breaks: agent screenshots the error, pastes to their Claude, gets fixed.
 
@@ -412,13 +508,13 @@ When something breaks: agent screenshots the error, pastes to their Claude, gets
 
 Earlier notes implied recipes are configured "per-client during onboarding in the Composio dashboard." That's wrong. Recipes live in Supabase. They ARE part of the install. Every Project Claude needs to know:
 
-1. The 12 canonical recipes are the standard install — not optional, not "set up later"
+1. The 14 canonical recipes are the standard install — not optional, not "set up later"
 2. Recipes are seeded into the client's Supabase, not configured in Composio
 3. Composio is the execution layer, not the storage layer
 4. Project Claude builds the recipes during install, alongside migrations and Vercel deploy
 
-This doc closes that gap. Future installs (John Edgar, Sherry, Marlon, Kenney) get all 12 recipes wired during their initial install.
+This doc closes that gap. Every future install gets all 14 recipes wired during its initial install.
 
 ---
 
-*Last updated: May 8, 2026 — canonical 12-recipe set sourced from Keith Thompson's working install + 2 new processors for the Producer ROI feature.*
+*Last updated: May 8, 2026 — canonical 14-recipe set sourced from Keith Thompson's working install + 2 new processors for the Producer ROI feature.*
