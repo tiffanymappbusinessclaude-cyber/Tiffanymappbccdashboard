@@ -756,7 +756,6 @@ const BCCConfiguration = () => {
             { label:"Currency",          value:cfg.currency,          hint:"USD" },
             { label:"Timezone",          value:cfg.timezone,          hint:"Used for scheduling" },
             { label:"Entity Type",       value:cfg.entity_type,       hint:"Tax structure" },
-            { label:"Lapse Rate (annual)", value:(cfg.lapse_rate == null ? "Not set — pull from AgentWeb" : pct(cfg.lapse_rate)), hint:"SF-reported retention metric" },
           ].map(f => (
             <div key={f.label}>
               <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>{f.label.toUpperCase()}</label>
@@ -775,16 +774,69 @@ const BCCConfiguration = () => {
             <span style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:20, background:T.amberLt, color:"#92400E" }}>A005 pending</span>
           )}
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
           <div>
-            <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>SMVC RATE (P&C)</label>
-            <div style={{ padding:"8px 10px", fontSize:12, color:T.slate600, background:T.slate50, borderRadius:8, border:`1px solid ${T.slate200}` }}>{pct(cfg.smvc_rate_pc)}</div>
-            <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{cfg.a005_loaded ? "From A005 agreement" : "Default placeholder — needs A005"}</div>
+            <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>
+              SMVC RATE (P&C)
+              {savingKey === "smvc_rate_pc" && <span style={{ marginLeft:6, color:T.slate400, fontWeight:400 }}>saving…</span>}
+            </label>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <input
+                type="number" step="0.1" min="0" max="100"
+                defaultValue={cfg.smvc_rate_pc != null ? (Number(cfg.smvc_rate_pc) * 100).toFixed(1) : ""}
+                onBlur={e => {
+                  const raw = e.target.value;
+                  const num = raw === "" ? null : Number(raw) / 100;
+                  const changed = raw === "" ? cfg.smvc_rate_pc != null : Math.abs((cfg.smvc_rate_pc ?? -1) - num) > 1e-6;
+                  if (changed) save("smvc_rate_pc", num);
+                }}
+                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                style={{ flex:1, padding:"8px 10px", fontSize:12, color:T.slate800, background:T.white, border:`1px solid ${T.slate200}`, borderRadius:8, outline:"none", boxSizing:"border-box" }} />
+              <span style={{ fontSize:12, color:T.slate500 }}>%</span>
+            </div>
+            <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{cfg.a005_loaded ? "From A005 agreement" : "Default placeholder — needs A005"} · saves on blur/Enter</div>
           </div>
           <div>
-            <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>BLENDED RATE (Life/Health/FS)</label>
-            <div style={{ padding:"8px 10px", fontSize:12, color:T.slate600, background:T.slate50, borderRadius:8, border:`1px solid ${T.slate200}` }}>{pct(cfg.blended_rate)}</div>
-            <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{cfg.a005_loaded ? "From A005 agreement" : "Default placeholder — needs A005"}</div>
+            <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>
+              BLENDED RATE (L/H/FS)
+              {savingKey === "blended_rate" && <span style={{ marginLeft:6, color:T.slate400, fontWeight:400 }}>saving…</span>}
+            </label>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <input
+                type="number" step="0.1" min="0" max="100"
+                defaultValue={cfg.blended_rate != null ? (Number(cfg.blended_rate) * 100).toFixed(1) : ""}
+                onBlur={e => {
+                  const raw = e.target.value;
+                  const num = raw === "" ? null : Number(raw) / 100;
+                  const changed = raw === "" ? cfg.blended_rate != null : Math.abs((cfg.blended_rate ?? -1) - num) > 1e-6;
+                  if (changed) save("blended_rate", num);
+                }}
+                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                style={{ flex:1, padding:"8px 10px", fontSize:12, color:T.slate800, background:T.white, border:`1px solid ${T.slate200}`, borderRadius:8, outline:"none", boxSizing:"border-box" }} />
+              <span style={{ fontSize:12, color:T.slate500 }}>%</span>
+            </div>
+            <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{cfg.a005_loaded ? "From A005 agreement" : "Default placeholder — needs A005"} · saves on blur/Enter</div>
+          </div>
+          <div>
+            <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>
+              LAPSE RATE (annual)
+              {savingKey === "lapse_rate" && <span style={{ marginLeft:6, color:T.slate400, fontWeight:400 }}>saving…</span>}
+            </label>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <input
+                type="number" step="0.1" min="0" max="100"
+                defaultValue={cfg.lapse_rate != null ? (Number(cfg.lapse_rate) * 100).toFixed(1) : ""}
+                onBlur={e => {
+                  const raw = e.target.value;
+                  const num = raw === "" ? null : Number(raw) / 100;
+                  const changed = raw === "" ? cfg.lapse_rate != null : Math.abs((cfg.lapse_rate ?? -1) - num) > 1e-6;
+                  if (changed) save("lapse_rate", num);
+                }}
+                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                style={{ flex:1, padding:"8px 10px", fontSize:12, color:T.slate800, background:T.white, border:`1px solid ${T.slate200}`, borderRadius:8, outline:"none", boxSizing:"border-box" }} />
+              <span style={{ fontSize:12, color:T.slate500 }}>%</span>
+            </div>
+            <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>SF-reported retention · saves on blur/Enter</div>
           </div>
         </div>
       </Card>
@@ -803,9 +855,25 @@ const BCCConfiguration = () => {
             <div style={{ padding:"8px 10px", fontSize:12, color:T.slate600, background:T.slate50, borderRadius:8, border:`1px solid ${T.slate200}` }}>{cfg.aipp_year || "—"}</div>
           </div>
           <div>
-            <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>AIPP TARGET</label>
-            <div style={{ padding:"8px 10px", fontSize:12, color:T.slate600, background:T.slate50, borderRadius:8, border:`1px solid ${T.slate200}` }}>{money(cfg.aipp_target)}</div>
-            <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{cfg.aipp_target_is_placeholder ? "Update when SF publishes target" : "Used for progress calculations"}</div>
+            <label style={{ fontSize:11, fontWeight:600, color:T.slate600, display:"block", marginBottom:5 }}>
+              AIPP TARGET
+              {savingKey === "aipp_target" && <span style={{ marginLeft:6, color:T.slate400, fontWeight:400 }}>saving…</span>}
+            </label>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ fontSize:12, color:T.slate500 }}>$</span>
+              <input
+                type="number" step="1000" min="0"
+                defaultValue={cfg.aipp_target != null ? Number(cfg.aipp_target) : ""}
+                onBlur={e => {
+                  const raw = e.target.value;
+                  const num = raw === "" ? null : Number(raw);
+                  const changed = raw === "" ? cfg.aipp_target != null : Number(cfg.aipp_target ?? -1) !== num;
+                  if (changed) save("aipp_target", num);
+                }}
+                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                style={{ flex:1, padding:"8px 10px", fontSize:12, color:T.slate800, background:T.white, border:`1px solid ${T.slate200}`, borderRadius:8, outline:"none", boxSizing:"border-box" }} />
+            </div>
+            <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>{cfg.aipp_target_is_placeholder ? "Update when SF publishes target · saves on blur/Enter" : "Used for progress calculations · saves on blur/Enter"}</div>
           </div>
         </div>
       </Card>
