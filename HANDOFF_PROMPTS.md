@@ -119,6 +119,7 @@ If either is missing, enable it in Studio, then continue.
 | 027 | `027_yoy_view_ytd_fix.sql` | Fixes `entity_year_over_year_view` to do YTD-vs-YTD | ✅ Required | ✅ Required |
 | 028 | `028_ingest_log_subject_pattern_method.sql` | Adds `subject_pattern` to `ingest_log.entity_identification_method` enum | ✅ Required | ✅ Required |
 | 029 | `029_documents_search_vector_field_aware.sql` | Field-aware `documents.search_vector` trigger | ✅ Required | ✅ Required |
+| 030 | `030_two_stage_recipe_helpers.sql` | 12 helper functions + `content_calendar` schema additions for the 3 two-stage internal_handler recipes (`dispatch_email_archiver`, `dispatch_document_processor`, `instagram_manual_reminder`). Paired with runner v3 (B8b, 2026-07-03). | ✅ Required | ✅ Required |
 | 045 | `045_system_map.sql` | Wiki-style living documentation (pages, categories) | ✅ Required | ✅ Required |
 | 046 | `046_system_map_staleness_check.sql` | Weekly drift-protection for system_map (pages older than 45 days) | ✅ Required | ✅ Required |
 | 047 | `047_current_system_overview.sql` | Session-start "where do things stand" snapshot RPC | ✅ Required | ✅ Required |

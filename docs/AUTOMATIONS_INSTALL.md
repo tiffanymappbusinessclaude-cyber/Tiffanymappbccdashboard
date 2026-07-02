@@ -319,31 +319,28 @@ The function is idempotent — a pre-check on `(agency_id, recipe_name)` prevent
 | 1 | **SF Daily Comp Processor** | 10:00 AM CDT daily | income | Composio + Groq | ✅ active |
 | 2 | **Deduction Statement Processor** | every 6 hours | Documents | Composio + Groq | ✅ active |
 | 3 | **Bank Statement Processor** | daily | Financial | Composio + Groq | ✅ active |
-| 4 | **Email Archiver** | 13:00 UTC daily | Documents | `dispatch_email_archiver` | ⚠ active BUT handler undefined at master (see B8 note below) |
-| 5a | **Payroll GL Writer (single-entity)** | daily | GL | `payroll_gl_writer` | ⚠ active if variant='single_entity' — handler undefined at master |
-| 5b | **Payroll GL Writer (two-entity)** | daily | GL | `payroll_gl_writer` | ⚠ active if variant='two_entity' — handler undefined at master |
-| 6 | **Social — Instagram** | manual + prompt | Marketing | `instagram_manual_reminder` | ❌ inactive at seed — handler undefined |
+| 4 | **Email Archiver** | 13:00 UTC daily | Documents | `dispatch_email_archiver` | ✅ active — handler defined by migration 030 (B8b) + runner orchestrator |
+| 5a | **Payroll GL Writer (single-entity)** | daily | GL | `payroll_gl_writer` | ✅ active if variant='single_entity' — handler defined by migration 014 (B8a) |
+| 5b | **Payroll GL Writer (two-entity)** | daily | GL | `payroll_gl_writer` | ✅ active if variant='two_entity' — handler defined by migration 014 (B8a) |
+| 6 | **Social — Instagram** | manual + prompt | Marketing | `instagram_manual_reminder` | ❌ inactive at seed by design (handler defined by migration 030 + runner; activate after populating content_calendar and setting settings.owner_email) |
 | 7 | **Monthly Close Monitor** | daily | Compliance | `monthly_close_monitor` | ✅ active |
 | 8 | **Social — Facebook** | scheduled | Marketing | Composio | ❌ inactive at seed |
 | 9 | **Social — LinkedIn** | scheduled | Marketing | Composio | ❌ inactive at seed |
-| 10 | **Monthly Close Generator** | 1st of month | Compliance | `monthly_close_generator` | ⚠ active — handler undefined at master |
+| 10 | **Monthly Close Generator** | 1st of month | Compliance | `monthly_close_generator` | ✅ active — handler defined by migration 014 (B8a) |
 | 11 | **GL Entry Writer** | daily | GL | `gl_entry_writer` | ✅ active |
-| 12 | **Bank GL Writer** | daily | GL | `bank_gl_writer` | ⚠ active — handler undefined at master |
-| 13 | **Credit Card GL Writer** | daily | GL | `cc_gl_writer` | ⚠ active — handler undefined at master |
+| 12 | **Bank GL Writer** | daily | GL | `bank_gl_writer` | ✅ active — handler defined by migration 014 (B8a) |
+| 13 | **Credit Card GL Writer** | daily | GL | `cc_gl_writer` | ✅ active — handler defined by migration 014 (B8a) |
 | 14 | **Producer Underperformance Watcher** | daily | HR | `producer_underperformance_watcher` | ✅ active |
 
-**⚠ INTERNAL HANDLER GAP — audit finding B8 (partial resolution 2026-07-02):**
+**✅ INTERNAL HANDLER GAP — audit finding B8 RESOLVED (2026-07-03):**
 
-The seed function references 10 distinct `internal_handler` values across the 14 recipes. **B8a (this commit) backported 4 handlers** from Kwame Tyler's fork as migration `014_missing_internal_handlers.sql`. Master now defines 7 of the 10 handlers: `gl_entry_writer`, `monthly_close_monitor`, `producer_underperformance_watcher` (migration 012, original) + `bank_gl_writer`, `cc_gl_writer`, `payroll_gl_writer`, `monthly_close_generator` (migration 014, backported).
+The seed function references 10 distinct `internal_handler` values across the 14 recipes. All 10 handlers are now defined at master:
 
-**3 handlers remain undefined at master (B8b, next session):** `dispatch_email_archiver`, `dispatch_document_processor`, `instagram_manual_reminder`. In Kwame's fork these were refactored into a two-stage `prepare_*_batch` / `log_*_result` helper pattern that requires runner code changes to orchestrate. That merge is deferred because it needs careful review to avoid reverting the 2026-07-02 direct-Groq migration.
+- **Migration 012 (original):** `gl_entry_writer`, `monthly_close_monitor`, `producer_underperformance_watcher`
+- **Migration 014 (B8a, backported):** `bank_gl_writer`, `cc_gl_writer`, `payroll_gl_writer`, `monthly_close_generator` — pure-SQL handlers dispatched by `run_internal_recipe()`
+- **Migration 030 + automation-runner v3 (B8b, backported):** `dispatch_email_archiver`, `dispatch_document_processor`, `instagram_manual_reminder` — two-stage handlers (`prepare_*_batch` / `log_*_result`) whose TypeScript orchestrators sit inside the runner. These three could not be pure-SQL because they need external API calls (Gmail, Drive, Composio email-send) that Postgres can't make.
 
-**If setup Claude runs the seed function and enables all recipes without addressing this**, the 3 recipes using still-undefined handlers (Email Archiver, Document Processor if seeded as INTERNAL, Instagram Manual Reminder) will error `function does not exist` at every fire.
-
-**Recommended action** (partial resolution shipped in migration 014):
-
-- **After migration 014:** 11 of 14 recipes work out of the box (all Composio-driven ones plus the 4 GL/close handlers backported in 014 plus the 3 original migration-012 handlers).
-- **Still disable at seed:** the 3 recipes whose handlers remain undefined at master — Email Archiver, Document Processor (if seeded with INTERNAL action), Instagram Manual Reminder. Set `is_active=false` on those three rows after seeding, or use `system_status` (migration 013) to mark them `customization_pending` with `unlocks_when = 'B8b: prepare/log helper pattern back-ported'`. That way the client's Claude presents them as runway, not as broken.
+**Recommended action:** Apply all migrations (001–015) plus deploy the updated runner. All 14 recipes work out of the box after that. The Social — Instagram recipe stays `is_active=false` at seed by design (activate when content_calendar has scheduled posts and `settings.owner_email` is set). No other recipes need disabling.
 
 ### Step 5 — Apply migration 011 and deploy the automation-runner Edge Function
 
@@ -502,8 +499,8 @@ After the recipe fires and `automation_run_log.status='success'`, re-run the sna
 | Daily Briefing Email | (email deliverability, not a DB target) | Composio delivery + agent inbox arrival |
 | Bank Statement Processor | `bank_transactions` (imported rows) | new rows matching statement period |
 | SF Daily Comp Processor | `comp_recap` | new rows for the target date |
-| Document Processor | (post-B8b) `documents.parsed_at IS NOT NULL` for processed rows | flag flip |
-| Email Archiver | (post-B8b) `documents` rows with `source='email_archive'` | new rows |
+| Document Processor | `documents` rows inserted by `log_document_processor_result` (`upload_source='gmail_auto'`, `uploaded_by='dispatch_document_processor'`), + `alerts` rows fired for docs needing manual ingest | migration 030 + runner v3 |
+| Email Archiver | `documents` rows inserted by `log_email_archive_result` for attachments (drive_file_id + drive_url + notes with gmail_msg=id); Gmail messages themselves get archive label | migration 030 + runner v3 |
 
 If `status='success'` but the target-table delta is zero AND the recipe SHOULD have processed data (e.g., you just imported a bank statement and fired Bank GL Writer), that's a *silent failure* — the runner reported success but the handler didn't do the work. Common causes: incorrect `settings.gl_cutover_date` blocking all txns, missing chart_of_accounts entries the handler falls through on, or (for GL writers) `bank_account_mapping` rows not wired. Read `output_summary` in `automation_run_log` — the backported handlers all set a descriptive summary explaining why they short-circuited.
 

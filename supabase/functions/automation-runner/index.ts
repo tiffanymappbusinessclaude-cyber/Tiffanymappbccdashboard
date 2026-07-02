@@ -124,21 +124,28 @@ function jsonResponse(body: any, status = 200): Response {
   });
 }
 
+// B8b enhancement: connectedAccountId is now optional; authConfigId is a fallback
+// (used by orchestrators that resolve settings.composio_<conn>_auth_config_id).
+// Callers that only had a connectedAccountId continue to work unchanged.
 async function callComposio(opts: {
   apiKey: string;
   userId: string;
-  connectedAccountId: string;
+  connectedAccountId?: string | null;
+  authConfigId?: string | null;
   toolSlug: string;
   toolArguments: Record<string, any>;
 }): Promise<{ ok: boolean; data: any; error: string | null; httpStatus: number }> {
+  const body: Record<string, any> = {
+    user_id: opts.userId,
+    arguments: opts.toolArguments,
+  };
+  if (opts.connectedAccountId) body.connected_account_id = opts.connectedAccountId;
+  else if (opts.authConfigId)  body.auth_config_id       = opts.authConfigId;
+
   const res = await fetch(`${COMPOSIO_BASE}/${opts.toolSlug}`, {
     method: "POST",
     headers: { "x-api-key": opts.apiKey, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      user_id: opts.userId,
-      connected_account_id: opts.connectedAccountId,
-      arguments: opts.toolArguments,
-    }),
+    body: JSON.stringify(body),
   });
   const text = await res.text();
   let parsed: any = {};
@@ -291,6 +298,914 @@ async function writeOutput(opts: {
   return { inserted: data?.length ?? 0, updated: 0 };
 }
 
+// =========================================================================
+// B8b — Two-stage orchestrators for internal_handler recipes that can't run
+// as pure Postgres (they need Gmail/Drive/Composio API calls).
+//
+// See migration 030_two_stage_recipe_helpers.sql for the paired SQL bookends.
+//
+// Handlers implemented here:
+//   dispatch_email_archiver     -> runEmailArchiver
+//   dispatch_document_processor -> runDocumentProcessor  (v1 flow only —
+//     detect + file to Drive + alert; LLM parse "v2 stage C" not shipped
+//     in B8b core, migration 030 provides the forward-prep RPCs)
+//   instagram_manual_reminder   -> runInstagramManualReminder
+//
+// All three use the same pattern:
+//   1. Call prepare_*_batch RPC -> returns jsonb plan
+//   2. Execute the plan (Composio calls)
+//   3. Call log_*_result RPC -> records outcome, returns summary
+// =========================================================================
+
+// -------------------------------------------------------------------------
+// Attachment classification result type (for document processor)
+// -------------------------------------------------------------------------
+interface ClassifiedAttachment {
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  docType: "sf_comp_recap" | "paychex_payroll" | "sf_deduction_stmt" | "other";
+  needsIngest: boolean;
+  periodHint: string | null;     // e.g. "2026-05-second" for Comp Recaps
+  driveSubfolder: string;        // category folder name
+}
+
+// -------------------------------------------------------------------------
+// Kwame-fork helper: resolve settings.composio_<connection>_auth_config_id
+// (companion to master's getComposioAccountId).
+// -------------------------------------------------------------------------
+async function getComposioAuthConfigId(agencyId: string, connection: string): Promise<string | null> {
+  return await getSetting(agencyId, `composio_${connection.toLowerCase()}_auth_config_id`);
+}
+
+// -------------------------------------------------------------------------
+// Ensure a Gmail label exists; return its id. Used to file / archive.
+// -------------------------------------------------------------------------
+async function ensureGmailLabelId(opts: {
+  apiKey: string; userId: string; accountId: string | null; authConfigId: string | null; labelName: string;
+}): Promise<string> {
+  const listRes = await callComposio({
+    apiKey: opts.apiKey, userId: opts.userId,
+    connectedAccountId: opts.accountId, authConfigId: opts.authConfigId,
+    toolSlug: "GMAIL_LIST_LABELS", toolArguments: {},
+  });
+  if (listRes.ok) {
+    const labels = listRes.data?.labels || listRes.data || [];
+    const arr = Array.isArray(labels) ? labels : (labels.labels || []);
+    const found = Array.isArray(arr) ? arr.find((l: any) => l && (l.name === opts.labelName)) : null;
+    if (found?.id) return found.id;
+  }
+  const createRes = await callComposio({
+    apiKey: opts.apiKey, userId: opts.userId,
+    connectedAccountId: opts.accountId, authConfigId: opts.authConfigId,
+    toolSlug: "GMAIL_CREATE_LABEL",
+    toolArguments: { label_name: opts.labelName, name: opts.labelName },
+  });
+  if (!createRes.ok) throw new Error(`GMAIL_CREATE_LABEL '${opts.labelName}' failed: ${createRes.error}`);
+  const id = createRes.data?.id || createRes.data?.label?.id;
+  if (!id) throw new Error(`GMAIL_CREATE_LABEL '${opts.labelName}' returned no id`);
+  return id;
+}
+
+// -------------------------------------------------------------------------
+// Find or create a Drive folder by path segments; returns folderId.
+// -------------------------------------------------------------------------
+async function findOrCreateDriveFolder(opts: {
+  apiKey: string; userId: string; accountId: string | null; authConfigId: string | null;
+  pathSegments: string[];
+}): Promise<{ folderId: string; folderPath: string }> {
+  let parentId: string | null = null;
+  for (const seg of opts.pathSegments) {
+    const findArgs: Record<string, any> = { name_exact: seg };
+    if (parentId) findArgs.parent_folder_id = parentId;
+    const findRes = await callComposio({
+      apiKey: opts.apiKey, userId: opts.userId,
+      connectedAccountId: opts.accountId, authConfigId: opts.authConfigId,
+      toolSlug: "GOOGLEDRIVE_FIND_FOLDER", toolArguments: findArgs,
+    });
+    let foundId: string | null = null;
+    if (findRes.ok) {
+      const d = findRes.data || {};
+      const candidates = d.files || d.items || d.folders || d.results || [];
+      if (Array.isArray(candidates) && candidates.length > 0) {
+        foundId = candidates[0].id || candidates[0].file_id || candidates[0].folder_id;
+      }
+    }
+    if (!foundId) {
+      const createArgs: Record<string, any> = { folder_name: seg, name: seg };
+      if (parentId) { createArgs.parent_id = parentId; createArgs.parent_folder_id = parentId; }
+      const createRes = await callComposio({
+        apiKey: opts.apiKey, userId: opts.userId,
+        connectedAccountId: opts.accountId, authConfigId: opts.authConfigId,
+        toolSlug: "GOOGLEDRIVE_CREATE_FOLDER", toolArguments: createArgs,
+      });
+      if (!createRes.ok) throw new Error(`GOOGLEDRIVE_CREATE_FOLDER for '${seg}' failed: ${createRes.error}`);
+      const d = createRes.data || {};
+      foundId = d.id || d.file_id || d.folder_id;
+      if (!foundId) throw new Error(`GOOGLEDRIVE_CREATE_FOLDER returned no id for '${seg}'`);
+    }
+    parentId = foundId;
+  }
+  return { folderId: parentId!, folderPath: opts.pathSegments.join("/") };
+}
+
+// -------------------------------------------------------------------------
+// Resolve a Drive folder template like 'BCC/{{year}}/{{month}}/{{category}}'
+// -------------------------------------------------------------------------
+function resolveDriveFolderTemplate(template: string, tz: string, category: string): string[] {
+  const now = new Date();
+  const fmt = new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit" });
+  const parts: Record<string, string> = {};
+  for (const p of fmt.formatToParts(now)) parts[p.type] = p.value;
+  const year = parts.year || String(now.getUTCFullYear());
+  const month = parts.month || String(now.getUTCMonth() + 1).padStart(2, "0");
+  const resolved = template
+    .replace(/\{\{year\}\}/g, year)
+    .replace(/\{\{month\}\}/g, month)
+    .replace(/\{\{category\}\}/g, category);
+  return resolved.split("/").filter((s) => s.length > 0);
+}
+
+// -------------------------------------------------------------------------
+// State-Farm-specific: sniff COMP_RECAP period hint from filename/subject
+// (e.g. '2026-Q1', 'January 2026'). Returns null if pattern not matched.
+// -------------------------------------------------------------------------
+function extractCompRecapPeriodHint(filename: string, subject: string): string | null {
+  const haystack = `${filename} ${subject}`;
+  // Try YYYY[_-]MM[_-]DD first
+  const ymd = haystack.match(/(20\d{2})[_\-\s\.]?(0?[1-9]|1[0-2])[_\-\s\.]?(0?[1-9]|[12]\d|3[01])/);
+  if (ymd) {
+    const year = ymd[1];
+    const month = ymd[2].padStart(2, "0");
+    const day = parseInt(ymd[3], 10);
+    const half = day <= 15 ? "first" : "second";
+    return `${year}-${month}-${half}`;
+  }
+  // Fall back to YYYY[_-]MM
+  const ym = haystack.match(/(20\d{2})[_\-\s\.](0?[1-9]|1[0-2])\b/);
+  if (ym) {
+    const year = ym[1];
+    const month = ym[2].padStart(2, "0");
+    return `${year}-${month}-unknown_half`;
+  }
+  return null;
+}
+
+// -------------------------------------------------------------------------
+// Drive folder routing by classified doc type (SF-specific categories:
+// sf_comp_recap, sf_deduction_stmt, paychex_payroll, other).
+// -------------------------------------------------------------------------
+function driveFolderForDocType(docType: ClassifiedAttachment["docType"], year: string): string[] {
+  const subfolder = {
+    sf_comp_recap:    "SF Compensation Recaps",
+    paychex_payroll:  "Paychex Payroll",
+    sf_deduction_stmt: "SF Deduction Statements",
+    other:            "Other",
+  }[docType];
+  return [
+    "BCC Financial Records",
+    "Live Documents (May 2026 forward)",
+    subfolder,
+    year,
+  ];
+}
+
+// -------------------------------------------------------------------------
+// Classify an incoming email attachment by sender + subject + filename.
+// Returns { docType, needsIngest, periodHint }.
+// -------------------------------------------------------------------------
+function classifyAttachment(opts: {
+  from: string;
+  subject: string;
+  filename: string;
+  mimeType: string;
+}): { docType: ClassifiedAttachment["docType"]; needsIngest: boolean; periodHint: string | null; driveSubfolder: string } {
+  const from = (opts.from || "").toLowerCase();
+  const subj = (opts.subject || "").toLowerCase();
+  const fname = (opts.filename || "").toLowerCase();
+  const isPdf = opts.mimeType === "application/pdf" || fname.endsWith(".pdf");
+
+  // SF Comp Recap: from statefarm + (subject OR filename) hints
+  if (
+    from.includes("statefarm")
+    && (
+      /comp(ensation)?[\s_\-]*recap/.test(subj)
+      || /comp(ensation)?[\s_\-]*recap/.test(fname)
+      || /recapitulation/.test(subj)
+    )
+    && isPdf
+  ) {
+    return {
+      docType: "sf_comp_recap",
+      needsIngest: true,
+      periodHint: extractCompRecapPeriodHint(fname, subj),
+      driveSubfolder: "SF Compensation Recaps",
+    };
+  }
+
+  // SF Deduction Statement
+  if (
+    from.includes("statefarm")
+    && /deduction[\s_\-]*statement/.test(subj + " " + fname)
+    && isPdf
+  ) {
+    return {
+      docType: "sf_deduction_stmt",
+      needsIngest: true,
+      periodHint: null,
+      driveSubfolder: "SF Deduction Statements",
+    };
+  }
+
+  // Paychex payroll: from paychex + payroll hints
+  if (
+    from.includes("paychex")
+    && (/payroll/.test(subj) || /payroll/.test(fname))
+    && (isPdf || /\.(csv|xlsx?)$/.test(fname))
+  ) {
+    return {
+      docType: "paychex_payroll",
+      needsIngest: true,
+      periodHint: null,
+      driveSubfolder: "Paychex Payroll",
+    };
+  }
+
+  // Generic SF or Paychex doc — file but don't fire ingest alert
+  if (from.includes("statefarm") || from.includes("paychex")) {
+    return {
+      docType: "other",
+      needsIngest: false,
+      periodHint: null,
+      driveSubfolder: "Other",
+    };
+  }
+
+  // Shouldn't reach here given the Gmail query, but be defensive
+  return { docType: "other", needsIngest: false, periodHint: null, driveSubfolder: "Other" };
+}
+
+// -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+// AA05 prohibited-terms list (State Farm compliance) — canonical word block
+// used by checkAA05Compliance. SQL side (has_aa05_prohibited_terms in
+// migration 015) applies the same list; TS pre-flight is defense-in-depth.
+// -------------------------------------------------------------------------
+const AA05_PROHIBITED_TERMS: string[] = [
+  "client", "clients",
+  "solutions",
+  "expert ", " expert", "experts ", " experts",
+  "specialist",
+  "advisor", "consultant",
+  "transfers welcome",
+  "financial freedom",
+  "wealth accumulation",
+  "world-class", "world class",
+  "first-class", "first class",
+  "cheap", "affordable", "low cost",
+  "guarantee", "guaranteed",
+  "#1", "greatest",
+];
+
+// AA05 (State Farm compliance) pre-flight check for social captions.
+// -------------------------------------------------------------------------
+function checkAA05Compliance(text: string): { ok: boolean; reason: string | null } {
+  if (!text || text.length === 0) return { ok: true, reason: null };
+  const lower = text.toLowerCase();
+  for (const term of AA05_PROHIBITED_TERMS) {
+    if (lower.includes(term)) return { ok: false, reason: `aa05_prohibited_term: '${term.trim()}'` };
+  }
+  return { ok: true, reason: null };
+}
+
+// -------------------------------------------------------------------------
+// Send Instagram-post reminder email to the agency owner or bookkeeper.
+// -------------------------------------------------------------------------
+async function sendInstagramReminderEmail(opts: {
+  apiKey: string; userId: string; agencyId: string; to: string; item: any;
+}): Promise<{ ok: boolean; error: string | null }> {
+  const gmailAccountId    = await getComposioAccountId(opts.agencyId, "gmail").catch(() => null);
+  const gmailAuthConfigId = await getComposioAuthConfigId(opts.agencyId, "gmail").catch(() => null);
+  const item = opts.item || {};
+  const hashtagsArr: string[] = Array.isArray(item.hashtags) ? item.hashtags : [];
+  const hashtagsText = hashtagsArr.length > 0
+    ? hashtagsArr.slice(0, 25).map((h: string) => h.startsWith("#") ? h : `#${h}`).join(" ")
+    : "(no hashtags set)";
+  const subject = `[BCC] Instagram post reminder — ${item.scheduled_date || "today"}`;
+  const body = [
+    "Your Instagram post is ready to post manually.",
+    "",
+    "(Instagram doesn't allow API auto-posting — only reminders.)",
+    "",
+    "---",
+    "",
+    "CAPTION:",
+    String(item.caption || "(no caption)"),
+    "",
+    "HASHTAGS (paste into the first comment, not the caption):",
+    hashtagsText,
+    "",
+    `MEDIA URL: ${item.media_url || "(none — upload manually)"}`,
+    `SCHEDULED:  ${item.scheduled_date || "?"} ${item.scheduled_time || ""}`,
+    "",
+    `content_calendar id: ${item.id}`,
+    "",
+    "After posting, mark the item 'posted' in BCC Social Media module.",
+  ].join("\n");
+
+  const res = await callComposio({
+    apiKey: opts.apiKey, userId: opts.userId,
+    connectedAccountId: gmailAccountId, authConfigId: gmailAuthConfigId,
+    toolSlug: "GMAIL_SEND_EMAIL",
+    toolArguments: {
+      recipient_email: opts.to,
+      subject,
+      body,
+    },
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+  return { ok: true, error: null };
+}
+
+// -------------------------------------------------------------------------
+// Orchestrator: runEmailArchiver (internal_handler=dispatch_email_archiver)
+// Reads prepare_email_archive_batch plan, executes Gmail archive + Drive
+// filing loop, calls log_email_archive_result.
+// -------------------------------------------------------------------------
+async function runEmailArchiver(recipe: any): Promise<{
+  recordsProcessed: number; outputSummary: string;
+}> {
+  const agencyId = recipe.agency_id as string;
+  const input = recipe.input_config || {};
+  const olderThanDays = Number(input.older_than_days ?? 30);
+  const maxBatch = Math.min(Number(input.max_batch ?? 100), 100);
+  const routeAttachments = input.route_attachments_to_drive !== false;
+  const preserveStarred = input.preserve_starred !== false;
+  const folderTemplate = input.drive_folder_template || "BCC/{{year}}/{{month}}/{{category}}";
+  const archiveLabelName = input.archive_label || "BCC/Archived";
+
+  const composioApiKey = Deno.env.get("COMPOSIO_API_KEY") || await getSetting(agencyId, "composio_api_key");
+  if (!composioApiKey) throw new Error("Missing Composio API key for email_archiver_orchestrator");
+  const composioUserId = await getSetting(agencyId, "composio_user_id");
+  if (!composioUserId) throw new Error("Missing settings.composio_user_id for email_archiver_orchestrator");
+  const gmailAccountId    = await getComposioAccountId(agencyId, "gmail");
+  const gmailAuthConfigId = await getComposioAuthConfigId(agencyId, "gmail");
+  const driveAccountId    = await getComposioAccountId(agencyId, "googledrive");
+  const driveAuthConfigId = await getComposioAuthConfigId(agencyId, "googledrive");
+
+  const { data: plan, error: planErr } = await sb.rpc("prepare_email_archive_batch", {
+    p_agency_id: agencyId,
+    p_older_than_days: olderThanDays,
+    p_max_batch: maxBatch,
+  });
+  if (planErr) throw new Error(`prepare_email_archive_batch failed: ${planErr.message}`);
+  if (!plan || typeof plan !== "object") throw new Error("prepare_email_archive_batch returned no plan");
+  const gmailQuery: string = plan.gmail_query;
+  const dedupSet: Set<string> = new Set(Array.isArray(plan.dedup_message_ids) ? plan.dedup_message_ids : []);
+
+  const archiveLabelId = await ensureGmailLabelId({
+    apiKey: composioApiKey, userId: composioUserId,
+    accountId: gmailAccountId, authConfigId: gmailAuthConfigId,
+    labelName: archiveLabelName,
+  });
+
+  const tz = (await getSetting(agencyId, "agency_timezone")) || "America/New_York";
+  let driveFolderId: string | null = null;
+  let driveFolderPath = "";
+  if (routeAttachments) {
+    const segments = resolveDriveFolderTemplate(folderTemplate, tz, "email-archive");
+    const folder = await findOrCreateDriveFolder({
+      apiKey: composioApiKey, userId: composioUserId,
+      accountId: driveAccountId, authConfigId: driveAuthConfigId,
+      pathSegments: segments,
+    });
+    driveFolderId = folder.folderId;
+    driveFolderPath = folder.folderPath;
+  }
+
+  const fetchRes = await callComposio({
+    apiKey: composioApiKey, userId: composioUserId,
+    connectedAccountId: gmailAccountId, authConfigId: gmailAuthConfigId,
+    toolSlug: "GMAIL_FETCH_EMAILS",
+    toolArguments: {
+      query: gmailQuery,
+      max_results: maxBatch,
+      ids_only: true,
+      verbose: false,
+    },
+  });
+  if (!fetchRes.ok) throw new Error(`GMAIL_FETCH_EMAILS failed: ${fetchRes.error}`);
+  const messages: any[] = (fetchRes.data?.messages) || (Array.isArray(fetchRes.data) ? fetchRes.data : []);
+  const candidateIds: string[] = messages
+    .map((m: any) => m?.messageId || m?.id)
+    .filter((id: any) => typeof id === "string" && id.length > 0 && !dedupSet.has(id))
+    .slice(0, maxBatch);
+
+  if (candidateIds.length === 0) {
+    return {
+      recordsProcessed: 0,
+      outputSummary: `No new messages to archive (query='${gmailQuery}'; ${dedupSet.size} dedup'd; ${messages.length} returned)`,
+    };
+  }
+
+  const archivedIds: string[] = [];
+  const attachmentsFiled: any[] = [];
+  const skipped: { id: string; reason: string }[] = [];
+
+  for (const msgId of candidateIds) {
+    try {
+      const msgRes = await callComposio({
+        apiKey: composioApiKey, userId: composioUserId,
+        connectedAccountId: gmailAccountId, authConfigId: gmailAuthConfigId,
+        toolSlug: "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID",
+        toolArguments: { message_id: msgId, format: routeAttachments ? "full" : "metadata" },
+      });
+      if (!msgRes.ok) { skipped.push({ id: msgId, reason: `fetch_full: ${msgRes.error}` }); continue; }
+      const msg: any = msgRes.data || {};
+
+      const labelIds: string[] = msg.labelIds || msg.label_ids || msg.payload?.labelIds || [];
+      const isStarred = labelIds.includes("STARRED");
+      if (preserveStarred && isStarred) { skipped.push({ id: msgId, reason: "preserve_starred" }); continue; }
+
+      let subject: string = msg.subject || "";
+      if (!subject && Array.isArray(msg.payload?.headers)) {
+        const h = msg.payload.headers.find((hh: any) => (hh.name || "").toLowerCase() === "subject");
+        subject = h?.value || "";
+      }
+
+      const attachments: { attachmentId: string; filename: string; mimeType: string }[] = [];
+      if (routeAttachments) {
+        const walk = (parts: any[]): void => {
+          for (const p of parts || []) {
+            if (p?.filename && p?.body?.attachmentId) {
+              attachments.push({
+                attachmentId: p.body.attachmentId,
+                filename: p.filename,
+                mimeType: p.mimeType || "application/octet-stream",
+              });
+            }
+            if (Array.isArray(p?.parts)) walk(p.parts);
+          }
+        };
+        walk(msg.payload?.parts || []);
+        if (attachments.length === 0 && Array.isArray(msg.attachmentList)) {
+          for (const a of msg.attachmentList) {
+            if (a?.attachmentId && a?.filename) {
+              attachments.push({
+                attachmentId: a.attachmentId,
+                filename: a.filename,
+                mimeType: a.mimeType || "application/octet-stream",
+              });
+            }
+          }
+        }
+      }
+
+      for (const att of attachments) {
+        try {
+          const getRes = await callComposio({
+            apiKey: composioApiKey, userId: composioUserId,
+            connectedAccountId: gmailAccountId, authConfigId: gmailAuthConfigId,
+            toolSlug: "GMAIL_GET_ATTACHMENT",
+            toolArguments: { message_id: msgId, attachment_id: att.attachmentId, file_name: att.filename },
+          });
+          if (!getRes.ok) { console.warn(`[email_archiver] GMAIL_GET_ATTACHMENT failed (${msgId}/${att.filename}): ${getRes.error}`); continue; }
+          const file = getRes.data?.file || getRes.data || {};
+          const s3url = file.s3url || file.url;
+          if (!s3url) { console.warn(`[email_archiver] no s3url for ${msgId}/${att.filename}`); continue; }
+          const uploadArgs: Record<string, any> = {
+            source_url: s3url,
+            name: att.filename,
+            mime_type: file.mimetype || att.mimeType,
+          };
+          if (driveFolderId) uploadArgs.parent_folder_id = driveFolderId;
+          const uploadRes = await callComposio({
+            apiKey: composioApiKey, userId: composioUserId,
+            connectedAccountId: driveAccountId, authConfigId: driveAuthConfigId,
+            toolSlug: "GOOGLEDRIVE_UPLOAD_FROM_URL",
+            toolArguments: uploadArgs,
+          });
+          if (!uploadRes.ok) { console.warn(`[email_archiver] GOOGLEDRIVE_UPLOAD_FROM_URL failed for ${att.filename}: ${uploadRes.error}`); continue; }
+          const driveFile = uploadRes.data || {};
+          const driveFileId: string | null = driveFile.id || driveFile.file_id || driveFile.fileId || null;
+          if (!driveFileId) { console.warn(`[email_archiver] upload returned no id for ${att.filename}`); continue; }
+          const driveUrl: string = driveFile.webViewLink || driveFile.url
+            || `https://drive.google.com/file/d/${driveFileId}/view`;
+          attachmentsFiled.push({
+            message_id: msgId,
+            subject,
+            file_name: att.filename,
+            file_type: file.mimetype || att.mimeType,
+            drive_file_id: driveFileId,
+            drive_url: driveUrl,
+          });
+        } catch (attErr) {
+          console.warn(`[email_archiver] attachment crash (${msgId}/${att.filename}): ${attErr instanceof Error ? attErr.message : attErr}`);
+        }
+      }
+
+      const labelRes = await callComposio({
+        apiKey: composioApiKey, userId: composioUserId,
+        connectedAccountId: gmailAccountId, authConfigId: gmailAuthConfigId,
+        toolSlug: "GMAIL_ADD_LABEL_TO_EMAIL",
+        toolArguments: {
+          message_id: msgId,
+          add_label_ids: [archiveLabelId],
+          remove_label_ids: ["INBOX"],
+        },
+      });
+      if (!labelRes.ok) { skipped.push({ id: msgId, reason: `label_modify: ${labelRes.error}` }); continue; }
+      archivedIds.push(msgId);
+    } catch (loopErr) {
+      skipped.push({ id: msgId, reason: `loop_crash: ${loopErr instanceof Error ? loopErr.message : loopErr}` });
+    }
+  }
+
+  const { data: logResult, error: logErr } = await sb.rpc("log_email_archive_result", {
+    p_agency_id: agencyId,
+    p_recipe_id: recipe.id,
+    p_result: { archived_message_ids: archivedIds, attachments_filed: attachmentsFiled },
+  });
+  if (logErr) throw new Error(`log_email_archive_result failed: ${logErr.message}`);
+
+  if (skipped.length > 0) {
+    console.warn(`[email_archiver] skipped detail (first 10): ${JSON.stringify(skipped.slice(0, 10))}`);
+  }
+
+  const driveDesc = routeAttachments ? `Drive: ${driveFolderPath}` : "Drive routing disabled";
+  const fallback = `${archivedIds.length} archived; ${attachmentsFiled.length} attachments filed (${driveDesc}); ${skipped.length} skipped; ${dedupSet.size} dedup'd`;
+  const outputSummary = (logResult?.output_summary as string) || fallback;
+  return { recordsProcessed: archivedIds.length, outputSummary };
+}
+
+// -------------------------------------------------------------------------
+// Orchestrator: runDocumentProcessor (internal_handler=dispatch_document_processor)
+// v1 flow only: detect SF/Paychex documents in Gmail, file to Drive, insert
+// documents row + fire alert. (v2 "stage C" in-runner LLM parse deliberately
+// omitted in B8b core; migration 015 ships the mark_document_parsed and
+// run_document_processor_backfill helpers as forward prep for a future v2
+// runner update.)
+// -------------------------------------------------------------------------
+async function runDocumentProcessor(recipe: any): Promise<{
+  recordsProcessed: number; outputSummary: string;
+}> {
+  const agencyId = recipe.agency_id as string;
+  const input = recipe.input_config || {};
+  const lookbackMinutes = Number(input.lookback_minutes ?? 60);
+  const maxBatch = Math.min(Number(input.max_batch ?? 10), 25);
+  const processedLabelName = input.processed_label || "BCC-Processed";
+
+  const composioApiKey = Deno.env.get("COMPOSIO_API_KEY") || await getSetting(agencyId, "composio_api_key");
+  if (!composioApiKey) throw new Error("Missing Composio API key for document_processor_orchestrator");
+  const composioUserId = await getSetting(agencyId, "composio_user_id");
+  if (!composioUserId) throw new Error("Missing settings.composio_user_id for document_processor_orchestrator");
+  const gmailAccountId    = await getComposioAccountId(agencyId, "gmail");
+  const gmailAuthConfigId = await getComposioAuthConfigId(agencyId, "gmail");
+  const driveAccountId    = await getComposioAccountId(agencyId, "googledrive");
+  const driveAuthConfigId = await getComposioAuthConfigId(agencyId, "googledrive");
+
+  // 1. Plan
+  const { data: plan, error: planErr } = await sb.rpc("prepare_document_processor_batch", {
+    p_agency_id: agencyId,
+    p_lookback_minutes: lookbackMinutes,
+    p_max_batch: maxBatch,
+  });
+  if (planErr) throw new Error(`prepare_document_processor_batch failed: ${planErr.message}`);
+  if (!plan || typeof plan !== "object") throw new Error("prepare_document_processor_batch returned no plan");
+  const gmailQuery: string = plan.gmail_query;
+  const dedupSet: Set<string> = new Set(Array.isArray(plan.dedup_message_ids) ? plan.dedup_message_ids : []);
+
+  // 2. Ensure the processed-marker label exists
+  const processedLabelId = await ensureGmailLabelId({
+    apiKey: composioApiKey, userId: composioUserId,
+    accountId: gmailAccountId, authConfigId: gmailAuthConfigId,
+    labelName: processedLabelName,
+  });
+
+  // 3. Fetch candidate messages
+  const fetchRes = await callComposio({
+    apiKey: composioApiKey, userId: composioUserId,
+    connectedAccountId: gmailAccountId, authConfigId: gmailAuthConfigId,
+    toolSlug: "GMAIL_FETCH_EMAILS",
+    toolArguments: {
+      query: gmailQuery,
+      max_results: maxBatch,
+      ids_only: true,
+      verbose: false,
+    },
+  });
+  if (!fetchRes.ok) throw new Error(`GMAIL_FETCH_EMAILS failed: ${fetchRes.error}`);
+  const messages: any[] = (fetchRes.data?.messages) || (Array.isArray(fetchRes.data) ? fetchRes.data : []);
+  const candidateIds: string[] = messages
+    .map((m: any) => m?.messageId || m?.id)
+    .filter((id: any) => typeof id === "string" && id.length > 0 && !dedupSet.has(id))
+    .slice(0, maxBatch);
+
+  if (candidateIds.length === 0) {
+    return {
+      recordsProcessed: 0,
+      outputSummary: `No new docs to process (query='${gmailQuery}'; ${dedupSet.size} dedup'd; ${messages.length} returned)`,
+    };
+  }
+
+  // 4. Per-message loop
+  const processed: any[] = [];
+  const skipped: { message_id: string; reason: string }[] = [];
+  const errors: { message_id: string; error: string }[] = [];
+
+  // Cache for resolved Drive folders by (docType, year)
+  const driveFolderCache: Map<string, string> = new Map();
+  const yearNow = new Date().getUTCFullYear().toString();
+
+  async function getDriveFolder(docType: ClassifiedAttachment["docType"], yearOverride?: string): Promise<string> {
+    const year = yearOverride || yearNow;
+    const cacheKey = `${docType}|${year}`;
+    if (driveFolderCache.has(cacheKey)) return driveFolderCache.get(cacheKey)!;
+    const segments = driveFolderForDocType(docType, year);
+    const folder = await findOrCreateDriveFolder({
+      apiKey: composioApiKey, userId: composioUserId,
+      accountId: driveAccountId, authConfigId: driveAuthConfigId,
+      pathSegments: segments,
+    });
+    driveFolderCache.set(cacheKey, folder.folderId);
+    return folder.folderId;
+  }
+
+  for (const msgId of candidateIds) {
+    try {
+      const msgRes = await callComposio({
+        apiKey: composioApiKey, userId: composioUserId,
+        connectedAccountId: gmailAccountId, authConfigId: gmailAuthConfigId,
+        toolSlug: "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID",
+        toolArguments: { message_id: msgId, format: "full" },
+      });
+      if (!msgRes.ok) { errors.push({ message_id: msgId, error: `fetch_full: ${msgRes.error}` }); continue; }
+      const msg: any = msgRes.data || {};
+
+      // Extract subject + from headers
+      let subject = msg.subject || "";
+      let fromHdr = msg.from || "";
+      if (Array.isArray(msg.payload?.headers)) {
+        for (const h of msg.payload.headers) {
+          const n = (h.name || "").toLowerCase();
+          if (n === "subject" && !subject) subject = h.value || "";
+          if (n === "from" && !fromHdr) fromHdr = h.value || "";
+        }
+      }
+
+      // Walk attachments
+      const attachments: { attachmentId: string; filename: string; mimeType: string }[] = [];
+      const walk = (parts: any[]): void => {
+        for (const p of parts || []) {
+          if (p?.filename && p?.body?.attachmentId) {
+            attachments.push({
+              attachmentId: p.body.attachmentId,
+              filename: p.filename,
+              mimeType: p.mimeType || "application/octet-stream",
+            });
+          }
+          if (Array.isArray(p?.parts)) walk(p.parts);
+        }
+      };
+      walk(msg.payload?.parts || []);
+      if (attachments.length === 0 && Array.isArray(msg.attachmentList)) {
+        for (const a of msg.attachmentList) {
+          if (a?.attachmentId && a?.filename) {
+            attachments.push({
+              attachmentId: a.attachmentId,
+              filename: a.filename,
+              mimeType: a.mimeType || "application/octet-stream",
+            });
+          }
+        }
+      }
+
+      if (attachments.length === 0) {
+        skipped.push({ message_id: msgId, reason: "no_attachments" });
+        continue;
+      }
+
+      let filedAny = false;
+      for (const att of attachments) {
+        try {
+          // Skip non-PDF/non-CSV/non-XLSX attachments (signatures, banner images, etc.)
+          const fn = (att.filename || "").toLowerCase();
+          const isFileable = att.mimeType === "application/pdf"
+            || fn.endsWith(".pdf") || fn.endsWith(".csv") || fn.endsWith(".xlsx") || fn.endsWith(".xls");
+          if (!isFileable) continue;
+
+          const classified = classifyAttachment({
+            from: fromHdr, subject, filename: att.filename, mimeType: att.mimeType,
+          });
+
+          // Resolve Drive folder for this docType + (year from periodHint if available, else current)
+          let folderYear = yearNow;
+          if (classified.periodHint) {
+            const m = classified.periodHint.match(/^(20\d{2})/);
+            if (m) folderYear = m[1];
+          }
+          const driveFolderId = await getDriveFolder(classified.docType, folderYear);
+
+          // Download attachment from Gmail to Composio S3
+          const getRes = await callComposio({
+            apiKey: composioApiKey, userId: composioUserId,
+            connectedAccountId: gmailAccountId, authConfigId: gmailAuthConfigId,
+            toolSlug: "GMAIL_GET_ATTACHMENT",
+            toolArguments: { message_id: msgId, attachment_id: att.attachmentId, file_name: att.filename },
+          });
+          if (!getRes.ok) {
+            console.warn(`[doc_processor] GMAIL_GET_ATTACHMENT failed (${msgId}/${att.filename}): ${getRes.error}`);
+            continue;
+          }
+          const file = getRes.data?.file || getRes.data || {};
+          const s3url = file.s3url || file.url;
+          if (!s3url) {
+            console.warn(`[doc_processor] no s3url for ${msgId}/${att.filename}`);
+            continue;
+          }
+
+          // Upload to Drive
+          const uploadArgs: Record<string, any> = {
+            source_url: s3url,
+            name: att.filename,
+            mime_type: file.mimetype || att.mimeType,
+            parent_folder_id: driveFolderId,
+          };
+          const uploadRes = await callComposio({
+            apiKey: composioApiKey, userId: composioUserId,
+            connectedAccountId: driveAccountId, authConfigId: driveAuthConfigId,
+            toolSlug: "GOOGLEDRIVE_UPLOAD_FROM_URL",
+            toolArguments: uploadArgs,
+          });
+          if (!uploadRes.ok) {
+            console.warn(`[doc_processor] GOOGLEDRIVE_UPLOAD_FROM_URL failed for ${att.filename}: ${uploadRes.error}`);
+            continue;
+          }
+          const driveFile = uploadRes.data || {};
+          const driveFileId: string | null = driveFile.id || driveFile.file_id || driveFile.fileId || null;
+          if (!driveFileId) {
+            console.warn(`[doc_processor] upload returned no id for ${att.filename}`);
+            continue;
+          }
+          const driveUrl: string = driveFile.webViewLink || driveFile.url
+            || `https://drive.google.com/file/d/${driveFileId}/view`;
+
+          processed.push({
+            message_id: msgId,
+            subject,
+            from: fromHdr,
+            file_name: att.filename,
+            file_type: file.mimetype || att.mimeType,
+            drive_file_id: driveFileId,
+            drive_url: driveUrl,
+            doc_type: classified.docType,
+            needs_ingest: classified.needsIngest,
+            period_hint: classified.periodHint,
+          });
+          filedAny = true;
+        } catch (attErr) {
+          console.warn(`[doc_processor] attachment crash (${msgId}/${att.filename}): ${attErr instanceof Error ? attErr.message : attErr}`);
+        }
+      }
+
+      if (!filedAny) {
+        skipped.push({ message_id: msgId, reason: "no_fileable_attachments" });
+        continue;
+      }
+
+      // Apply the processed-marker label (dedup signal for next run, also lets
+      // Email Archiver skip these via "-label:BCC-Processed" — wait, that
+      // exclusion is in prepare_document_processor_batch's query, not the
+      // Email Archiver's. The label is purely a hint for human + dedup).
+      const labelRes = await callComposio({
+        apiKey: composioApiKey, userId: composioUserId,
+        connectedAccountId: gmailAccountId, authConfigId: gmailAuthConfigId,
+        toolSlug: "GMAIL_ADD_LABEL_TO_EMAIL",
+        toolArguments: {
+          message_id: msgId,
+          add_label_ids: [processedLabelId],
+        },
+      });
+      if (!labelRes.ok) {
+        // Label failure is non-fatal — file already in Drive + documents row will be inserted
+        console.warn(`[doc_processor] label add failed for ${msgId}: ${labelRes.error}`);
+      }
+    } catch (loopErr) {
+      errors.push({ message_id: msgId, error: `loop_crash: ${loopErr instanceof Error ? loopErr.message : loopErr}` });
+    }
+  }
+
+  // 5. Callback to result_rpc — v1 stage A+B done point.
+  const { data: logResult, error: logErr } = await sb.rpc("log_document_processor_result", {
+    p_agency_id: agencyId,
+    p_recipe_id: recipe.id,
+    p_result: { processed, skipped, errors },
+  });
+  if (logErr) throw new Error(`log_document_processor_result failed: ${logErr.message}`);
+
+  if (skipped.length > 0) {
+    console.warn(`[doc_processor] skipped detail (first 10): ${JSON.stringify(skipped.slice(0, 10))}`);
+  }
+  if (errors.length > 0) {
+    console.warn(`[doc_processor] error detail (first 10): ${JSON.stringify(errors.slice(0, 10))}`);
+  }
+  const fallback = `${processed.length} attachments filed; ${skipped.length} messages skipped; ${errors.length} errors; ${dedupSet.size} dedup'd`;
+  const outputSummary = (logResult?.output_summary as string) || fallback;
+  return { recordsProcessed: processed.length, outputSummary };
+}
+
+// -------------------------------------------------------------------------
+// Orchestrator: runInstagramManualReminder (internal_handler=instagram_manual_reminder)
+// Meta blocks third-party Instagram posting APIs, so this orchestrator sends
+// an email reminder to the agency owner at scheduled post time. Uses AA05
+// pre-flight for defense-in-depth (SQL side already filters).
+// -------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------
+// runInstagramManualReminder — Instagram manual-post reminder orchestrator
+// -------------------------------------------------------------------------
+// Instagram has no server-side API that supports third-party auto-posting;
+// content scheduled to Instagram triggers an email reminder to the agency
+// owner (typically the front-desk staffer running social) so they can post
+// from the phone at the scheduled time. Reads work plan from
+// prepare_instagram_reminder_batch, writes result via log_social_post_result.
+// -------------------------------------------------------------------------
+async function runInstagramManualReminder(recipe: any): Promise<{
+  recordsProcessed: number;
+  outputSummary: string;
+}> {
+  const agencyId = recipe.agency_id as string;
+  const input = recipe.input_config || {};
+
+  const composioApiKey = Deno.env.get("COMPOSIO_API_KEY") || await getSetting(agencyId, "composio_api_key");
+  if (!composioApiKey) throw new Error("Missing Composio API key for Instagram reminder");
+  const composioUserId = await getSetting(agencyId, "composio_user_id");
+  if (!composioUserId) throw new Error("Missing settings.composio_user_id for Instagram reminder");
+
+  // 1. Get the plan (posts scheduled for today)
+  const tz = (await getSetting(agencyId, "agency_timezone")) || "America/New_York";
+  const { data: plan, error: planErr } = await sb.rpc("prepare_instagram_reminder_batch", {
+    p_agency_id: agencyId, p_tz: tz,
+  });
+  if (planErr) throw new Error(`prepare_instagram_reminder_batch failed: ${planErr.message}`);
+  if (!plan || typeof plan !== "object") throw new Error("prepare_instagram_reminder_batch returned no plan");
+  const items: any[] = Array.isArray(plan.items) ? plan.items : [];
+  const skipped: any[] = Array.isArray(plan.skipped) ? plan.skipped : [];
+
+  if (items.length === 0 && skipped.length === 0) {
+    return { recordsProcessed: 0, outputSummary: "No Instagram posts due" };
+  }
+
+  // 2. Resolve the reminder recipient
+  const reminderEmail: string = input.reminder_email
+    || (await getSetting(agencyId, "owner_email"))
+    || (await getSetting(agencyId, "bookkeeper_email"))
+    || "";
+  if (!reminderEmail) {
+    throw new Error(
+      "Instagram reminder needs a recipient: set settings.owner_email or " +
+      "recipe.input_config.reminder_email"
+    );
+  }
+
+  // 3. Send reminder per due item
+  const results: any[] = [];
+  for (const item of items) {
+    try {
+      // TS pre-flight AA05 (defensive — SQL belt should have caught these)
+      const compliance = checkAA05Compliance(String(item.caption || ""));
+      if (!compliance.ok) {
+        skipped.push({ id: item.id, reason: compliance.reason });
+        continue;
+      }
+      const sendRes = await sendInstagramReminderEmail({
+        apiKey: composioApiKey, userId: composioUserId, agencyId,
+        to: reminderEmail, item,
+      });
+      if (sendRes.ok) {
+        results.push({ id: item.id, status: "reminded", reminder_sent: true, platform: "instagram" });
+      } else {
+        results.push({ id: item.id, status: "failed", error: sendRes.error, platform: "instagram" });
+      }
+    } catch (itemErr) {
+      const msg = itemErr instanceof Error ? itemErr.message : String(itemErr);
+      results.push({ id: item.id, status: "failed", error: `crash: ${msg}`, platform: "instagram" });
+    }
+  }
+
+  // 4. Callback to log_social_post_result
+  const { data: logResult, error: logErr } = await sb.rpc("log_social_post_result", {
+    p_agency_id: agencyId,
+    p_recipe_id: recipe.id,
+    p_result: { results, skipped },
+  });
+  if (logErr) throw new Error(`log_social_post_result failed: ${logErr.message}`);
+
+  const fallback = `instagram: ${results.length} reminded, ${skipped.length} skipped`;
+  const outputSummary = (logResult?.output_summary as string) || fallback;
+  return { recordsProcessed: results.length, outputSummary };
+}
+
 // --- core executor ------------------------------------------------------
 
 async function executeRecipe(
@@ -321,6 +1236,55 @@ async function executeRecipe(
     // Close Monitor, Producer Underperformance Watcher, and any agency-
     // specific INTERNAL recipes added later.
     if (recipe.composio_action === "INTERNAL") {
+      // --- Runner-side orchestrators (B8b) ---
+      // Some internal_handler values need external API calls (Gmail, Drive,
+      // Composio) that Postgres can't make. Short-circuit those to their
+      // TypeScript orchestrators; everything else falls through to the
+      // pure-SQL run_internal_recipe() path below.
+      const handler = recipe.internal_handler as string | null;
+      let orchestratorResult: { recordsProcessed: number; outputSummary: string } | null = null;
+
+      if (handler === "dispatch_email_archiver") {
+        orchestratorResult = await runEmailArchiver(recipe);
+      } else if (handler === "dispatch_document_processor") {
+        orchestratorResult = await runDocumentProcessor(recipe);
+      } else if (handler === "instagram_manual_reminder") {
+        orchestratorResult = await runInstagramManualReminder(recipe);
+      }
+
+      if (orchestratorResult) {
+        recordsProcessed = orchestratorResult.recordsProcessed;
+        outputSummary = orchestratorResult.outputSummary;
+
+        // Write run log + update recipe status, then return early
+        const durationSec = Math.round((Date.now() - started) / 1000);
+        await sb.from("automation_run_log").insert({
+          agency_id: agencyId,
+          recipe_id: recipeId,
+          status: "success",
+          records_processed: recordsProcessed,
+          error_message: null,
+          duration_seconds: durationSec,
+          output_summary: outputSummary,
+        });
+        await sb
+          .from("automation_recipes")
+          .update({ last_run_status: "success" })
+          .eq("id", recipeId);
+        return {
+          recipe_id: recipeId,
+          recipe_name: recipe.recipe_name,
+          status: "success",
+          records_processed: recordsProcessed,
+          duration_seconds: durationSec,
+          triggered_by: triggeredBy,
+          error: null,
+        };
+      }
+
+      // --- Pure-SQL INTERNAL handlers (B8a: bank_gl_writer, cc_gl_writer,
+      //     payroll_gl_writer, monthly_close_generator, plus GL Entry Writer,
+      //     Monthly Close Monitor, Producer Underperformance Watcher) ---
       const { data: internalResult, error: internalErr } = await sb.rpc(
         "run_internal_recipe",
         { p_recipe_id: recipeId },
