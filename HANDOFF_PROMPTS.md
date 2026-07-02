@@ -1,6 +1,42 @@
 # BCC Project Claude Handoff Prompts
 ## Canonical templates for client install handoffs
 
+---
+
+## ✅ LLM POLICY — GROQ FREE-TIER API KEY (Updated 2026-07-02)
+
+**The LLM path uses Groq's free OpenAI-compatible REST API directly** — no Composio proxy, no OpenAI / Anthropic / Gemini keys. The automation-runner reads a single credential: `GROQ_API_KEY`.
+
+### Set it once — as an Edge Function secret (NOT a `public.settings` row)
+
+Both IF and IA converged on this pattern on 2026-07-02: the runner reads `GROQ_API_KEY` from Supabase Edge Function secrets, not from the database.
+
+```bash
+# 1. Get a free key at https://console.groq.com (no credit card required)
+# 2. Set it as an Edge Function secret on the client's Supabase project:
+supabase secrets set GROQ_API_KEY=<your-key>
+# 3. Redeploy the runner so it picks up the new secret:
+supabase functions deploy automation-runner
+```
+
+**If a prior install (or an older doc) had you INSERT the key into `public.settings`** — that row is now inert. The runner no longer reads it. Move the value to an Edge Function secret via the command above.
+
+### What the runner calls
+
+```
+POST https://api.groq.com/openai/v1/chat/completions
+Headers: Authorization: Bearer ${GROQ_API_KEY}
+Model:   llama-3.3-70b-versatile (default; llama-3.1-8b-instant available for faster jobs)
+```
+
+If `GROQ_API_KEY` is missing when a recipe fires, the runner throws a clear error pointing to console.groq.com and logs `LLM parsing failed` to `automation_run_log`. Set the secret once and you're done.
+
+**Composio still handles non-LLM actions** (Gmail, Drive, Facebook, LinkedIn, Stripe, etc.). Those still use `composio_api_key` and `composio_<conn>_account_id` rows in `public.settings` — that pattern is unchanged.
+
+**Full details for the automation install:** see `docs/AUTOMATIONS_INSTALL.md` (the canonical source of truth for the LLM policy and runner setup as of 2026-07-02).
+
+---
+
 There are exactly two install paths. Pick the one that matches the client's Supabase state.
 
 ---
@@ -92,6 +128,7 @@ WHERE id = (SELECT id FROM agency LIMIT 1);
   - `VITE_AGENCY_ID` = result of `SELECT id FROM agency LIMIT 1;` (will exist after migration 004)
   - `VITE_USE_MOCK_DATA` = `false` ← **must be false. Mock data is a lie.**
 - Deploy
+- **Record the deployed URL in IF Supabase `clients.webapp_url`** once the smoke test below passes. The live Vercel URL (e.g. `https://<name>.vercel.app/`) goes in `webapp_url`; the GitHub repo URL stays in `notes`, never in `webapp_url`. Run: `UPDATE clients SET webapp_url = '<https://...vercel.app/>', updated_at = NOW() WHERE id = '[CLIENT-ID]';` (Data-management rule established 2026-06-24 — see `agent_memory` rows where `metadata->>'rule_category' = 'data_management'` for full text.)
 
 **5. Browser smoke test (in this order):**
 - (a) Dashboard loads, agency name renders in header (will show seed value from migration 004 until Rebecca personalizes it)
@@ -102,12 +139,12 @@ WHERE id = (SELECT id FROM agency LIMIT 1);
 - (e2) Automations module loads, shows all 12 canonical recipes you seeded, with status pills. After the smoke test in Step 5.5, the Daily Briefing recipe should show last_run_status='success' here
 - (f) All other modules load without crashing — they should all show empty states (the ErrorBoundary will surface any errors with full diagnostics, not blank tabs)
 
-**5.5. Install the document importer (= seed recipes + deploy the runner engine).** This is the single most important install step. **The 12 canonical recipes ARE the document importer** — they read [CLIENT-FIRST-NAME]'s Gmail every day, parse comp recaps, deduction statements, payroll notifications, bank/CC statements, and producer production reports via Groq, and write structured rows into the right tables. Read `docs/DOCUMENT_IMPORTER_GUIDE.md` first — it explains why you should NOT build a parallel importer.
+**5.5. Install the document importer (= seed recipes + deploy the runner engine).** This is the single most important install step. **The 12 canonical recipes ARE the document importer** — they read [CLIENT-FIRST-NAME]'s Gmail every day, parse comp recaps, deduction statements, payroll notifications, bank/CC statements, and producer production reports via Composio's LLM, and write structured rows into the right tables. Read `docs/DOCUMENT_IMPORTER_GUIDE.md` first — it explains why you should NOT build a parallel importer.
 
 Then walk through `docs/AUTOMATIONS_INSTALL.md` end-to-end. Specifically:
 
   - **Step 4 of that doc** — insert all 12 recipes using the SQL templates (replace `[AGENCY_ID]`, `[AGENT_NAME]`, `[AGENT_PERSONAL_EMAIL]`)
-  - **Step 5a-5d of that doc** — apply migration 011 (already covered in step 2 above), deploy the `automation-runner` Edge Function via `supabase functions deploy automation-runner --no-verify-jwt`, INSERT the required settings credential rows for the runner (composio_api_key, composio_user_id, composio_<conn>_account_id rows, automation_runner_cron_secret, supabase_url — NO groq_api_key, LLM calls route through Composio), schedule pg_cron with `SELECT cron.schedule('automation-runner-tick', '* * * * *', $$ SELECT public.run_due_automation_recipes(); $$);`
+  - **Step 5a-5d of that doc** — apply migration 011 (already covered in step 2 above), deploy the `automation-runner` Edge Function via `supabase functions deploy automation-runner --no-verify-jwt`, INSERT the required settings credential rows for the runner (composio_api_key, composio_user_id, composio_<conn>_account_id rows, automation_runner_cron_secret, supabase_url, AND groq_api_key (free from console.groq.com — required for LLM parsing recipes)), schedule pg_cron with `SELECT cron.schedule('automation-runner-tick', '* * * * *', $$ SELECT public.run_due_automation_recipes(); $$);`
   - **Step 6 of that doc** — fire the Daily Briefing recipe manually as a smoke test. Confirm 200 from the Edge Function, success row in `automation_run_log`, and the agent receives the briefing email.
 
 Without all four sub-steps complete, the recipes sit inert and the document importer doesn't run. The Daily Briefing smoke test is the only way to know the entire pipeline works end-to-end.
@@ -167,7 +204,7 @@ Your BCC web app starter repo has just been pushed to your GitHub.
 - `SCHEMA_NORMALIZATION_RUNBOOK.md` — the playbook for fitting the web app to an existing database (most important file for this install)
 - `CLAUDE.md` — the install bible (env vars, smoke test, hard-learned bugs)
 
-**2. Run the schema audit.** Open Supabase Studio for [CLIENT-FIRST-NAME]'s project. Paste and run `supabase/migrations/007_schema_audit.sql`. You'll get back ~40 rows in three sections (TABLE AUDIT, VIEW AUDIT, ANON ACCESS).
+**2. Run the schema audit.** Open Supabase Studio for [CLIENT-FIRST-NAME]'s project. Paste and run the contents of `tools/schema_audit_query.sql` (the file in this repo, not a migration — there is no migration 007 schema audit; that number belongs to `007_monthly_close_checklist.sql`). You'll get back ~40 rows in three sections (TABLE AUDIT, VIEW AUDIT, ANON ACCESS).
 
 **3. Categorize results:**
 - `ok` rows → nothing to do
@@ -220,6 +257,7 @@ Each row returns ready-to-run `CREATE OR REPLACE VIEW` SQL with column-level mat
   - `VITE_AGENCY_ID` = `SELECT id FROM agency LIMIT 1;`
   - `VITE_USE_MOCK_DATA` = `false` ← **must be false. Mock data is a lie.**
 - Deploy
+- **Record the deployed URL in IF Supabase `clients.webapp_url`** once the smoke test below passes. The live Vercel URL (e.g. `https://<name>.vercel.app/`) goes in `webapp_url`; the GitHub repo URL stays in `notes`, never in `webapp_url`. Run: `UPDATE clients SET webapp_url = '<https://...vercel.app/>', updated_at = NOW() WHERE id = '[CLIENT-ID]';` (Data-management rule established 2026-06-24 — see `agent_memory` rows where `metadata->>'rule_category' = 'data_management'` for full text.)
 
 **9. Browser smoke test (in this order):**
 - (a) Dashboard loads, agency name renders correctly in header
@@ -229,12 +267,12 @@ Each row returns ready-to-run `CREATE OR REPLACE VIEW` SQL with column-level mat
 - (e) Settings → About → Keep It Connected shows the green self-heal hero card. The connector status indicators below the hero card render (don't worry about their state — just confirm they render)
 - (e2) Automations module loads, shows all 12 canonical recipes (yours plus any pre-existing). After the smoke test in Step 9.5, the Daily Briefing recipe should show last_run_status='success' here
 
-**9.5. Install the document importer (= seed recipes + deploy the runner engine).** This is the single most important install step. **The 12 canonical recipes ARE the document importer** — they read [CLIENT-FIRST-NAME]'s Gmail every day, parse comp recaps, deduction statements, payroll notifications, bank/CC statements, and producer production reports via Groq, and write structured rows into the right tables. Read `docs/DOCUMENT_IMPORTER_GUIDE.md` first — it explains why you should NOT build a parallel importer.
+**9.5. Install the document importer (= seed recipes + deploy the runner engine).** This is the single most important install step. **The 12 canonical recipes ARE the document importer** — they read [CLIENT-FIRST-NAME]'s Gmail every day, parse comp recaps, deduction statements, payroll notifications, bank/CC statements, and producer production reports via Composio's LLM, and write structured rows into the right tables. Read `docs/DOCUMENT_IMPORTER_GUIDE.md` first — it explains why you should NOT build a parallel importer.
 
 Then walk through `docs/AUTOMATIONS_INSTALL.md` end-to-end. Specifically:
 
   - **Step 4 of that doc** — insert all 12 recipes using the SQL templates (replace `[AGENCY_ID]`, `[AGENT_NAME]`, `[AGENT_PERSONAL_EMAIL]`). For Path A clients, `automation_recipes` may already have a few rows from prior tooling — query the table first and only insert what's missing.
-  - **Step 5a-5d of that doc** — apply migration 011 (already covered in step 3 above), deploy the `automation-runner` Edge Function via `supabase functions deploy automation-runner --no-verify-jwt`, INSERT the required settings credential rows for the runner (composio_api_key, composio_user_id, composio_<conn>_account_id rows, automation_runner_cron_secret, supabase_url — NO groq_api_key, LLM calls route through Composio), schedule pg_cron with `SELECT cron.schedule('automation-runner-tick', '* * * * *', $$ SELECT public.run_due_automation_recipes(); $$);`
+  - **Step 5a-5d of that doc** — apply migration 011 (already covered in step 3 above), deploy the `automation-runner` Edge Function via `supabase functions deploy automation-runner --no-verify-jwt`, INSERT the required settings credential rows for the runner (composio_api_key, composio_user_id, composio_<conn>_account_id rows, automation_runner_cron_secret, supabase_url, AND groq_api_key (free from console.groq.com — required for LLM parsing recipes)), schedule pg_cron with `SELECT cron.schedule('automation-runner-tick', '* * * * *', $$ SELECT public.run_due_automation_recipes(); $$);`
   - **Step 6 of that doc** — fire the Daily Briefing recipe manually as a smoke test. Confirm 200 from the Edge Function, success row in `automation_run_log`, and the agent receives the briefing email.
 
 Without all four sub-steps complete, the recipes sit inert and the document importer doesn't run. The Daily Briefing smoke test is the only way to know the entire pipeline works end-to-end.

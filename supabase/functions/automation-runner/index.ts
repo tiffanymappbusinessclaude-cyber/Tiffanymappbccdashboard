@@ -14,10 +14,10 @@
 //     3. Mark the recipe as "running" (sets last_run_at to NOW())
 //     4. Resolve Composio credentials from settings (agency-scoped)
 //     5. Call the recipe's composio_action with input_config arguments
-//     6. If groq_prompt is set, post the result data through the
-//        Composio-hosted LLM (COMPOSIO_SEARCH_GROQ_CHAT) for structured
-//        extraction. NO separate Groq API key required — auth is via the
-//        existing composio_api_key.
+//     6. If groq_prompt is set, post the result data through Groq's free
+//        OpenAI-compatible REST API for structured JSON extraction.
+//        Requires GROQ_API_KEY as a Supabase Edge Function secret
+//        (free tier from console.groq.com — set via `supabase secrets set`).
 //     7. Write parsed records to the recipe's output_table per output_config
 //     8. Write a row to automation_run_log
 //     9. Update the recipe's last_run_status
@@ -36,6 +36,10 @@
 //   composio_<conn>_account_id     - one per connection used by recipes;
 //                                    e.g. composio_gmail_account_id,
 //                                    composio_facebook_account_id, etc.
+//   (GROQ_API_KEY is a Supabase Edge Function secret, NOT a settings row.
+//    Set via: supabase secrets set GROQ_API_KEY=<your-key>, then redeploy.
+//    Required only if any recipe uses groq_prompt. Both IF and IA converged
+//    on this pattern 2026-07-02.)
 //   telegram_bot_token             - OPTIONAL; failure alerts only
 //   telegram_chat_id               - OPTIONAL; failure alerts only
 //
@@ -58,9 +62,10 @@ const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 const COMPOSIO_BASE = "https://backend.composio.dev/api/v3/tools/execute";
-// LLM calls now route through Composio's hosted Groq chat tool.
-// Auth uses composio_api_key — NO separate groq_api_key needed.
-const COMPOSIO_LLM_TOOL = "COMPOSIO_SEARCH_GROQ_CHAT";
+// LLM calls go directly to Groq's OpenAI-compatible REST API.
+// Free tier from console.groq.com — set as Edge Function secret via
+// `supabase secrets set GROQ_API_KEY=<key>`, then redeploy this function.
+const GROQ_API_BASE = "https://api.groq.com/openai/v1/chat/completions";
 const LLM_MODEL_DEFAULT = "llama-3.3-70b-versatile";
 
 function stripFences(s: string): string {
@@ -146,42 +151,39 @@ async function callComposio(opts: {
   return { ok, data, error, httpStatus: res.status };
 }
 
-async function callComposioLLM(opts: {
-  composioApiKey: string;
-  composioUserId: string;
+async function callGroqLLM(opts: {
+  groqApiKey: string;
   systemPrompt: string;
   userContent: string;
   model?: string;
   maxTokens?: number;
 }): Promise<{ ok: boolean; data: any; error: string | null }> {
-  // COMPOSIO_SEARCH_GROQ_CHAT is part of the composio_search toolkit
-  // (no separate auth/connection needed beyond composio_api_key).
-  // Schema does NOT expose response_format — system prompt MUST demand raw JSON
-  // and we MUST strip code fences before JSON.parse.
+  // Direct call to Groq's OpenAI-compatible chat completions endpoint.
+  // Free tier supports llama-3.3-70b-versatile with generous rate limits.
+  // We use response_format json_object (supported by Groq) AND keep the
+  // belt-and-suspenders system-prompt instruction + fence stripping as a fallback.
   const body = {
-    user_id: opts.composioUserId,
-    arguments: {
-      messages: [
-        {
-          role: "system",
-          content: opts.systemPrompt +
-            "\n\nReturn ONLY a raw JSON object. No markdown. No code fences. No prose before or after the JSON.",
-        },
-        { role: "user", content: opts.userContent },
-      ],
-      model: opts.model ?? LLM_MODEL_DEFAULT,
-      temperature: 0.1,
-      max_tokens: opts.maxTokens ?? 4096,
-    },
+    messages: [
+      {
+        role: "system",
+        content: opts.systemPrompt +
+          "\n\nReturn ONLY a raw JSON object. No markdown. No code fences. No prose before or after the JSON.",
+      },
+      { role: "user", content: opts.userContent },
+    ],
+    model: opts.model ?? LLM_MODEL_DEFAULT,
+    temperature: 0.1,
+    max_tokens: opts.maxTokens ?? 4096,
+    response_format: { type: "json_object" },
   };
 
   // Retry on 429/5xx with exponential backoff, max 3 attempts.
   let lastErr = "unknown";
   for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch(`${COMPOSIO_BASE}/${COMPOSIO_LLM_TOOL}`, {
+    const res = await fetch(GROQ_API_BASE, {
       method: "POST",
       headers: {
-        "x-api-key": opts.composioApiKey,
+        "Authorization": `Bearer ${opts.groqApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -197,17 +199,13 @@ async function callComposioLLM(opts: {
       lastErr = parsed?.error?.message || parsed?.error || text.slice(0, 400);
       return { ok: false, data: null, error: lastErr };
     }
-    if (!parsed?.successful) {
-      lastErr = parsed?.error || "Composio LLM call unsuccessful";
-      return { ok: false, data: null, error: lastErr };
-    }
-    const choice = parsed?.data?.choices?.[0];
+    const choice = parsed?.choices?.[0];
     const content = choice?.message?.content;
     if (!content) {
-      return { ok: false, data: null, error: "Composio LLM returned empty content" };
+      return { ok: false, data: null, error: "Groq returned empty content" };
     }
     if (choice?.finish_reason === "length") {
-      console.warn("[callComposioLLM] finish_reason=length — output may be truncated");
+      console.warn("[callGroqLLM] finish_reason=length — output may be truncated");
     }
     const cleaned = stripFences(content);
     let extracted: any;
@@ -221,7 +219,7 @@ async function callComposioLLM(opts: {
     }
     return { ok: true, data: extracted, error: null };
   }
-  return { ok: false, data: null, error: `LLM call exhausted retries: ${lastErr}` };
+  return { ok: false, data: null, error: `Groq LLM call exhausted retries: ${lastErr}` };
 }
 
 /**
@@ -362,72 +360,6 @@ async function executeRecipe(
       };
     }
 
-    // --- EDGE_FUNCTION recipe branch ---
-    // composio_action like "EDGE_FUNCTION:drive-archiver" → POST to the named
-    // Supabase Edge Function. The edge function is expected to self-log to
-    // automation_run_log (so the runner does NOT write a second row), and to
-    // handle its own Composio calls. The runner just dispatches and bubbles
-    // the outcome upstream.
-    if (recipe.composio_action?.startsWith("EDGE_FUNCTION:")) {
-      const slug = recipe.composio_action.substring("EDGE_FUNCTION:".length).trim();
-      if (!slug) {
-        throw new Error("EDGE_FUNCTION: prefix with empty function slug");
-      }
-      const cronSecret = await getSetting(agencyId, "automation_runner_cron_secret");
-      if (!cronSecret) {
-        throw new Error(`Missing automation_runner_cron_secret for edge dispatch (agency ${agencyId})`);
-      }
-      const url = `${SUPABASE_URL}/functions/v1/${slug}`;
-      const efRes = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${SERVICE_ROLE_KEY}`,
-        },
-        body: JSON.stringify({
-          shared_secret: cronSecret,
-          recipe_id: recipeId,
-          triggered_by: triggeredBy,
-          ...(recipe.input_config || {}),
-        }),
-      });
-      const efText = await efRes.text();
-      let efParsed: any = {};
-      try { efParsed = JSON.parse(efText); } catch { efParsed = { raw: efText.slice(0, 400) }; }
-      if (!efRes.ok || efParsed?.ok === false) {
-        const msg = (efParsed?.error || efText || "").toString().slice(0, 400);
-        throw new Error(`Edge function ${slug} failed: HTTP ${efRes.status} ${msg}`);
-      }
-      // Edge function self-logged. Just update recipe status and return.
-      await sb
-        .from("automation_recipes")
-        .update({ last_run_status: "success" })
-        .eq("id", recipeId);
-      return {
-        recipe_id: recipeId,
-        recipe_name: recipe.recipe_name,
-        status: "success",
-        records_processed: efParsed?.archived ?? efParsed?.records_processed ?? 0,
-        duration_seconds: Math.round((Date.now() - started) / 1000),
-        triggered_by: triggeredBy,
-        error: null,
-      };
-    }
-
-    // --- HYBRID: internal_handler runs BEFORE the Composio call ---
-    // For recipes like "Daily Briefing Email" where internal_handler builds the
-    // snapshot data (writes daily_briefing_log) AND a separate composio_action
-    // performs the user-visible action (sending the email). Without this, the
-    // composer would never run and the runner would silently report success.
-    let hybridInternalResult: any = null;
-    if (recipe.internal_handler) {
-      const { data: ir, error: ie } = await sb.rpc("run_internal_recipe", { p_recipe_id: recipeId });
-      if (ie) {
-        throw new Error(`Hybrid internal_handler ${recipe.internal_handler} failed: ${ie.message}`);
-      }
-      hybridInternalResult = ir;
-    }
-
     // --- Resolve credentials ---
     const composioApiKey = await getSetting(agencyId, "composio_api_key");
     if (!composioApiKey) {
@@ -468,15 +400,22 @@ async function executeRecipe(
 
     let parsedRecords: any[] = [];
 
-    // --- Optional: LLM parsing pass (via Composio-hosted Groq) ---
+    // --- Optional: LLM parsing pass (via direct Groq REST) ---
     if (recipe.groq_prompt && recipe.output_table) {
       // Default expectation: composioResult.data is array-shaped or has a top-level
       // collection (messages, items, results). Recipes that need a different shape
       // can include extraction hints in groq_prompt.
       const inputForLLM = JSON.stringify(composioResult.data).slice(0, 60000);
-      const llmResult = await callComposioLLM({
-        composioApiKey,
-        composioUserId,
+      const groqApiKey = Deno.env.get("GROQ_API_KEY") ?? "";
+      if (!groqApiKey) {
+        throw new Error(
+          "GROQ_API_KEY secret is not set. Get a free key at https://console.groq.com " +
+          "and set via: supabase secrets set GROQ_API_KEY=<your-key>, " +
+          "then redeploy: supabase functions deploy automation-runner --no-verify-jwt"
+        );
+      }
+      const llmResult = await callGroqLLM({
+        groqApiKey,
         systemPrompt: recipe.groq_prompt +
           '\n\nReturn a JSON object: {"records": [...]} where records is an array of objects ready to insert into the output_table. Return {"records": []} if nothing applicable.',
         userContent: inputForLLM,
@@ -501,20 +440,12 @@ async function executeRecipe(
       recordsProcessed = writeResult.inserted + writeResult.updated;
       outputSummary = `${recordsProcessed} records written to ${recipe.output_table}`;
     } else if (recipe.output_table) {
-      outputSummary = `0 records — Composio returned data but LLM parsing yielded no records to write`;
+      outputSummary = `0 records — Composio returned data but Groq LLM parsing yielded no records to write`;
     } else {
       // No output_table: this is an action-only recipe (e.g. send email,
       // post to social, archive). Composio call success is the result.
       outputSummary = `Action ${action} executed successfully (no output_table)`;
       recordsProcessed = 1;
-    }
-
-    // --- HYBRID merge: prepend internal_handler summary, prefer its records count
-    if (hybridInternalResult) {
-      const hRec = (hybridInternalResult.records_processed as number) ?? 0;
-      const hSum = (hybridInternalResult.output_summary as string) ?? "";
-      recordsProcessed = hRec; // composer's count is the meaningful one
-      outputSummary = hSum + (outputSummary ? ` | ${outputSummary}` : "");
     }
   } catch (err) {
     runStatus = "failed";

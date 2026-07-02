@@ -5,12 +5,49 @@ This file is your briefing. Before touching any file in this repo, read this com
 
 ---
 
+---
+
+## ✅ LLM POLICY — GROQ FREE-TIER API KEY (Updated 2026-07-02)
+
+**The LLM path uses Groq's free OpenAI-compatible REST API directly** — no Composio proxy, no OpenAI / Anthropic / Gemini keys. The automation-runner reads a single credential: `GROQ_API_KEY`.
+
+### Set it once — as an Edge Function secret (NOT a `public.settings` row)
+
+Both IF and IA converged on this pattern on 2026-07-02: the runner reads `GROQ_API_KEY` from Supabase Edge Function secrets, not from the database.
+
+```bash
+# 1. Get a free key at https://console.groq.com (no credit card required)
+# 2. Set it as an Edge Function secret on the client's Supabase project:
+supabase secrets set GROQ_API_KEY=<your-key>
+# 3. Redeploy the runner so it picks up the new secret:
+supabase functions deploy automation-runner
+```
+
+**If a prior install (or an older doc) had you INSERT the key into `public.settings`** — that row is now inert. The runner no longer reads it. Move the value to an Edge Function secret via the command above.
+
+### What the runner calls
+
+```
+POST https://api.groq.com/openai/v1/chat/completions
+Headers: Authorization: Bearer ${GROQ_API_KEY}
+Model:   llama-3.3-70b-versatile (default; llama-3.1-8b-instant available for faster jobs)
+```
+
+If `GROQ_API_KEY` is missing when a recipe fires, the runner throws a clear error pointing to console.groq.com and logs `LLM parsing failed` to `automation_run_log`. Set the secret once and you're done.
+
+**Composio still handles non-LLM actions** (Gmail, Drive, Facebook, LinkedIn, Stripe, etc.). Those still use `composio_api_key` and `composio_<conn>_account_id` rows in `public.settings` — that pattern is unchanged.
+
+**Full details for the automation install:** see `docs/AUTOMATIONS_INSTALL.md` (the canonical source of truth for the LLM policy and runner setup as of 2026-07-02).
+
+---
+
 ## Companion Docs (read these when relevant during install)
 
 | Doc | When to read |
 |---|---|
 | `HANDOFF_PROMPTS.md` | Pick the install path (Path A existing-DB or Path B clean) and follow the matching prompt step-by-step. The single source of truth for install order. |
 | `docs/DOCUMENT_IMPORTER_GUIDE.md` | **Read FIRST during any install.** Explains why the 12 canonical recipes ARE the document importer — prevents Project Claude from building a parallel one. |
+| `docs/DRIVE_FOLDER_SETUP.md` | Canonical Google Drive folder structure for the Email Archiver, Document Processor, and any recipe that writes files to Drive. Snake_case category vocabulary, required owner setup (root `BCC/` folder + Composio connections + `settings` rows), install verification checklist. |
 | `docs/AUTOMATIONS_INSTALL.md` | The full SQL templates for all 12 canonical recipes, plus the runner setup (Step 5a-5d) and end-to-end smoke test (Step 6). |
 | `docs/MODULE_DATA_WIRING.md` | Per-module: which Supabase tables each web app module reads, what to check when something doesn't render. The cheat sheet for "why is this module empty / wrong." |
 | `docs/PRODUCER_ROI_INSTALL.md` | Performance tab onboarding: SMVC/blended/lapse rates on `agency`, producer_production backfill, role-name conventions for `staff`. |
@@ -40,8 +77,8 @@ Every client has ALL of these — the web app is Layer 5, added on top:
 |---|---|---|
 | 1 | Claude.ai Project Claude | Agent intelligence — the brain |
 | 2 | Supabase | Database — source of truth for ALL data |
-| 3 | Composio | MCP connector — Claude's tools |
-| 4 | Composio | Automation recipes — social posting, imports |
+| 3 | Composio | Integration layer — Claude's tools and the runner's execution surface (Gmail, Drive, Facebook, LinkedIn, etc.) |
+| 4 | Supabase `automation_recipes` + `pg_cron` + `automation-runner` Edge Function | Automation orchestration — recipes live in Supabase, `pg_cron` schedules them, the Edge Function executes them via Composio calls and pipes LLM steps through Groq's free REST API |
 | 5 | GitHub + Vercel | **Web app — visual dashboard (this repo)** |
 
 ---
@@ -271,14 +308,14 @@ Recipes don't run themselves. The engine that executes them lives in two pieces,
    - Auth: validates the shared_secret against the recipe's agency in `settings`.
    - Resolves Composio credentials from `settings` (agency-scoped — this is the master template's pattern, distinct from the IF ops project's `brand_kit` table).
    - Calls Composio's `/api/v3/tools/execute` with the recipe's `composio_action` and `input_config`.
-   - Optionally pipes the result through the Composio-hosted Groq LLM (`COMPOSIO_SEARCH_GROQ_CHAT`) for structured extraction when the recipe has a `groq_prompt`. No separate LLM API key required — uses `composio_api_key`.
+   - Optionally pipes the result through Groq's free OpenAI-compatible REST API for structured JSON extraction when the recipe has a `groq_prompt`. Requires `groq_api_key` in settings (free tier from console.groq.com).
    - Writes parsed records to the recipe's `output_table`.
    - Writes a row to `automation_run_log` with status, duration, and any error.
    - Sends a Telegram alert on failure (when telegram credentials are present).
 
 The Postgres side fires-and-forgets via `pg_net.http_post` with a ~4-minute timeout. Run-log writes happen inside the Edge Function, so a slow Composio call never blocks Postgres.
 
-**Credentials are agency-scoped rows in `settings`.** Required keys: `automation_runner_cron_secret`, `supabase_url`, `composio_api_key`, `composio_user_id`, and one `composio_<conn>_account_id` per connection used (e.g. `composio_gmail_account_id`). Optional: `telegram_bot_token` / `telegram_chat_id` for failure alerts. **DO NOT add a `groq_api_key` row** — LLM calls inside the automation runner go through `COMPOSIO_SEARCH_GROQ_CHAT`, which authenticates via the existing `composio_api_key`. No separate LLM key is required, ever.
+**Composio credentials are agency-scoped rows in `settings`.** Required keys: `automation_runner_cron_secret`, `supabase_url`, `composio_api_key`, `composio_user_id`, and one `composio_<conn>_account_id` per connection used (e.g. `composio_gmail_account_id`). Optional: `telegram_bot_token` / `telegram_chat_id` for failure alerts. **The LLM credential is separate** — `GROQ_API_KEY` lives as a Supabase Edge Function secret (not a settings row). Get a free key at https://console.groq.com (no credit card) and set via `supabase secrets set GROQ_API_KEY=<key>`, then redeploy the runner. You do NOT need OpenAI / Anthropic / Gemini keys — Groq's free tier covers every LLM call this BCC makes.
 
 **Critical install note:** the `pg_net` extension is NOT pre-enabled on a fresh Supabase project. Migration 011 runs `CREATE EXTENSION IF NOT EXISTS pg_net;` at the top, but if RLS or extension policy blocks that, the project owner must enable it manually in Supabase Studio → Database → Extensions before the migration will succeed.
 
@@ -335,26 +372,13 @@ See `docs/PRODUCER_ROI_INSTALL.md` for the install playbook.
 
 ## Open Issues (GitHub)
 
-All 5 issues that were listed here were SHIPPED 2026-06-24. None outstanding.
-
-| # | Issue | Priority | Status | Closing commit(s) |
-|---|---|---|---|---|
-| #1 | Instagram auto-posting — Business account banner | Medium | ✅ Closed 2026-06-24 | `d4a135fe` |
-| #2 | Social Media — Schedule New Post full form | High | ✅ Closed 2026-06-24 | `4f2cfa09` |
-| #3 | Dashboard — Emails Needing Attention (Gmail MCP) | High | ✅ Closed 2026-06-24 | `68447d8e` |
-| #4 | Dashboard — Calendar Events (Google Calendar MCP) | High | ✅ Closed 2026-06-24 | `a79db815` |
-| #5 | Replace remaining MOCK data with EmptyState | Medium | ✅ Closed 2026-06-24 | `8320c192`, `9e33f5a7` |
-
-**Notes on the 2026-06-24 shipment:**
-- Issues #3 and #4 added two new on-demand Edge Functions (`dashboard-emails-needing-attention`, `dashboard-calendar-events`) that proxy Gmail and Google Calendar through Composio. Both use `verify_jwt=true` and are called from the webapp via `supabase.functions.invoke()`.
-- Issue #2 also fixed a latent CLAUDE.md lesson #3 violation in `SocialMedia.jsx`: the `SocialOverview` component's Schedule toggle button referenced `setShowScheduler` that wasn't being passed as a prop. Signature widened, call site updated.
-- Issue #5 took the conservative path: replaced active `MOCK_*` references in `Automations.jsx` and `Documents.jsx` with empty arrays so internal empty states render. `ComplianceCenter.jsx`'s `MOCK_CHECKLIST` was KEPT (static AA05 26-item policy checklist, not transactional data). `Settings.jsx` per-field `MOCK_AGENCY` fallbacks were KEPT (placeholder behavior when a DB field is null). Orphan `MOCK_*` declarations in modules where they're no longer rendered were LEFT as harmless dead code; a follow-up cleanup commit can remove them when convenient.
-
-**Follow-up work (not blocking; tracked in persistent_memory, category=agency_profile):**
-- Document Processor Groq parsing: **FORMALLY SKIPPED 2026-06-24.** The `groq_prompt` pipeline described above is the master-template architecture, but in this agency's actual operation, source-document parsing happens in `COMPOSIO_REMOTE_WORKBENCH` sessions when Claude is in the loop (smart_file_extract + invoke_llm). The Document Processor recipe still files originals to Drive and updates `processing_status`, but the LLM classification step is intentionally a no-op. To revisit: add an HTTP-callable LLM in an Edge Function (Anthropic API direct, ~$5-10/mo at this volume). Not on the roadmap. See persistent_memory entry "2026-06-24 EVENING — Groq formally DROPPED; LLM parsing is workbench-driven".
-- Facebook and LinkedIn social recipes: pending Composio OAuth connections
-- Score+/PYC document parser: blocked on receiving first sample document
-- Optional: 60s response caching on the two new Edge Functions if load increases
+| # | Issue | Priority |
+|---|---|---|
+| #1 | Instagram auto-posting — Business account banner | Medium |
+| #2 | Social Media — Schedule New Post full form | High |
+| #3 | Dashboard — Emails Needing Attention (Gmail MCP) | High |
+| #4 | Dashboard — Calendar Events (Google Calendar MCP) | High |
+| #5 | Replace remaining MOCK data with EmptyState | Medium |
 
 ---
 
@@ -471,6 +495,56 @@ FROM information_schema.role_table_grants
 WHERE grantee = 'anon' AND table_schema = 'public';
 -- If 0: run migration 005 immediately.
 ```
+
+## Customization Runway vs. Actual Issues
+
+Your system has components that are **intentionally pending the owner's input** rather than broken. Before flagging anything as a problem, check the `system_status` table (migration 013).
+
+### How to read system_status
+
+Every recipe, table, integration, view, edge function, and module in this BCC has a row in `public.system_status` with one of four statuses:
+
+| Status | Meaning | Where it lives |
+|---|---|---|
+| `operational_green` | Working as designed. Move on. | `system_status` |
+| `customization_pending` | **Intentionally waiting on owner input** — OAuth, data, or a decision. Not a bug. | `v_customization_runway` |
+| `deferred` | A path **deliberately not built**, with a written reason. Do not propose rebuilding without explicit owner direction. | `system_status` (filter `status = 'deferred'`) |
+| `needs_attention` | Genuine issue requiring fix. | `v_system_issues` |
+
+### When you audit the system
+
+Run this query first:
+
+```sql
+SELECT
+  (SELECT COUNT(*) FROM public.system_status WHERE status = 'operational_green')     AS green,
+  (SELECT COUNT(*) FROM public.system_status WHERE status = 'customization_pending') AS pending,
+  (SELECT COUNT(*) FROM public.system_status WHERE status = 'deferred')              AS deferred,
+  (SELECT COUNT(*) FROM public.system_status WHERE status = 'needs_attention')       AS issues;
+```
+
+Then:
+
+- **Present `customization_pending` rows as the runway** — "here's what we still need from you to light up the rest of the system." Each row has an `unlocks_when` field telling you exactly what owner action lifts the pending state.
+- **Present `deferred` rows as decided-against** — they exist so you don't propose rebuilding them. The `decided_against_reason` is the why.
+- **Present only `needs_attention` rows as problems** — and only those.
+
+### What this prevents
+
+Without this distinction, every fresh client Claude tends to read pending integrations and unseeded tables as "broken modules" and write up alarming audit reports. They are not broken. They are the **runway** the owner walks down as they bring their own data and integrations into the system.
+
+The BCC is intentionally **80% built and 20% blank at install** — the blanks are where the owner and their Claude collaborate to make this *their* business command center, not a generic template. Frame the customization_pending list as the collaboration ahead, not as a gap list.
+
+### Updating system_status as you go
+
+As components are wired up and verified during onboarding, the owner's Project Claude should:
+
+- Flip `customization_pending` → `operational_green` once the relevant integration / data / decision is in place, AND
+- Stamp `last_verified_at = now()` so the owner can see how recently each component was confirmed working.
+
+Only escalate a row to `needs_attention` after a real test fails. Don't preemptively mark anything as broken.
+
+---
 
 ## Imaginary Farms LLC Context
 
