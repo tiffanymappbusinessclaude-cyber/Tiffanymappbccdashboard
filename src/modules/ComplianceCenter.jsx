@@ -51,16 +51,17 @@ const T = {
 
 // ─── Category Config ──────────────────────────────────────────
 const CATEGORY_CONFIG = {
-  contract:              { label: "Contract Basics",        color: T.navy,   icon: "📜" },
-  advertising:           { label: "Advertising",            color: T.blue,   icon: "📢" },
-  social_media:          { label: "Social Media",           color: T.purple, icon: "📱" },
-  social_media_checklist:{ label: "Pre-Post Checklist",     color: T.teal,   icon: "✅" },
-  trademark:             { label: "Trademark & Brand",      color: T.amber,  icon: "®️" },
-  giveaways:             { label: "Giveaways",              color: T.green,  icon: "🎁" },
-  financial:             { label: "Financial",              color: T.blue,   icon: "💰" },
-  licensing:             { label: "Licensing",              color: T.red,    icon: "🪪" },
-  data_privacy:          { label: "Data Privacy",           color: T.slate700,icon: "🔒" },
-  medicare:              { label: "Medicare",               color: T.red,    icon: "🏥" },
+  contract:              { label: "Contract Basics",        color: T.navy,     icon: "📜" },
+  advertising:           { label: "Advertising",            color: T.blue,     icon: "📢" },
+  language:              { label: "Language & Word Rules",  color: T.slate800, icon: "💬" },
+  social_media:          { label: "Social Media",           color: T.purple,   icon: "📱" },
+  social_media_checklist:{ label: "Pre-Post Checklist",     color: T.teal,     icon: "✅" },
+  trademark:             { label: "Trademark & Brand",      color: T.amber,    icon: "®️" },
+  giveaways:             { label: "Giveaways",              color: T.green,    icon: "🎁" },
+  financial:             { label: "Financial",              color: T.blue,     icon: "💰" },
+  licensing:             { label: "Licensing",              color: T.red,      icon: "🪪" },
+  data_privacy:          { label: "Data Privacy",           color: T.slate700, icon: "🔒" },
+  medicare:              { label: "Medicare",               color: T.red,      icon: "🏥" },
 };
 
 // ─── Mock Data ────────────────────────────────────────────────
@@ -696,23 +697,36 @@ export default function ComplianceCenter() {
 
   // ── Add/Edit Modal State ────────────────────────────────────
   const [showAddRule, setShowAddRule] = useState(false);
-  const [newRule, setNewRule] = useState({title:"", category:"", description:"", severity:"info"});
+  const [newRule, setNewRule] = useState({title:"", category:"", description:"", severity:"info", rule_code:"", requirement:"", source:"", effective_date:""});
+  const [savingRule, setSavingRule] = useState(false);
 
   const saveRule = async () => {
-    if (!newRule.title) return;
+    if (!newRule.title || !newRule.category || savingRule) return;
+    setSavingRule(true);
     try {
-      const { data, error } = await supabase.from("compliance_rules").insert({
-        ...newRule,
-        agency_id: AGENCY_ID,
-        is_active: true,
-      }).select().single();
+      // Coerce empty strings to null so optional columns hold NULL cleanly.
+      const payload = {
+        title:          newRule.title,
+        category:       newRule.category,
+        description:    newRule.description || "",
+        severity:       newRule.severity || "info",
+        rule_code:      newRule.rule_code || null,
+        requirement:    newRule.requirement || null,
+        source:         newRule.source || null,
+        effective_date: newRule.effective_date || null,
+        agency_id:      AGENCY_ID,
+        is_active:      true,
+      };
+      const { data, error } = await supabase.from("compliance_rules").insert(payload).select().single();
       if (error) throw error;
       setRules(prev => [data, ...prev]);
       setShowAddRule(false);
-      setNewRule({title:"", category:"", description:"", severity:"info"});
+      setNewRule({title:"", category:"", description:"", severity:"info", rule_code:"", requirement:"", source:"", effective_date:""});
     } catch (e) {
       console.error("compliance_rules insert error:", e);
       alert("Could not save rule: " + (e?.message || "unknown error"));
+    } finally {
+      setSavingRule(false);
     }
   };
 
@@ -777,22 +791,55 @@ export default function ComplianceCenter() {
         <div style={{background:T.navyLt, border:`1px solid ${T.blue}30`, borderRadius:10, padding:16, marginBottom:16}}>
           <div style={{fontSize:13, fontWeight:700, color:T.navy, marginBottom:12}}>Add Custom Compliance Rule</div>
           <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10}}>
+            {/* Title (full width) */}
             <input placeholder="Rule title *" value={newRule.title} onChange={e=>setNewRule({...newRule,title:e.target.value})}
               style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, gridColumn:"1/-1"}} />
-            <input placeholder="Category (e.g. Social Media)" value={newRule.category} onChange={e=>setNewRule({...newRule,category:e.target.value})}
-              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12}} />
+
+            {/* Category (real DB values) + Severity */}
+            <select value={newRule.category} onChange={e=>setNewRule({...newRule,category:e.target.value})}
+              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, background:T.white}}>
+              <option value="">Category *</option>
+              {Object.entries(CATEGORY_CONFIG)
+                .filter(([k]) => k !== "social_media_checklist")
+                .map(([k, cfg]) => (
+                  <option key={k} value={k}>{cfg.icon} {cfg.label}</option>
+                ))}
+            </select>
             <select value={newRule.severity} onChange={e=>setNewRule({...newRule,severity:e.target.value})}
-              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12}}>
+              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, background:T.white}}>
               <option value="info">Info</option>
               <option value="warning">Warning</option>
               <option value="critical">Critical</option>
             </select>
-            <textarea placeholder="Description / requirement" value={newRule.description} onChange={e=>setNewRule({...newRule,description:e.target.value})}
+
+            {/* Rule code + Source */}
+            <input placeholder="Rule code (e.g. AA05-011)" value={newRule.rule_code} onChange={e=>setNewRule({...newRule,rule_code:e.target.value})}
+              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12}} />
+            <input placeholder="Source (contract clause / regulator)" value={newRule.source} onChange={e=>setNewRule({...newRule,source:e.target.value})}
+              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12}} />
+
+            {/* Effective date */}
+            <div style={{gridColumn:"1/-1"}}>
+              <label style={{fontSize:10, color:T.slate500, fontWeight:600, display:"block", marginBottom:3}}>EFFECTIVE DATE (optional)</label>
+              <input type="date" value={newRule.effective_date} onChange={e=>setNewRule({...newRule,effective_date:e.target.value})}
+                style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, maxWidth:200}} />
+            </div>
+
+            {/* Description */}
+            <textarea placeholder="Description — plain-English explanation of what this rule requires" value={newRule.description} onChange={e=>setNewRule({...newRule,description:e.target.value})}
+              rows={2} style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, gridColumn:"1/-1", resize:"vertical"}} />
+
+            {/* Requirement */}
+            <textarea placeholder="Requirement (specific action or behavior — optional)" value={newRule.requirement} onChange={e=>setNewRule({...newRule,requirement:e.target.value})}
               rows={2} style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, gridColumn:"1/-1", resize:"vertical"}} />
           </div>
-          <div style={{display:"flex", gap:8, justifyContent:"flex-end"}}>
-            <button onClick={()=>setShowAddRule(false)} style={{padding:"6px 14px", fontSize:12, background:T.slate100, color:T.slate700, border:"none", borderRadius:6, cursor:"pointer"}}>Cancel</button>
-            <button onClick={saveRule} style={{padding:"6px 14px", fontSize:12, background:T.navy, color:T.white, border:"none", borderRadius:6, cursor:"pointer", fontWeight:600}}>Save Rule</button>
+          <div style={{display:"flex", gap:8, justifyContent:"flex-end", alignItems:"center"}}>
+            <span style={{fontSize:10, color:T.slate400, marginRight:"auto"}}>Fields marked * are required</span>
+            <button onClick={()=>setShowAddRule(false)} disabled={savingRule} style={{padding:"6px 14px", fontSize:12, background:T.slate100, color:T.slate700, border:"none", borderRadius:6, cursor:savingRule?"not-allowed":"pointer"}}>Cancel</button>
+            <button onClick={saveRule} disabled={savingRule || !newRule.title || !newRule.category}
+              style={{padding:"6px 14px", fontSize:12, background:T.navy, color:T.white, border:"none", borderRadius:6, cursor:(savingRule || !newRule.title || !newRule.category)?"not-allowed":"pointer", fontWeight:600, opacity:(savingRule || !newRule.title || !newRule.category)?0.6:1}}>
+              {savingRule ? "Saving…" : "Save Rule"}
+            </button>
           </div>
         </div>
       )}
