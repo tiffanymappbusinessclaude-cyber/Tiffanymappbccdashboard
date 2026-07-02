@@ -249,8 +249,8 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
       {showScheduler && (
         <Card style={{marginBottom:12, background:"#F8FAFC", border:"1px solid #CBD5E1"}}>
           <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12}}>
-            <span style={{fontSize:13, fontWeight:700, color:"#1E3A5F"}}>📝 Schedule New Post</span>
-            <button onClick={()=>setShowScheduler(false)} style={{fontSize:11, color:"#64748B", background:"none", border:"none", cursor:"pointer", fontWeight:600}}>✕ Cancel</button>
+            <span style={{fontSize:13, fontWeight:700, color:"#1E3A5F"}}>{editingPost ? "✏️ Edit Post" : "📝 Schedule New Post"}</span>
+            <button onClick={()=>{ setShowScheduler(false); setEditingPost(null); }} style={{fontSize:11, color:"#64748B", background:"none", border:"none", cursor:"pointer", fontWeight:600}}>✕ Cancel</button>
           </div>
           <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10}}>
             <div>
@@ -289,27 +289,33 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
             <strong>Reminder:</strong> Customer not client · No "best/expert/specialist/advisor" · No pricing or rate language · No investment/wealth language · No giveaways with chance · English only
           </div>
           <div style={{display:"flex", gap:8, justifyContent:"flex-end"}}>
-            <button onClick={()=>setShowScheduler(false)} style={{padding:"8px 14px", fontSize:12, fontWeight:600, color:"#475569", background:"#fff", border:"1px solid #CBD5E1", borderRadius:6, cursor:"pointer"}}>Cancel</button>
+            <button onClick={()=>{ setShowScheduler(false); setEditingPost(null); }} style={{padding:"8px 14px", fontSize:12, fontWeight:600, color:"#475569", background:"#fff", border:"1px solid #CBD5E1", borderRadius:6, cursor:"pointer"}}>Cancel</button>
             <button
               onClick={async () => {
                 if (!newPost?.caption?.trim() || !newPost?.scheduled_date) {
                   alert("Caption and scheduled date are both required.");
                   return;
                 }
-                await savePost({
+                // If editing an existing post, include its id so the upsert
+                // updates that row instead of inserting a new one. Preserve
+                // its status too, so an "approved" post edited into a fixed
+                // typo doesn't get demoted back to "draft".
+                const payload = {
                   platform: newPost.platform || "facebook",
                   content_type: newPost.content_pillar || "educate",
                   scheduled_date: newPost.scheduled_date,
                   caption: newPost.caption,
-                  status: "draft",
+                  status: editingPost ? (editingPost.status || "draft") : "draft",
                   requires_manual: (newPost.platform === "instagram"),
-                });
+                };
+                if (editingPost?.id) payload.id = editingPost.id;
+                await savePost(payload);
                 setNewPost({platform:"facebook", caption:"", scheduled_date:"", content_pillar:"educate", status:"draft"});
               }}
               disabled={!newPost?.caption?.trim() || !newPost?.scheduled_date}
               style={{padding:"8px 16px", fontSize:12, fontWeight:700, color:"#fff", background: (newPost?.caption?.trim() && newPost?.scheduled_date) ? "#1E3A5F" : "#94A3B8", border:"none", borderRadius:6, cursor: (newPost?.caption?.trim() && newPost?.scheduled_date) ? "pointer" : "not-allowed"}}
             >
-              💾 Save as Draft
+              {editingPost ? "💾 Save Changes" : "💾 Save as Draft"}
             </button>
           </div>
         </Card>
@@ -336,7 +342,20 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
                     ✅ Approve
                   </button>
                 )}
-                <button onClick={()=>setEditingPost(post)} style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:"#DBEAFE",color:"#2563EB",border:"none",borderRadius:5,cursor:"pointer"}}>
+                <button
+                  onClick={()=>{
+                    // Populate the scheduler form from this post's fields, then open it.
+                    setEditingPost(post);
+                    setNewPost({
+                      platform:       post.platform || "facebook",
+                      content_pillar: post.pillar   || "educate",
+                      scheduled_date: post.scheduled_date_raw || "",
+                      caption:        post.caption || "",
+                      status:         post.status  || "draft",
+                    });
+                    setShowScheduler(true);
+                  }}
+                  style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:"#DBEAFE",color:"#2563EB",border:"none",borderRadius:5,cursor:"pointer"}}>
                   ✏️ Edit
                 </button>
               </div>
@@ -858,13 +877,16 @@ export default function SocialMedia() {
           .order("scheduled_date", { ascending: false })
           .limit(60);
 
-        // Normalize rows to match component expectations
+        // Normalize rows to match component expectations. Preserve raw
+        // scheduled_date so the Edit workflow can populate the scheduler
+        // date input (which needs YYYY-MM-DD, not "Jul 15").
         const normalized = (calData || []).map(row => ({
           id:              row.id,
           platform:        row.platform,
           date:            row.scheduled_date
             ? new Date(row.scheduled_date).toLocaleDateString("en-US", { month:"short", day:"numeric" })
             : "",
+          scheduled_date_raw: row.scheduled_date || "",   // for edit-mode repopulation
           time:            row.scheduled_time || "",
           status:          row.status,
           pillar:          row.content_type || "educate",
@@ -907,6 +929,7 @@ export default function SocialMedia() {
         date: data.scheduled_date
           ? new Date(data.scheduled_date).toLocaleDateString("en-US", { month:"short", day:"numeric" })
           : "",
+        scheduled_date_raw: data.scheduled_date || "",   // for edit-mode repopulation
         time: data.scheduled_time || "",
         status: data.status,
         pillar: data.content_type || "educate",
