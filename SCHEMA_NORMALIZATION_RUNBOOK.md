@@ -12,7 +12,7 @@ The web app expects 37 specific tables with specific column names (defined in `0
 ---
 
 ## Step 1 — Run the audit
-Open Supabase Studio for the client, paste `bcc_schema_audit.sql`, run it.
+Open Supabase Studio for the client, paste `tools/schema_audit_query.sql`, run it.
 
 You get back ~40 rows in three sections:
 - **TABLE AUDIT** (37 rows) — one per master table. Status = `ok` / `bridge_needed` / `missing`
@@ -36,7 +36,7 @@ For section 3 missing → run migration 005.
 
 **Also required for every install (Path A and Path B):**
 - `monthly_close_checklist` table missing → run migration 007.
-- `producer_production` table missing OR `agency.smvc_rate_pc` column missing → run migration 010 (Producer ROI infrastructure). The HR & People → Performance tab depends on this. After migration 010, ask the agent for their A005 SMVC rate and update the agency record:
+- `producer_production` table missing OR `agency.smvc_rate_pc` column missing → run migration 010 (Producer ROI infrastructure). The HR & People → Performance tab depends on this. After migration 010, ask the agent for their AA05 SMVC rate and update the agency record:
 ```sql
 UPDATE agency
 SET smvc_rate_pc = 10.00,        -- their actual P&C SMVC rate

@@ -468,7 +468,44 @@ SELECT recipe_name, last_run_at, last_run_status
 FROM public.automation_recipes WHERE id = 'RECIPE_UUID';
 ```
 
-**What success looks like:** `automation_run_log.status = 'success'`, `last_run_status = 'success'`, the agent receives the briefing email (or the recipe's output table has new rows), and `net._http_response.status_code = 200`.
+**What success looks like (all four must hold):**
+
+1. `automation_run_log.status = 'success'` AND `error_message IS NULL`
+2. `automation_recipes.last_run_status = 'success'` (the recipe row's own tracking updated)
+3. `net._http_response.status_code = 200` (the HTTP delivery to the Edge Function succeeded)
+4. **Target table row-count delta is positive** — the recipe actually WROTE data, not just returned success. Status=success with zero records_processed means the recipe ran but had nothing to do, which is a valid outcome for some recipes (Monthly Close Monitor with no gaps to alert on) but a red flag for others (GL Entry Writer with new comp_recap rows should produce journal_entries).
+
+**Step 6b — Target-table verification (required smoke test):**
+
+Before Step 6, snapshot the target table's row count and last-modified stamp:
+
+```sql
+-- BEFORE firing the recipe, snapshot the target:
+SELECT COUNT(*) AS n_before, MAX(created_at) AS latest_before
+FROM public.<TARGET_TABLE>       -- see mapping below
+WHERE agency_id = 'AGENCY_UUID';
+```
+
+After the recipe fires and `automation_run_log.status='success'`, re-run the snapshot query. Expected: `n_after - n_before = records_processed` (or, for idempotent recipes that skip-when-already-done, `n_after >= n_before` and `latest_before < latest_after` on the affected rows).
+
+**Target-table mapping per recipe:**
+
+| Recipe | Target table | Success signal |
+|---|---|---|
+| GL Entry Writer | `journal_entries` (+ `journal_lines`) | new JE rows sourced by `source='gl_entry_writer'` for the run window |
+| Bank GL Writer | `journal_entries` + `bank_transactions.is_posted_to_gl=true` | posted-flag flip AND (for non-skip rules) new JE rows |
+| Credit Card GL Writer | `journal_entries` + `credit_transactions.is_posted_to_gl=true` | same pattern |
+| Payroll GL Writer | `journal_entries` + `payroll_runs.status='posted'` | status flip AND new 3-legged JE per run |
+| Monthly Close Monitor | `alerts` (or the run_log `output_summary` if no gaps) | either alert row(s) or `output_summary` states "no gaps found" |
+| Monthly Close Generator | `monthly_close_checklist` | new pending rows for current period |
+| Producer Underperformance Watcher | `alerts` (or `output_summary` if no underperformers) | same as Monitor |
+| Daily Briefing Email | (email deliverability, not a DB target) | Composio delivery + agent inbox arrival |
+| Bank Statement Processor | `bank_transactions` (imported rows) | new rows matching statement period |
+| SF Daily Comp Processor | `comp_recap` | new rows for the target date |
+| Document Processor | (post-B8b) `documents.parsed_at IS NOT NULL` for processed rows | flag flip |
+| Email Archiver | (post-B8b) `documents` rows with `source='email_archive'` | new rows |
+
+If `status='success'` but the target-table delta is zero AND the recipe SHOULD have processed data (e.g., you just imported a bank statement and fired Bank GL Writer), that's a *silent failure* — the runner reported success but the handler didn't do the work. Common causes: incorrect `settings.gl_cutover_date` blocking all txns, missing chart_of_accounts entries the handler falls through on, or (for GL writers) `bank_account_mapping` rows not wired. Read `output_summary` in `automation_run_log` — the backported handlers all set a descriptive summary explaining why they short-circuited.
 
 **Common Step 6 failures (and what they mean):**
 

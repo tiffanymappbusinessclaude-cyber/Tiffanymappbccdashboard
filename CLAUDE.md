@@ -61,7 +61,7 @@ If `GROQ_API_KEY` is missing when a recipe fires, the runner throws a clear erro
 
 This is the **BCC Web App** — a React/Vite application that gives Imaginary Farms LLC clients 
 a visual command center for their State Farm agency. It reads from their existing Supabase 
-database and displays real agency data across 10 modules.
+database and displays real agency data across 14 modules (ground truth = BCCApp.jsx router).
 
 **Live at:** Each client gets their own Vercel deployment  
 **Master repo:** github.com/cindarellabots-droid/bcc-master-template  
@@ -85,37 +85,12 @@ Every client has ALL of these — the web app is Layer 5, added on top:
 
 ## TWO DEPLOYMENT PROCESSES — KNOW THE DIFFERENCE
 
-### PROCESS A — Existing Client
-Client already has Supabase + Composio set up.
-Adding GitHub + Vercel on top of working system.
+**The install runbook is `HANDOFF_PROMPTS.md`.** Two paths, canonical step-by-step:
 
-**Clients in this category:** Dominique Miles, Sherry Dennard, Alyssa Holloway, 
-Kellie Byers, Shantorra, Jasmine, Marlon, Scott Williams, Keith Thompson, Kenney
+- **Path A — Existing Database:** client's Supabase was built out before this web app existed and already has operational data. Uses bridge views to reconcile schema drift. See `SCHEMA_NORMALIZATION_RUNBOOK.md` for the audit-and-bridge workflow.
+- **Path B — Clean Install:** brand-new empty Supabase. Uses the full migration set (33 numbered migrations + `seed_bcc_automations`), then Composio wiring + Vercel deploy + system prompt install.
 
-**Critical:** Their Supabase schema was built BEFORE this web app existed.
-Table names WILL differ from what this app expects. 
-**Always use bridge views (Option A) — never destroy real data.**
-
-Steps:
-1. RLS preflight check in their Supabase
-2. Push this repo to their GitHub via Composio
-3. Create Vercel account via GitHub login, add env vars
-4. Run migration 005 FIRST (anon RLS policies)
-5. Run migrations 001-004 (safe, IF NOT EXISTS)
-6. Schema gap check — build bridge views for renamed tables
-7. System prompt into Claude.ai with 6 placeholders filled
-8. Verify all 10 modules, schedule training
-
-### PROCESS B — New Client  
-No Supabase yet. Starting completely fresh.
-
-Steps:
-1. Create Supabase project
-2. Run all 5 migrations in order — clean slate
-3. GitHub + Vercel setup
-4. Load system prompt
-5. EmptyState components will show — that is CORRECT, not broken
-6. Client populates data through Claude conversations over time
+Both paths verify all 14 modules at the end and hand off with a training walk-through. Do not paraphrase or reorder those steps here — read the Handoff document directly. It's kept current; this file is intentionally minimal on install mechanics to avoid drift.
 
 ---
 
@@ -130,7 +105,7 @@ VITE_USE_MOCK_DATA=false (production; set to true only for sales demos)
 
 ---
 
-## 11 Modules — All Wired to Supabase
+## 14 Modules — All Wired to Supabase (see BCCApp.jsx for the canonical router)
 
 | Module | Key Tables / Views | Notes |
 |---|---|---|
@@ -360,7 +335,7 @@ Producer is profitable when `total_commission ≥ monthly_loaded_cost`.
 ### Data intake
 
 Three pieces feed this tab:
-1. **`agency.smvc_rate_pc`** and **`agency.blended_rate_other`** — agent's A005 SMVC commission rate. Project Claude asks the agent during install (most agents know their P&C rate; blended is typically 8-10%).
+1. **`agency.smvc_rate_pc`** and **`agency.blended_rate_other`** — agent's AA05 SMVC commission rate. Project Claude asks the agent during install (most agents know their P&C rate; blended is typically 8-10%).
 2. **`agency.lapse_rate_annual`** — optional override. NULL = compute from `comp_recap` (prior-year vs current-year P&C YTD ratio).
 3. **`producer_production`** — monthly issued premium per producer per line of business. Fed by either:
    - Manual entry during onboarding (Project Claude pastes from agent's reports)
@@ -384,23 +359,9 @@ See `docs/PRODUCER_ROI_INSTALL.md` for the install playbook.
 
 ## Migration Files
 
-Run in this order. Every migration is safe on existing databases — they all use `IF NOT EXISTS` or `CREATE OR REPLACE`.
+**The canonical full migration list is in `HANDOFF_PROMPTS.md` Option B, Step 2** — a table of all 33 numbered migrations plus `seed_bcc_automations.sql`, with Path A vs Path B applicability marked per migration, plus explanation of numbering gaps (009, 014, 030–044, 049 were reserved during development; 014 is now used by the `missing_internal_handlers` back-port from 2026-07-02).
 
-| File | Purpose | Path A (existing DB) | Path B (clean install) |
-|---|---|---|---|
-| 001_bcc_master_schema.sql | 37 core tables | Yes — IF NOT EXISTS safe | Yes |
-| 002_seed_compliance_rules.sql | 57 SF compliance rules | Check if empty first | Yes |
-| 003_seed_chart_of_accounts.sql | Full COA | Check if empty first | Yes |
-| 004_seed_agency_record.sql | Agency placeholder | Update with real data after | Yes |
-| 005_anon_read_policies.sql | Anon read access | **YES — ALWAYS, run this FIRST** | Yes |
-| 006_derived_financial_views.sql | v_income_statement, v_balance_sheet | Yes — required | Yes |
-| 007_monthly_close_checklist.sql | Monthly close checklist infra | Yes | Yes |
-| 008_bridge_generator.sql | `bcc_generate_bridges()` function | **YES — Path A only** | Skip |
-| 010_producer_roi_infrastructure.sql | Producer ROI feature: SMVC/blended/lapse columns on agency, producer_production table | **YES — required for Performance tab** | Yes |
-| 011_automation_runner.sql | `run_due_automation_recipes()` and `run_automation_recipe(uuid)` — the engine that drives Layer 4. Pairs with the `automation-runner` Edge Function. Adds `get_setting()` helper. Enables `pg_net` extension. | **YES — required for any automation to run** | Yes |
-| 012_internal_recipe_handlers.sql | Three SQL functions that the runner dispatches to when `composio_action='INTERNAL'`: `gl_entry_writer` (turns comp_recap into journal_lines, drives P&L), `monthly_close_monitor`, `producer_underperformance_watcher`. Plus `run_internal_recipe()` dispatcher. Adds `automation_recipes.internal_handler` column and `comp_recap.posted_at` column. | **YES — required, or recipes #8/#11/#12 fail every time** | Yes |
-
-**Note:** There is no `009_*` migration — that number was reserved for a SQL diagnostic query that's now in `tools/schema_audit_query.sql` (it's not DDL, doesn't belong in `migrations/`).
+Every migration is safe on existing databases — all use `IF NOT EXISTS` or `CREATE OR REPLACE`. The `pg_net` extension is not pre-enabled on a fresh Supabase project; migration 011 has `CREATE EXTENSION IF NOT EXISTS pg_net;` at the top, but if RLS blocks that the project owner must enable `pg_cron` and `pg_net` in Supabase Studio → Database → Extensions before 011 will succeed (detection SQL is in the HANDOFF playbook).
 
 **Diagnostic queries** (not migrations, but useful during install):
 - `tools/schema_audit_query.sql` — Path A schema audit. Returns table/view/anon-grant status. Run in Studio, read results, decide what migrations or bridges are needed.
@@ -410,28 +371,6 @@ Run in this order. Every migration is safe on existing databases — they all us
 
 
 ---
-
-## Ambassador vs Channel Partner — KNOW THE DIFFERENCE
-
-| Role | Person | Commission | On What |
-|---|---|---|---|
-| **Ambassador Partner** | Alyssa Holloway | 20% of ALL IF setup fees | Every client, every payment, regardless of referral source |
-| **Channel Partner** | Kellie Byers, Kim Yow | Commission on THEIR referrals only | Only clients they personally referred. Kellie has signed agreement, commissions tracked, money owed. |
-
-**Alyssa's commission is non-negotiable, permanent, and private.**  
-It NEVER appears in Channel Partner agreements or client-facing documents.  
-Alyssa and Kellie are also IF's founding clients (#1 and #2) and active State Farm agents.
-
-## Client Queue (as of April 29, 2026)
-
-| Client | Status | Notes |
-|---|---|---|
-| Dominique Miles | App live, training TBD | Her Claude fixing final issues |
-| **Alyssa Holloway** | **NEXT — Friday deadline** | Channel Partner, existing setup |
-| **Kellie Byers** | **Friday deadline** | Channel Partner, existing setup |
-| Sherry Dennard | training_scheduled | Paid $1,995, next after Alyssa/Kellie |
-| Scott Williams | queue | After Sherry |
-| Keith Thompson | queue | After Scott |
 
 ---
 
@@ -548,19 +487,17 @@ Only escalate a row to `needs_attention` after a real test fails. Don't preempti
 
 ## Imaginary Farms LLC Context
 
-- Rebecca Coelho is the operator/co-founder
-- Matthew Cooper is the owner of record (non-compete + estate planning)
-- Primary market: State Farm insurance agents
-- Product: BCC (Business Command Center) — setup fee $2,995 + $1,497.50 additional
-- Alyssa Holloway is Ambassador Partner — always receives 20% of ALL IF setup fees paid, regardless of referral source. NON-NEGOTIABLE and PRIVATE.
-- Commission structure is PRIVATE — never appears in external docs
+- Rebecca Coelho is the operator/co-founder; **do NOT reference her as owner** in external comms.
+- Matthew Cooper is the owner of record (non-compete + estate planning). Signs all client agreements as Managing Member.
+- Primary market: State Farm insurance agents (exclusive).
+- Product: BCC (Business Command Center) — see `imaginary-farms.com` for public-facing pricing and structure. Internal-only details (setup fee amounts, partner commission structures, Ambassador overrides) live in the IF ops Supabase project (`olxgwlevvjvebgecqhru`) `agent_memory` operational_rules and are not shipped in this repo.
 
-*Last updated: May 7, 2026 by Main Claude — Producer ROI feature shipped (HR & People → Performance tab) + ErrorBoundary across all modules + self-heal model in Settings → About + AIPP derived from producer_production. Master repo updated with: docs/PROJECT_CLAUDE_SYSTEM_PROMPT_TEMPLATE.md (the canonical Project Claude system prompt with placeholders), docs/AUTOMATIONS_INSTALL.md (recipes live in Supabase architecture, 14 standard recipes), docs/PRODUCER_ROI_INSTALL.md (Performance tab onboarding), docs/SELF_HEAL_GUIDE.md (Layer 1 vs Layer 2 connector model). Migration numbering cleaned up (no duplicate 008). 3 new hard-learned lessons logged.*
+*Last updated: 2026-07-02 by Main Claude — Stage 1+2+B8a+Stage 3 of the install-journey completeness audit landed. LLM policy now consistently reflects the direct Groq / Edge Function secret pattern (commit ba0fb6f9). Full migration list authoritatively lives in HANDOFF_PROMPTS.md (commit 431652e0). Migration 014 back-ported 4 previously-undefined internal handlers plus their prerequisites from Kwame Tyler's fork (commit 9ff5c295). Module count reconciled to 14 across all docs to match BCCApp.jsx router. Client-name references and confidential pricing/commission details removed from this file per Lens B of the audit.*
 
 
 ---
 
-## Known Schema Variant — chart_of_accounts (discovered Kellie Byers install, April 29 2026)
+## Known Schema Variant — chart_of_accounts (legacy layout, discovered during a Path A install)
 
 Some existing BCC clients have a legacy `chart_of_accounts` table with:
 - Integer PK (not UUID)
@@ -587,14 +524,14 @@ Add this to the schema gap check in Step 6 of Process A installs.
 
 ---
 
-## Known Issue — Vercel Hobby Plan Deploy Blocking (discovered Alyssa Holloway install, April 29 2026)
+## Known Issue — Vercel Hobby Plan Deploy Blocking (discovered during a Path A install)
 
 **Problem:** Vercel Hobby plan blocks deployments from commits authored by collaborators (e.g. cindarellabots-droid). Only the repo OWNER can trigger auto-deploys on Hobby plan.
 
 **Symptom:** Vercel shows "Deployment was blocked because the commit author does not have contributing access to the project."
 
 **Fix — Add to Step 2 of every Process A/B install:**
-After Rebecca's Claude pushes the 29 files, instruct the client's Claude or repo owner to make one dummy commit directly in the GitHub web UI:
+After Rebecca's Claude pushes the repo contents, instruct the client's Claude or repo owner to make one dummy commit directly in the GitHub web UI:
 1. Go to the client's GitHub repo
 2. Open any file (e.g. README.md) → click pencil icon
 3. Don't change anything → click "Commit changes"

@@ -46,12 +46,14 @@ If `GROQ_API_KEY` is missing when a recipe fires, the runner throws a clear erro
 
 | You are... | Read first |
 |---|---|
+| **A fresh setup Claude driving a full install from cold-start** | `PRODUCT_VISION.md` (mental model + definition of done) → `CLAUDE.md` (behavior rules + hard-learned bugs) → `HANDOFF_PROMPTS.md` (Path A vs Path B step-by-step). Read in that order. |
 | The client's Project Claude, just opened this repo | `CLAUDE.md` (full briefing). Then `HANDOFF_PROMPTS.md` for Path A vs Path B install. |
 | The operator pushing this template to a new client's GitHub | `HANDOFF_PROMPTS.md` — copy the appropriate handoff prompt and paste into the client's Project Claude. |
-| Reviewing the install architecture | `CLAUDE.md` + `docs/AUTOMATIONS_INSTALL.md` + `docs/DOCUMENT_IMPORTER_GUIDE.md` |
+| Reviewing the install architecture | `PRODUCT_VISION.md` + `CLAUDE.md` + `docs/AUTOMATIONS_INSTALL.md` + `docs/DOCUMENT_IMPORTER_GUIDE.md` |
 
 ## Key docs
 
+- `PRODUCT_VISION.md` — engineering-side product spec (mental model, 6 core principles, definition-of-done, anti-patterns to catch). Read this before making any agent-facing decisions.
 - `CLAUDE.md` — read-first briefing, env vars, smoke test, hard-learned bugs from prior installs
 - `HANDOFF_PROMPTS.md` — Path A (existing-DB) vs Path B (clean install) prompts
 - `docs/AUTOMATIONS_INSTALL.md` — 12 canonical automation recipes + runner setup + smoke test
