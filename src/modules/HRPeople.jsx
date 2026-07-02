@@ -314,14 +314,26 @@ const StageBadge = ({ status }) => {
 const HROverview = ({ applicants, staff, onboarding, onAdd = () => {} }) => {
   const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2"});
+  const [newEmployee, setNewEmployee] = useState({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2", licensed:null, license_states:"", compliance_flag:""});
 
   const saveEmployee = async () => {
     if (!newEmployee.first_name || !newEmployee.last_name || saving) return;
     setSaving(true);
     try {
-      // Coerce empty date string to null (staff.start_date is a date column)
-      const payload = { ...newEmployee, agency_id: AGENCY_ID, is_active: true };
+      // Coerce empty/optional strings to appropriate types for the DB:
+      //   - start_date empty → drop (date column can't accept "")
+      //   - license_states CSV → text[] array (empty string → null)
+      //   - compliance_flag "" → null
+      //   - licensed can be true / false / null (unknown)
+      const stateArr = String(newEmployee.license_states || "")
+        .split(",").map(s => s.trim()).filter(Boolean);
+      const payload = {
+        ...newEmployee,
+        agency_id: AGENCY_ID,
+        is_active: true,
+        license_states:  stateArr.length ? stateArr : null,
+        compliance_flag: (newEmployee.compliance_flag || "").trim() || null,
+      };
       if (!payload.start_date) delete payload.start_date;
       const { data, error } = await supabase
         .from("staff")
@@ -331,7 +343,7 @@ const HROverview = ({ applicants, staff, onboarding, onAdd = () => {} }) => {
       if (error) throw error;
       onAdd(data);
       setShowAddEmployee(false);
-      setNewEmployee({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2"});
+      setNewEmployee({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2", licensed:null, license_states:"", compliance_flag:""});
     } catch (e) {
       console.error("staff insert error:", e);
       alert("Could not save employee: " + (e?.message || "unknown error"));
@@ -345,9 +357,10 @@ const HROverview = ({ applicants, staff, onboarding, onAdd = () => {} }) => {
   const inInterview = applicants.filter(a => a.status === "interview").length;
   const inOffer     = applicants.filter(a => a.status === "offer").length;
   const activeStaff = staff.filter(s => s.is_active).length;
-  // The staff table doesn't currently track a compliance_flag column, so surface
-  // a data-hygiene metric instead: active staff missing email or phone. Actionable
-  // and truthful. Log a follow-up to add real licensing/compliance columns.
+  // Real licensing/compliance signals from the staff table.
+  const unlicensedActive     = staff.filter(s => s.is_active && s.licensed === false).length;
+  const complianceFlagsActive = staff.filter(s => s.is_active && s.compliance_flag).length;
+  // Data-hygiene metric: active staff missing email or phone (still useful).
   const missingContact = staff.filter(s => s.is_active && (!s.email || !s.phone)).length;
 
   return (
@@ -360,6 +373,7 @@ const HROverview = ({ applicants, staff, onboarding, onAdd = () => {} }) => {
           { label:"In Interviews",     value:inInterview,     color:T.purple,border:T.purple },
           { label:"Offers Pending",    value:inOffer,         color:T.green, border:T.green },
           { label:"Active Staff",      value:activeStaff,     color:T.navy,  border:T.navy  },
+          { label:"Compliance Flags",  value:complianceFlagsActive + unlicensedActive, color:(complianceFlagsActive+unlicensedActive)>0?T.red:T.green, border:(complianceFlagsActive+unlicensedActive)>0?T.red:T.green },
           { label:"Missing Contact",   value:missingContact,  color:missingContact>0?T.amber:T.green, border:missingContact>0?T.amber:T.green },
         ].map((k,i) => (
           <div key={i} style={{ background:T.white, border:`1px solid ${T.slate200}`, borderTop:`3px solid ${k.border}`, borderRadius:12, padding:"14px 16px" }}>
@@ -399,6 +413,17 @@ const HROverview = ({ applicants, staff, onboarding, onAdd = () => {} }) => {
               <option value="1099">1099 Contractor</option>
               <option value="family">Family Employee (W-2)</option>
             </select>
+            {/* Licensing */}
+            <select value={newEmployee.licensed === null ? "" : String(newEmployee.licensed)} onChange={e=>setNewEmployee({...newEmployee, licensed: e.target.value === "" ? null : e.target.value === "true"})} style={{padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:12,background:"#fff"}}>
+              <option value="">License status — not tracked</option>
+              <option value="true">Licensed — active</option>
+              <option value="false">Unlicensed — cannot quote / bind / solicit</option>
+            </select>
+            <input placeholder="Licensed states (comma-separated, e.g. FL, GA)" value={newEmployee.license_states} onChange={e=>setNewEmployee({...newEmployee,license_states:e.target.value})} style={{padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:12}} />
+          </div>
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:10, fontWeight:700, color:"#475569", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:0.4}}>Compliance flag (optional)</label>
+            <input placeholder='e.g. "License renewal due Sep 2026", "E&O gap"' value={newEmployee.compliance_flag} onChange={e=>setNewEmployee({...newEmployee,compliance_flag:e.target.value})} style={{width:"100%", padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:12,boxSizing:"border-box"}} />
           </div>
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <button onClick={()=>setShowAddEmployee(false)} style={{padding:"6px 14px",fontSize:12,background:"#F1F5F9",color:"#334155",border:"none",borderRadius:6,cursor:"pointer"}}>Cancel</button>
