@@ -311,7 +311,7 @@ const StageBadge = ({ status }) => {
 };
 
 // ─── Section: Overview ────────────────────────────────────────
-const HROverview = ({ applicants, staff, onboarding, onAdd = () => {} }) => {
+const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = () => {} }) => {
   const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newEmployee, setNewEmployee] = useState({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2", licensed:null, license_states:"", compliance_flag:""});
@@ -383,13 +383,33 @@ const HROverview = ({ applicants, staff, onboarding, onAdd = () => {} }) => {
         ))}
       </div>
 
-      {/* Compliance reminder */}
-      <div style={{ background:T.amberLt, border:`1px solid #FCD34D`, borderLeft:`4px solid ${T.amber}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
-        <div style={{ fontSize:12, fontWeight:700, color:"#92400E", marginBottom:4 }}>⚠ AA05 Section I.P — Agent is liable for all staff activities</div>
-        <div style={{ fontSize:11, color:"#92400E", lineHeight:1.6 }}>
-          You are contractually responsible for every action your staff takes on behalf of the agency. All staff performing licensed activities must hold active licenses. Unlicensed staff may not quote, bind, or solicit. Tyler Smith (family employee) requires W-2 at year-end — review with Steven Bonventre at Club Capital Tax.
-        </div>
-      </div>
+      {/* Compliance reminder — banner text is composed from live data:
+          family employees pulled from `staff.employment_type === "family"`,
+          CPA contact pulled from persistent_memory key_contacts. */}
+      {(() => {
+        const familyNames = staff
+          .filter(s => s.is_active && s.employment_type === "family")
+          .map(s => [s.first_name, s.last_name].filter(Boolean).join(" ").trim())
+          .filter(Boolean);
+        const cpaFragment = cpaContact ? ` — review with ${cpaContact}` : " — review with your CPA";
+        return (
+          <div style={{ background:T.amberLt, border:`1px solid #FCD34D`, borderLeft:`4px solid ${T.amber}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+            <div style={{ fontSize:12, fontWeight:700, color:"#92400E", marginBottom:4 }}>⚠ AA05 Section I.P — Agent is liable for all staff activities</div>
+            <div style={{ fontSize:11, color:"#92400E", lineHeight:1.6 }}>
+              You are contractually responsible for every action your staff takes on behalf of the agency. All staff performing licensed activities must hold active licenses. Unlicensed staff may not quote, bind, or solicit.
+              {familyNames.length > 0 && (
+                <>
+                  {" "}
+                  {familyNames.length === 1
+                    ? `${familyNames[0]} (family employee) requires`
+                    : `${familyNames.join(", ")} (family employees) require`}
+                  {" "}W-2 at year-end{cpaFragment}.
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:12 }}>
         {/* Active Pipeline */}
@@ -1182,6 +1202,10 @@ export default function HRPeople() {
   const onboarding  = [];
   const commissions = [];
 
+  // CPA contact display string, sourced from persistent_memory. Rendered in the
+  // AA05 banner beside the family-employee W-2 reminder. null while unknown.
+  const [cpaContact, setCpaContact] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -1198,6 +1222,24 @@ export default function HRPeople() {
         if (!cancelled) console.error("HR staff load error:", e);
       } finally {
         if (!cancelled) setStaffLoading(false);
+      }
+
+      // Look for a CPA / accountant entry in persistent_memory key_contacts.
+      // Title convention: "Firstname Lastname — Firm Name (CPA)" or similar.
+      try {
+        const { data: mem } = await supabase
+          .from("persistent_memory")
+          .select("title")
+          .eq("agency_id", AGENCY_ID)
+          .eq("category", "key_contacts")
+          .or("title.ilike.%CPA%,title.ilike.%accountant%,content.ilike.%CPA%,content.ilike.%accountant%")
+          .limit(1);
+        if (!cancelled && Array.isArray(mem) && mem.length > 0 && mem[0]?.title) {
+          setCpaContact(mem[0].title);
+        }
+      } catch (e) {
+        // Non-fatal; banner falls back to generic "your CPA".
+        if (!cancelled) console.debug("CPA contact lookup skipped:", e?.message);
       }
     })();
     return () => { cancelled = true; };
@@ -1242,7 +1284,7 @@ export default function HRPeople() {
       </div>
 
       {/* Section Content */}
-      {section === "overview"    && <HROverview        applicants={applicants} staff={staff} onboarding={onboarding} onAdd={(row) => setStaff(prev => [row, ...prev].sort((a,b) => (a.last_name||"").localeCompare(b.last_name||"")))} />}
+      {section === "overview"    && <HROverview        applicants={applicants} staff={staff} onboarding={onboarding} cpaContact={cpaContact} onAdd={(row) => setStaff(prev => [row, ...prev].sort((a,b) => (a.last_name||"").localeCompare(b.last_name||"")))} />}
       {section === "recruiting"  && <RecruitingPipeline applicants={applicants} onUpdate={updateApplicantStage} />}
       {section === "staff"       && <StaffDirectory     staff={staff} loading={staffLoading} />}
       {section === "onboarding"  && <OnboardingSection  onboarding={onboarding} />}
