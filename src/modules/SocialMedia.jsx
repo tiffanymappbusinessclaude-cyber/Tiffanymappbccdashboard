@@ -176,6 +176,85 @@ const StatBar = ({ value, max, color }) => (
   </div>
 );
 
+// ─── Aggregator ───────────────────────────────────────────────
+// aggregateSocialAnalytics turns raw social_analytics rows (one per post
+// per day) into the { this_week, last_week, by_platform, by_pillar } shape
+// both SocialOverview and Analytics render. Pure function — safe to call in
+// the load effect once and pass the result through props.
+//
+// Inputs:
+//   rows            — array of social_analytics rows (may be [])
+//   contentMap      — Map<content_calendar_id, {caption, pillar}> from posts
+//   oneWeekAgoISO   — 'YYYY-MM-DD' inclusive boundary for this_week
+//   twoWeeksAgoISO  — 'YYYY-MM-DD' inclusive boundary for last_week
+//
+// Rows with post_date >= oneWeekAgoISO count as this_week.
+// Rows with twoWeeksAgoISO <= post_date < oneWeekAgoISO count as last_week.
+export function aggregateSocialAnalytics(rows, contentMap, oneWeekAgoISO, twoWeeksAgoISO) {
+  const zero = () => ({ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 });
+  const this_week = zero();
+  const last_week = zero();
+  const thisWeekRows = [];
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const map = contentMap instanceof Map ? contentMap : new Map();
+
+  for (const r of safeRows) {
+    const d = r?.post_date;
+    if (!d) continue;
+    const reach    = Number(r.reach)    || 0;
+    const likes    = Number(r.likes)    || 0;
+    const comments = Number(r.comments) || 0;
+    const shares   = Number(r.shares)   || 0;
+    if (d >= oneWeekAgoISO) {
+      this_week.total_posts++;
+      this_week.total_reach    += reach;
+      this_week.total_likes    += likes;
+      this_week.total_comments += comments;
+      this_week.total_shares   += shares;
+      thisWeekRows.push(r);
+    } else if (d >= twoWeeksAgoISO) {
+      last_week.total_posts++;
+      last_week.total_reach    += reach;
+      last_week.total_likes    += likes;
+      last_week.total_comments += comments;
+      last_week.total_shares   += shares;
+    }
+  }
+
+  // by_platform (this-week metrics + best-reach post's caption)
+  const platMap = new Map();
+  const pillarMap = new Map();
+  for (const r of thisWeekRows) {
+    const plat = r.platform || "unknown";
+    const cur = platMap.get(plat) || { platform:plat, posts:0, reach:0, likes:0, comments:0, shares:0, _bestReach:-1, best_post:"—" };
+    cur.posts++;
+    cur.reach    += Number(r.reach)    || 0;
+    cur.likes    += Number(r.likes)    || 0;
+    cur.comments += Number(r.comments) || 0;
+    cur.shares   += Number(r.shares)   || 0;
+    const meta = map.get(r.content_calendar_id) || {};
+    if ((Number(r.reach) || 0) > cur._bestReach) {
+      cur._bestReach = Number(r.reach) || 0;
+      cur.best_post = (meta.caption || "").slice(0, 80) || "—";
+    }
+    platMap.set(plat, cur);
+
+    // by_pillar (needs the content_calendar join)
+    const pillar = meta.pillar || "other";
+    const pcur = pillarMap.get(pillar) || { pillar, posts:0, reach:0, likes:0, comments:0, shares:0 };
+    pcur.posts++;
+    pcur.reach    += Number(r.reach)    || 0;
+    pcur.likes    += Number(r.likes)    || 0;
+    pcur.comments += Number(r.comments) || 0;
+    pcur.shares   += Number(r.shares)   || 0;
+    pillarMap.set(pillar, pcur);
+  }
+  const by_platform = Array.from(platMap.values()).map(({_bestReach, ...rest}) => rest);
+  const by_pillar   = Array.from(pillarMap.values());
+
+  return { this_week, last_week, by_platform, by_pillar };
+}
+
 // ─── Section: Overview ────────────────────────────────────────
 const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowScheduler, newPost, setNewPost, savePost, editingPost, setEditingPost, approvePost }) => {
   // Loading state
@@ -191,10 +270,10 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
   const failedRecent = safePosts.filter(p => p.status === "failed").length;
   const manualNeeded = safePosts.filter(p => p.status === "scheduled" && p.requires_manual).length;
 
-  // Safe analytics — falls back to zeros when no aggregated data yet.
-  // The `analytics` prop may currently hold a raw social_analytics row (per-post metrics)
-  // instead of an aggregate; the this_week/last_week/by_platform shape is not yet built
-  // client-side. Guard both shapes so the UI never crashes on unexpected data.
+  // The `analytics` prop is the aggregate shape produced by
+  // aggregateSocialAnalytics in the load effect: { this_week, last_week,
+  // by_platform, by_pillar }. emptyAgg below is a safety net for the
+  // transitional null-while-loading case.
   const emptyAgg = { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, by_platform:[], by_pillar:[] };
   const ana = (analytics && analytics.this_week && analytics.last_week) ? analytics : emptyAgg;
   const weekChange = {
@@ -554,10 +633,8 @@ const Analytics = ({ analytics, posts, loading }) => {
     <div style={{ textAlign:"center", padding:48, color:T.slate400, fontSize:13 }}>Loading analytics…</div>
   );
 
-  // If no aggregated analytics data yet, show empty state.
-  // Same shape-guard as Overview — the load currently sets analytics from a single
-  // raw social_analytics row; the aggregation into this_week/last_week/by_platform
-  // is a pending follow-up. Guard defensively.
+  // analytics is the aggregate shape from aggregateSocialAnalytics.
+  // Same emptyAgg safety net as Overview for the null-while-loading case.
   const emptyAgg = { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, by_platform:[], by_pillar:[] };
   const ana = (analytics && analytics.this_week && analytics.last_week) ? analytics : emptyAgg;
   const safePosts = Array.isArray(posts) ? posts : [];
@@ -613,7 +690,7 @@ const Analytics = ({ analytics, posts, loading }) => {
               <tr key={i} style={{ borderBottom:`1px solid ${T.slate100}` }}>
                 <td style={{ padding:"10px 8px" }}><PlatformBadge platform={p.platform} /></td>
                 <td style={{ padding:"10px 8px", fontSize:12, fontWeight:600, color:T.slate900, textAlign:"right" }}>{p.posts}</td>
-                <td style={{ padding:"10px 8px", fontSize:12, color:T.slate700, textAlign:"right" }}>{p.reach.toLocaleString()}</td>
+                <td style={{ padding:"10px 8px", fontSize:12, color:T.slate700, textAlign:"right" }}>{(p.reach||0).toLocaleString()}</td>
                 <td style={{ padding:"10px 8px", fontSize:12, color:T.slate700, textAlign:"right" }}>{p.likes}</td>
                 <td style={{ padding:"10px 8px", fontSize:12, color:T.slate700, textAlign:"right" }}>{p.comments}</td>
                 <td style={{ padding:"10px 8px", fontSize:12, color:T.slate700, textAlign:"right" }}>{p.shares}</td>
@@ -896,15 +973,25 @@ export default function SocialMedia() {
         }));
         setPosts(normalized);
 
-        // Load analytics if table exists (graceful — table may be empty)
+        // Load 14 days of social_analytics rows and aggregate client-side
+        // into the shape the render components read. Empty result produces
+        // an aggregate of zeros — the components render gracefully.
+        const today = new Date();
+        const oneWeekAgoISO  = new Date(today.getTime() -  7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const twoWeeksAgoISO = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
         const { data: anaData } = await supabase
           .from("social_analytics")
           .select("*")
           .eq("agency_id", AGENCY_ID)
-          .order("created_at", { ascending: false })
-          .limit(1);
+          .gte("post_date", twoWeeksAgoISO)
+          .order("post_date", { ascending: false });
 
-        setAnalytics((anaData && anaData.length > 0) ? anaData[0] : null);
+        // content_calendar_id → { caption, pillar } for best_post + by_pillar lookup.
+        const contentMap = new Map(
+          (calData || []).map(row => [row.id, { caption: row.caption || "", pillar: row.content_type || "other" }])
+        );
+
+        setAnalytics(aggregateSocialAnalytics(anaData || [], contentMap, oneWeekAgoISO, twoWeeksAgoISO));
       } catch (err) {
         console.error("Social data load error:", err);
       } finally {
