@@ -608,7 +608,7 @@ const ProgressBar = ({ value, max, color = T.blue, height = 8 }) => {
 };
 
 // ─── Section: Overview ───────────────────────────────────────
-const OverviewSection = ({ period, setPeriod, data }) => {
+const OverviewSection = ({ data }) => {
   const d = data?.summary || {};
   const yoyR = (d.yoyRevenuePct != null) ? d.yoyRevenuePct : null;
   const yoyN = (d.yoyNetPct != null) ? d.yoyNetPct : null;
@@ -617,9 +617,10 @@ const OverviewSection = ({ period, setPeriod, data }) => {
   const asOf = data?.asOfLabel || "Year to date";
   const trend = (p) => (p == null) ? "" : `${p >= 0 ? "↑" : "↓"} ${Math.abs(p).toFixed(1)}%`;
 
-  // 2026 cpa_pnl_monthly is YTD-only, so MTD/QTD tabs aren't accurate for expenses.
-  // Show YTD as primary; keep period tabs for future when monthly breakouts arrive.
-  const periodIsYTD = true;  // forced until monthly current-year P&L lands
+  // Overview is YTD-only. cpa_pnl_monthly for the current year currently
+  // reports YTD figures rather than true monthly breakouts, so period toggles
+  // wouldn't be accurate for expenses. When monthly breakouts land, add a
+  // period tab bar here (state can live in the parent) and wire the ratios.
   const incomeBreakdown = Array.isArray(data?.pl?.income) ? data.pl.income : [];
 
   return (
@@ -1223,7 +1224,6 @@ const ReconciliationSection = ({ data }) => {
 // ─── Main Financials Module ───────────────────────────────────
 export default function Financials() {
   const [section, setSection] = useState("overview");
-  const [period, setPeriod] = useState("mtd");
   const { data: liveData, loading } = useFinancialsData();
 
   const sections = [
@@ -1271,7 +1271,7 @@ export default function Financials() {
       </div>
 
       {/* Section Content */}
-      {section === "overview" && <OverviewSection period={period} setPeriod={setPeriod} data={liveData || EMPTY_DATA} />}
+      {section === "overview" && <OverviewSection data={liveData || EMPTY_DATA} />}
       {section === "pl"       && <PLSection data={liveData || EMPTY_DATA} />}
       {section === "comp"     && <CompRecapSection data={liveData || EMPTY_DATA} />}
       {section === "aipp"     && <AIPPSection data={liveData || EMPTY_DATA} />}
