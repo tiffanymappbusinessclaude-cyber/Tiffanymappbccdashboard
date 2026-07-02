@@ -313,8 +313,34 @@ const StageBadge = ({ status }) => {
 // ─── Section: Overview ────────────────────────────────────────
 const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = () => {} }) => {
   const [showAddEmployee, setShowAddEmployee] = useState(false);
+  const [editingStaff, setEditingStaff] = useState(null);  // null = adding, non-null = editing that row
   const [saving, setSaving] = useState(false);
   const [newEmployee, setNewEmployee] = useState({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2", licensed:null, license_states:"", compliance_flag:""});
+
+  // Helper: reset form + close panel + clear edit target
+  const closeForm = () => {
+    setShowAddEmployee(false);
+    setEditingStaff(null);
+    setNewEmployee({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2", licensed:null, license_states:"", compliance_flag:""});
+  };
+
+  // Helper: open the Add/Edit form pre-populated from an existing staff row
+  const startEdit = (member) => {
+    setEditingStaff(member);
+    setNewEmployee({
+      first_name:      member.first_name || "",
+      last_name:       member.last_name  || "",
+      role:            member.role || "",
+      email:           member.email || "",
+      phone:           member.phone || "",
+      start_date:      member.start_date || "",
+      employment_type: member.employment_type || "w2",
+      licensed:        member.licensed == null ? null : Boolean(member.licensed),
+      license_states:  Array.isArray(member.license_states) ? member.license_states.join(", ") : "",
+      compliance_flag: member.compliance_flag || "",
+    });
+    setShowAddEmployee(true);
+  };
 
   const saveEmployee = async () => {
     if (!newEmployee.first_name || !newEmployee.last_name || saving) return;
@@ -327,25 +353,40 @@ const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = 
       //   - licensed can be true / false / null (unknown)
       const stateArr = String(newEmployee.license_states || "")
         .split(",").map(s => s.trim()).filter(Boolean);
-      const payload = {
+      const basePayload = {
         ...newEmployee,
         agency_id: AGENCY_ID,
-        is_active: true,
         license_states:  stateArr.length ? stateArr : null,
         compliance_flag: (newEmployee.compliance_flag || "").trim() || null,
       };
-      if (!payload.start_date) delete payload.start_date;
-      const { data, error } = await supabase
-        .from("staff")
-        .insert(payload)
-        .select()
-        .single();
+      if (!basePayload.start_date) delete basePayload.start_date;
+
+      let data, error;
+      if (editingStaff?.id) {
+        // Edit branch — UPDATE that row by id. Do not touch is_active on
+        // edit (an already-inactive staff being edited stays inactive).
+        ({ data, error } = await supabase
+          .from("staff")
+          .update(basePayload)
+          .eq("id", editingStaff.id)
+          .eq("agency_id", AGENCY_ID)
+          .select()
+          .single());
+      } else {
+        // Add branch — INSERT + default to active.
+        ({ data, error } = await supabase
+          .from("staff")
+          .insert({ ...basePayload, is_active: true })
+          .select()
+          .single());
+      }
       if (error) throw error;
+      // Notify parent of the change so its `staff` state can reflect it.
+      // The parent's onAdd handler replaces-or-prepends by id.
       onAdd(data);
-      setShowAddEmployee(false);
-      setNewEmployee({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2", licensed:null, license_states:"", compliance_flag:""});
+      closeForm();
     } catch (e) {
-      console.error("staff insert error:", e);
+      console.error("staff " + (editingStaff ? "update" : "insert") + " error:", e);
       alert("Could not save employee: " + (e?.message || "unknown error"));
     } finally {
       setSaving(false);
@@ -415,12 +456,14 @@ const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = 
         {/* Active Pipeline */}
         
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
-        <button onClick={()=>setShowAddEmployee(s=>!s)} style={{padding:"8px 16px",fontSize:12,fontWeight:600,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>➕ Add Employee</button>
+        <button onClick={() => showAddEmployee ? closeForm() : setShowAddEmployee(true)} style={{padding:"8px 16px",fontSize:12,fontWeight:600,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>➕ Add Employee</button>
       </div>
 
       {showAddEmployee && (
         <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:10,padding:16,marginBottom:16}}>
-          <div style={{fontSize:13,fontWeight:700,color:"#1E3A5F",marginBottom:12}}>Add New Employee</div>
+          <div style={{fontSize:13,fontWeight:700,color:"#1E3A5F",marginBottom:12}}>
+            {editingStaff ? `Edit ${editingStaff.first_name} ${editingStaff.last_name}` : "Add New Employee"}
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
             <input placeholder="First name *" value={newEmployee.first_name} onChange={e=>setNewEmployee({...newEmployee,first_name:e.target.value})} style={{padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:12}} />
             <input placeholder="Last name *" value={newEmployee.last_name} onChange={e=>setNewEmployee({...newEmployee,last_name:e.target.value})} style={{padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:12}} />
@@ -446,8 +489,10 @@ const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = 
             <input placeholder='e.g. "License renewal due Sep 2026", "E&O gap"' value={newEmployee.compliance_flag} onChange={e=>setNewEmployee({...newEmployee,compliance_flag:e.target.value})} style={{width:"100%", padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:12,boxSizing:"border-box"}} />
           </div>
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-            <button onClick={()=>setShowAddEmployee(false)} style={{padding:"6px 14px",fontSize:12,background:"#F1F5F9",color:"#334155",border:"none",borderRadius:6,cursor:"pointer"}}>Cancel</button>
-            <button onClick={saveEmployee} disabled={saving} style={{padding:"6px 14px",fontSize:12,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:6,cursor:saving?"not-allowed":"pointer",fontWeight:600,opacity:saving?0.6:1}}>{saving ? "Saving…" : "Save Employee"}</button>
+            <button onClick={closeForm} disabled={saving} style={{padding:"6px 14px",fontSize:12,background:"#F1F5F9",color:"#334155",border:"none",borderRadius:6,cursor:saving?"not-allowed":"pointer"}}>Cancel</button>
+            <button onClick={saveEmployee} disabled={saving} style={{padding:"6px 14px",fontSize:12,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:6,cursor:saving?"not-allowed":"pointer",fontWeight:600,opacity:saving?0.6:1}}>
+              {saving ? "Saving…" : editingStaff ? "Save Changes" : "Save Employee"}
+            </button>
           </div>
         </div>
       )}
@@ -490,6 +535,12 @@ const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = 
                   <span style={{ fontSize:9, fontWeight:600, padding:"2px 6px", borderRadius:20, background:T.amberLt, color:"#92400E" }}>⚠ CPA Flag</span>
                 )}
               </div>
+              <button
+                onClick={() => startEdit(member)}
+                title="Edit this staff member"
+                style={{ padding:"3px 10px", fontSize:10, fontWeight:600, background:"#DBEAFE", color:"#2563EB", border:"none", borderRadius:5, cursor:"pointer", flexShrink:0 }}>
+                ✏️
+              </button>
             </div>
           ))}
         </Card>
@@ -1284,7 +1335,10 @@ export default function HRPeople() {
       </div>
 
       {/* Section Content */}
-      {section === "overview"    && <HROverview        applicants={applicants} staff={staff} onboarding={onboarding} cpaContact={cpaContact} onAdd={(row) => setStaff(prev => [row, ...prev].sort((a,b) => (a.last_name||"").localeCompare(b.last_name||"")))} />}
+      {section === "overview"    && <HROverview        applicants={applicants} staff={staff} onboarding={onboarding} cpaContact={cpaContact} onAdd={(row) => setStaff(prev => {
+        const rest = prev.filter(s => s.id !== row.id);
+        return [row, ...rest].sort((a,b) => (a.last_name||"").localeCompare(b.last_name||""));
+      })} />}
       {section === "recruiting"  && <RecruitingPipeline applicants={applicants} onUpdate={updateApplicantStage} />}
       {section === "staff"       && <StaffDirectory     staff={staff} loading={staffLoading} />}
       {section === "onboarding"  && <OnboardingSection  onboarding={onboarding} />}
