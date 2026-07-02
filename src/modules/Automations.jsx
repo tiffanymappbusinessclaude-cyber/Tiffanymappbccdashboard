@@ -587,7 +587,7 @@ const DocImporter = ({ imports }) => {
       <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
         {imports.map(doc => {
           const isExpanded = expanded === doc.id;
-          const tc = typeColor(doc.groq_type);
+          const tc = typeColor(doc.document_type);
           return (
             <div key={doc.id} style={{ border:`1px solid ${isExpanded?T.blue:T.slate200}`, borderRadius:8, overflow:"hidden" }}>
               <div
@@ -597,7 +597,7 @@ const DocImporter = ({ imports }) => {
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2, flexWrap:"wrap" }}>
                     <span style={{ fontSize:12, fontWeight:500, color:T.slate800, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{doc.file_name}</span>
-                    <span style={{ fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:20, background:tc.bg, color:tc.color, flexShrink:0 }}>{typeLabel(doc.groq_type)}</span>
+                    <span style={{ fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:20, background:tc.bg, color:tc.color, flexShrink:0 }}>{typeLabel(doc.document_type)}</span>
                   </div>
                   <div style={{ fontSize:10, color:T.slate400 }}>{doc.date} · {doc.source} · {doc.records} records loaded</div>
                 </div>
@@ -621,7 +621,7 @@ const DocImporter = ({ imports }) => {
                       ⚠ Partial import — one or more pages could not be parsed. File saved to Google Drive for manual review.
                     </div>
                   )}
-                  <AskBtn size="small" context={`Document import record:\nFile: ${doc.file_name}\nDate: ${doc.date}\nSource: ${doc.source}\nLLM Classification: ${doc.groq_type}\nStatus: ${doc.status}\nRecords loaded: ${doc.records}\nTables updated: ${doc.tables.join(", ")}\n\nHelp me verify this import looks correct and identify any follow-up needed.`} />
+                  <AskBtn size="small" context={`Document import record:\nFile: ${doc.file_name}\nDate: ${doc.date}\nSource: ${doc.source}\nClassification: ${doc.document_type}\nStatus: ${doc.status}\nRecords loaded: ${doc.records}\nTables updated: ${doc.tables.join(", ")}\n\nHelp me verify this import looks correct and identify any follow-up needed.`} />
                 </div>
               )}
             </div>
@@ -639,19 +639,18 @@ export default function Automations() {
   const { data: liveRunLog }   = useSupabaseTable("automation_run_log", AGENCY_ID, { orderBy: "run_at", ascending: false });
   const { data: liveDocs }     = useSupabaseTable("documents", AGENCY_ID, { orderBy: "uploaded_at", ascending: false });
 
-  // Normalize documents rows to the shape DocImporter expects. Internal keys
-  // in DocImporter (groq_type, tables, status, records, source, date) predate
-  // the schema; we bridge here at the boundary rather than refactor the
-  // component. Kept to the 25 most-recent for a lightweight recent-history view.
+  // Normalize documents rows to the shape DocImporter renders.
+  // Kept to the 25 most-recent for a lightweight recent-history view;
+  // the full archive lives in the Documents module.
   const docImports = (Array.isArray(liveDocs) ? liveDocs : []).slice(0, 25).map(d => ({
-    id:        d.id,
-    file_name: d.file_name || d.source_filename || "(unnamed)",
-    groq_type: d.document_type || d.groq_classification || "other",
-    date:      d.uploaded_at ? new Date(d.uploaded_at).toLocaleString("en-US", { month:"short", day:"numeric", year:"numeric", hour:"numeric", minute:"2-digit" }) : "—",
-    source:    d.upload_source || "—",
-    records:   d.records_created ?? 0,
-    status:    d.processing_status || "pending",
-    tables:    Array.isArray(d.tables_updated) ? d.tables_updated : [],
+    id:            d.id,
+    file_name:     d.file_name || d.source_filename || "(unnamed)",
+    document_type: d.document_type || d.groq_classification || "other",
+    date:          d.uploaded_at ? new Date(d.uploaded_at).toLocaleString("en-US", { month:"short", day:"numeric", year:"numeric", hour:"numeric", minute:"2-digit" }) : "—",
+    source:        d.upload_source || "—",
+    records:       d.records_created ?? 0,
+    status:        d.processing_status || "pending",
+    tables:        Array.isArray(d.tables_updated) ? d.tables_updated : [],
   }));
 
   const [recipes, setRecipes] = useState([]);
