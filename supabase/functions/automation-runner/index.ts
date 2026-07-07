@@ -340,30 +340,85 @@ async function getComposioAuthConfigId(agencyId: string, connection: string): Pr
 
 // -------------------------------------------------------------------------
 // Ensure a Gmail label exists; return its id. Used to file / archive.
+// Resilient to the "Label already exists" race that occurs when
+// GMAIL_LIST_LABELS returns labels in a shape the parser doesn't recognize,
+// or when the label was created outside this recipe. If agencyId +
+// settingsKey are provided, the resolved label id is cached in settings
+// for zero-Composio-call lookups on subsequent runs.
+// FIXED 2026-07-06: Doc Processor was failing 190x since 2026-07-02 21:11 UTC
+// because create-then-throw fired on every run once BCC-Processed existed.
 // -------------------------------------------------------------------------
 async function ensureGmailLabelId(opts: {
   apiKey: string; userId: string; accountId: string | null; authConfigId: string | null; labelName: string;
+  agencyId?: string; settingsKey?: string;
 }): Promise<string> {
+  // Fast path: settings-cached label id (no Composio calls when populated)
+  if (opts.agencyId && opts.settingsKey) {
+    const cached = await getSetting(opts.agencyId, opts.settingsKey);
+    if (cached) return cached;
+  }
+
+  const parseListedLabels = (data: any): any[] => {
+    const labels = data?.labels ?? data ?? [];
+    const arr = Array.isArray(labels) ? labels : (labels.labels || []);
+    return Array.isArray(arr) ? arr : [];
+  };
+  const matchesLabel = (l: any): boolean =>
+    !!l && (l.name === opts.labelName || l.label_name === opts.labelName);
+
+  const persistIfConfigured = async (id: string): Promise<void> => {
+    if (opts.agencyId && opts.settingsKey) {
+      await sb.from("settings").upsert({
+        agency_id: opts.agencyId, setting_key: opts.settingsKey,
+        setting_value: id, setting_type: "string",
+        updated_by: "automation_runner",
+      }, { onConflict: "agency_id,setting_key" });
+    }
+  };
+
+  // Try list first
   const listRes = await callComposio({
     apiKey: opts.apiKey, userId: opts.userId,
     connectedAccountId: opts.accountId, authConfigId: opts.authConfigId,
     toolSlug: "GMAIL_LIST_LABELS", toolArguments: {},
   });
   if (listRes.ok) {
-    const labels = listRes.data?.labels || listRes.data || [];
-    const arr = Array.isArray(labels) ? labels : (labels.labels || []);
-    const found = Array.isArray(arr) ? arr.find((l: any) => l && (l.name === opts.labelName)) : null;
-    if (found?.id) return found.id;
+    const found = parseListedLabels(listRes.data).find(matchesLabel);
+    if (found?.id) {
+      await persistIfConfigured(found.id);
+      return found.id;
+    }
   }
+
+  // Create as a fallback
   const createRes = await callComposio({
     apiKey: opts.apiKey, userId: opts.userId,
     connectedAccountId: opts.accountId, authConfigId: opts.authConfigId,
     toolSlug: "GMAIL_CREATE_LABEL",
     toolArguments: { label_name: opts.labelName, name: opts.labelName },
   });
-  if (!createRes.ok) throw new Error(`GMAIL_CREATE_LABEL '${opts.labelName}' failed: ${createRes.error}`);
+  if (!createRes.ok) {
+    // Graceful "already exists" recovery: label existed but list-parse missed it.
+    const errStr = String(createRes.error || "").toLowerCase();
+    if (errStr.includes("already exists")) {
+      const retryRes = await callComposio({
+        apiKey: opts.apiKey, userId: opts.userId,
+        connectedAccountId: opts.accountId, authConfigId: opts.authConfigId,
+        toolSlug: "GMAIL_LIST_LABELS", toolArguments: {},
+      });
+      if (retryRes.ok) {
+        const found = parseListedLabels(retryRes.data).find(matchesLabel);
+        if (found?.id) {
+          await persistIfConfigured(found.id);
+          return found.id;
+        }
+      }
+    }
+    throw new Error(`GMAIL_CREATE_LABEL '${opts.labelName}' failed: ${createRes.error}`);
+  }
   const id = createRes.data?.id || createRes.data?.label?.id;
   if (!id) throw new Error(`GMAIL_CREATE_LABEL '${opts.labelName}' returned no id`);
+  await persistIfConfigured(id);
   return id;
 }
 
@@ -667,6 +722,7 @@ async function runEmailArchiver(recipe: any): Promise<{
     apiKey: composioApiKey, userId: composioUserId,
     accountId: gmailAccountId, authConfigId: gmailAuthConfigId,
     labelName: archiveLabelName,
+    agencyId, settingsKey: "gmail_archive_label_id",
   });
 
   const tz = (await getSetting(agencyId, "agency_timezone")) || "America/New_York";
@@ -875,11 +931,12 @@ async function runDocumentProcessor(recipe: any): Promise<{
   const gmailQuery: string = plan.gmail_query;
   const dedupSet: Set<string> = new Set(Array.isArray(plan.dedup_message_ids) ? plan.dedup_message_ids : []);
 
-  // 2. Ensure the processed-marker label exists
+  // 2. Ensure the processed-marker label exists (settings-cached; see ensureGmailLabelId)
   const processedLabelId = await ensureGmailLabelId({
     apiKey: composioApiKey, userId: composioUserId,
     accountId: gmailAccountId, authConfigId: gmailAuthConfigId,
     labelName: processedLabelName,
+    agencyId, settingsKey: "gmail_processed_label_id",
   });
 
   // 3. Fetch candidate messages
