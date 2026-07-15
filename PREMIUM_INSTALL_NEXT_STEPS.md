@@ -6,9 +6,15 @@ Do not skip steps. Do not reorder them. If any step returns an unexpected result
 
 ---
 
+## Version: v1.1.3 (2026-07-15 hotfix)
+
+**If you previously started a v1.1.2 install and it stopped with `ERROR: 42P01: relation "public._install_provenance" does not exist`, you are in the exact scenario this v1.1.3 hotfix addresses.** Pull the latest files from this repo (which you already have if you're reading this updated document), then follow the steps below from the top. The BEGIN/COMMIT in `100a` rolled back atomically, so there is no partial state to clean up — resume from Step 1 clean.
+
+---
+
 ## What just landed in this repo
 
-Imaginary Farms just pushed the **BCC Premium overlay v1.1.2**, which extends the Base BCC with 10 new modules (Time Tracking, Sales Activity, Scoreboard, PTO, Handbook, Benefits, Personnel Files, Licenses, Milestones, Emergency Contacts) plus the shared auto-provisioning infrastructure they depend on.
+Imaginary Farms just pushed the **BCC Premium overlay v1.1.3**, which extends the Base BCC with 10 new modules (Time Tracking, Sales Activity, Scoreboard, PTO, Handbook, Benefits, Personnel Files, Licenses, Milestones, Emergency Contacts) plus the shared auto-provisioning infrastructure they depend on.
 
 **Additive content — already in place, no action required from you:**
 
@@ -29,21 +35,41 @@ Imaginary Farms just pushed the **BCC Premium overlay v1.1.2**, which extends th
 
 ## Your task, in order
 
-### Step 1 — Apply migration 100a first, alone, and verify
+### Step 1a — Apply the Base compatibility shim FIRST
 
-Migration `supabase/migrations/100a_premium_auto_provisioning.sql` is the auto-provisioning prerequisite. Every other Premium migration depends on it.
+**Do not skip this step.** It exists because your Base BCC may pre-date `bcc-master-template @ 041b4321` (fresh Bases installed after 2026-07-06 have all required prerequisites; Bases hand-installed earlier may be missing `public._install_provenance`, may use divergent `staff.role` labels, or may have a Base-shipped `is_current_user_owner()` helper the Premium RLS needs to delegate to).
 
-Apply it against the client's Supabase project via the Supabase MCP or SQL editor. After it runs, verify:
+Apply `supabase/migrations/100_base_compat_shim.sql` against this client's Supabase project via the Supabase MCP `apply_migration` tool or the SQL editor. The migration:
 
-- `_pending_auth_actions` table exists
-- `trg_staff_auth_lifecycle` trigger is bound to `public.staff`
-- `_install_provenance.overlay_version` is set to `'v1.1.2'`
+- Creates `public._install_provenance` if entirely absent (fresh Bases: no-op).
+- Adds `public.staff.full_name` as a GENERATED column derived from `first_name` + `last_name`.
+- Widens `_install_provenance` with `event_type` and `event_data` columns for the overlay event log.
+- Creates `public.get_current_role_is_owner()` as a dispatcher: if this Base ships `public.is_current_user_owner()`, the new function delegates to it (keeping Premium RLS aligned with Base RLS); otherwise it uses a widened role match accepting `'Owner / Agent'`, `'owner_producer'`, `'producer_licensed'`, `'Owner'`, and `'Agent'`.
+- Adds `UNIQUE` indexes on `public.alerts` and `public.automation_recipes` for overlay `ON CONFLICT` clauses.
+
+After it runs, verify:
+
+- `SELECT COUNT(*) FROM public._install_provenance;` returns `>= 1` (a row was inserted logging that this migration applied).
+- `SELECT public.get_current_role_is_owner();` returns `false` or `NULL` without error when called from the service_role context (there is no `auth.uid()` in that context).
+- `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='staff' AND column_name='full_name';` returns one row.
+
+If any of those fail, STOP and email `rebecca.coelho@imaginary-farms.com` with the full error before continuing.
+
+### Step 1b — Apply migration 100a (auto-provisioning prerequisite)
+
+Migration `supabase/migrations/100a_premium_auto_provisioning.sql` is the auto-provisioning prerequisite. Every other Premium migration depends on it. Apply it now.
+
+After it runs, verify:
+
+- `_pending_auth_actions` table exists.
+- `trg_staff_auth_lifecycle` trigger is bound to `public.staff`.
+- `_install_provenance.overlay_version` is set to `'1.1.3'` (or the version you're installing).
 
 If any of those are missing, do not proceed. Investigate.
 
-### Step 2 — Apply the remaining 18 migrations in this order
+### Step 2 — Apply the remaining 17 migrations in this order
 
-Numeric order per the design doc: 100, 100b, 100c, 100e, 101, 102, 103, 105, 106, 107a, 107b, 107c, 107d, 107e, 108, 109, 110, 112.
+Numeric order per the design doc: 100b, 100c, 100e, 101, 102, 103, 105, 106, 107a, 107b, 107c, 107d, 107e, 108, 109, 110, 112.
 
 Every migration is idempotent (`CREATE TABLE IF NOT EXISTS`, `INSERT ... ON CONFLICT DO NOTHING`, guarded `ADD COLUMN`). Safe to re-run if anything fails partway.
 
@@ -91,7 +117,7 @@ If any smoke test fails, do NOT report the install as complete. Fix it, re-verif
 
 When all 6 steps above pass, reply to the person operating this repo with:
 
-> ✅ **Premium overlay v1.1.2 install complete.** All 19 migrations applied. All 3 splices applied. Smoke test passed. Ready for use.
+> ✅ **Premium overlay v1.1.3 install complete.** All 19 migrations applied (Step 1a shim + 100a + 17 remaining). All 3 splices applied. Smoke test passed. Ready for use.
 
 If anything failed or was ambiguous, describe exactly what happened and what you did or did not do. Do not report success on a partial install.
 
@@ -103,4 +129,12 @@ Email `rebecca.coelho@imaginary-farms.com` — she is the operations lead at Ima
 
 ---
 
-*Delivered by Main Claude at Imaginary Farms LLC on behalf of Matthew Cooper (Managing Member). Overlay repo: `cindarellabots-droid/bcc-premium-overlay` @ v1.1.2. Base master reference: `cindarellabots-droid/bcc-master-template` @ 041b4321.*
+## Changelog for this file
+
+- **v1.1.3 (2026-07-15)** — Step 1 split into 1a (shim) + 1b (100a). Prior version told Claude to apply 100a first, which failed with `ERROR 42P01` on hand-installed pre-`041b4321` Bases whose `_install_provenance` table was created by a Base version that predates the current bootstrap. See the overlay repo CHANGELOG entry for v1.1.3 for full root-cause detail. Ramon Glenn install feedback drove this fix.
+- **v1.1.2 (2026-07-14)** — SalesActivity/LOB chip cosmetic fix from demo-hardening backport. No install-flow changes.
+- **v1.1.1 (2026-07-14)** — PTO Phase 3b + 4 + v1.1.0.1 hotfix backlog. No install-flow changes.
+
+---
+
+*Delivered by Main Claude at Imaginary Farms LLC on behalf of Matthew Cooper (Managing Member). Overlay repo: `cindarellabots-droid/bcc-premium-overlay` @ v1.1.3. Base master reference: `cindarellabots-droid/bcc-master-template` @ 041b4321.*

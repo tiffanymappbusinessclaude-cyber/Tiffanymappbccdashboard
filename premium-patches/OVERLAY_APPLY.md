@@ -35,13 +35,27 @@ work/
 
 `<client-slug>` matches the client's fork name (e.g., `smith-agency-bcc`).
 
-### Step 2 — Apply the prerequisite migration (100a)
+### Step 2a — Apply the Base compatibility shim (100_base_compat_shim) FIRST
+
+**Do not skip this step.** Every other overlay migration references schema this shim adds. Apply order matters: filesystem alphabetical is `100_ < 100a < 100b < 100c < 100e`, which is the correct dependency order.
+
+Run migration `100_base_compat_shim.sql` against the client's Supabase project. This migration:
+
+- Creates `public._install_provenance` if the Base predates 2026-07-06 (`tools/bootstrap_client_repo.sh` era) and the table is absent. Fresh 041b4321+ Bases: no-op.
+- Adds `staff.full_name` as a GENERATED column.
+- Widens `_install_provenance` with `event_type` / `event_data` columns for the overlay event log.
+- Creates `get_current_role_is_owner()` as a dispatcher that delegates to a pre-existing `is_current_user_owner()` if the Base ships one, otherwise falls back to a widened `staff.role` match (accepts `Owner / Agent`, `owner_producer`, `producer_licensed`, and historical variants). This means hand-installed Bases from June 2026 with divergent role labels are supported without per-client patches.
+- Adds idempotency UNIQUE indexes on `public.alerts` and `public.automation_recipes` required by ON CONFLICT clauses in later overlay migrations.
+
+If this step returns an unexpected result (schema mismatches, missing Base tables, etc.), STOP and email `cindarellabots@gmail.com` with the full error before continuing. See the v1.1.3 CHANGELOG entry for the Ramon Glenn install feedback that motivated this shim.
+
+### Step 2b — Apply the auto-provisioning prerequisite (100a)
 
 Run migration `100a_premium_auto_provisioning.sql` against the client's Supabase project via the Composio Supabase connection or the SQL editor. Verify:
 
 - `_pending_auth_actions` table exists.
 - `trg_staff_auth_lifecycle` trigger is bound to `public.staff`.
-- `_install_provenance.overlay_version` is set to `'v0.5-scaffold'`.
+- `_install_provenance.overlay_version` is set to `'1.1.3'` (or whatever version is being installed).
 
 Run the verification block at the bottom of the migration file — insert a test staff row with status changes and confirm the trigger enqueues correctly. Delete the test staff row when done.
 

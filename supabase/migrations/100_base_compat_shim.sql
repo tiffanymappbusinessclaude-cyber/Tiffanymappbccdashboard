@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Migration 100 — Base Compatibility Shim
 -- =============================================================================
--- Overlay:      bcc-premium-overlay v0.5.2.1
+-- Overlay:      bcc-premium-overlay v1.1.3 (was v0.5.2.1; hotfixed 2026-07-15)
 -- Runs before:  100a, 100b, 100c, 100e, 107a-d, 112 (every other overlay
 --               migration in this repo)
 --
@@ -60,6 +60,38 @@
 -- =============================================================================
 
 BEGIN;
+
+-- ============================================================================
+-- 0. _install_provenance — CREATE if entirely absent (hotfix v1.1.3)
+-- ============================================================================
+-- Ramon Glenn install on 2026-07-15 hit ERROR 42P01: relation
+-- "public._install_provenance" does not exist. Root cause: Ramon's Base was
+-- hand-installed prior to bootstrap_client_repo.sh (2026-07-06) landing the
+-- provenance table + watermark row on client fork. Every step in this shim
+-- (Section 2) and every event-log INSERT in overlay migrations (100a, 100e,
+-- 107a-d, 112) presumes the table exists.
+--
+-- Fix: create the table with the Base canonical single-row watermark shape
+-- when absent. Section 2 then widens it for the overlay event-log usage.
+-- Fresh 041b4321+ Base installs already have the table from Base 000; this
+-- block is a no-op there.
+--
+-- Columns and nullability match tools/bootstrap_client_repo.sh's expected
+-- write. install_id is nullable at creation because Section 2b adds a
+-- DEFAULT of gen_random_uuid() anyway; requiring NOT NULL here without a
+-- default would make the CREATE fail on empty databases.
+
+CREATE TABLE IF NOT EXISTS public._install_provenance (
+  install_id     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity         TEXT,
+  master_head    TEXT,
+  installed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  notes          TEXT
+);
+
+COMMENT ON TABLE public._install_provenance IS
+  'Overlay compat shim (100_base_compat_shim §0, v1.1.3). Created here when Base pre-dates the canonical Base 000 that ships this table. Overlay Section 2 widens it with event_type/event_data for the overlay event log. Watermark row is written by tools/bootstrap_client_repo.sh at fork time on modern Base installs; hand-installed pre-2026-07-06 Bases (e.g. Ramon Glenn) get the row created only when overlay migrations write their own event-log entries.';
+
 
 -- ============================================================================
 -- 1. staff.full_name — GENERATED column so overlay views can read one name
@@ -187,13 +219,48 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_has_base_helper boolean;
 BEGIN
+  -- v1.1.3 dispatcher (Ramon Glenn install feedback, 2026-07-15):
+  -- If the client's Base ships its own owner-check helper
+  -- (public.is_current_user_owner()), delegate to it. This is the case for
+  -- hand-installed Bases from June 2026 where the helper name and role
+  -- labels diverge from bcc-master-template @ 041b4321+ ('owner_producer',
+  -- 'producer_licensed' vs 'Owner / Agent'). Delegating keeps Premium RLS
+  -- consistent with Base RLS on the same DB — no drift when the agent's
+  -- Claude edits the Base helper later.
+  --
+  -- Otherwise (fresh 041b4321+ Base, no owner helper in public), fall back
+  -- to a widened staff.role match covering every canonical variant seen in
+  -- the field. Both the current master ('Owner / Agent') and the pre-041b
+  -- hand-install labels are accepted so a single fallback path serves every
+  -- known Base shape.
+  SELECT EXISTS (
+    SELECT 1
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public'
+       AND p.proname = 'is_current_user_owner'
+       AND p.pronargs = 0
+  ) INTO v_has_base_helper;
+
+  IF v_has_base_helper THEN
+    RETURN public.is_current_user_owner();
+  END IF;
+
   RETURN EXISTS (
     SELECT 1
-    FROM public.staff s
-    WHERE s.auth_user_id = auth.uid()
-      AND s.is_active IS TRUE
-      AND s.role = 'Owner / Agent'
+      FROM public.staff s
+     WHERE s.auth_user_id = auth.uid()
+       AND s.is_active IS TRUE
+       AND s.role IN (
+             'Owner / Agent',      -- Base master 041b4321+ canonical
+             'Owner',              -- historical variant
+             'Agent',              -- historical variant
+             'owner_producer',     -- hand-install June 2026 variant (Ramon)
+             'producer_licensed'   -- hand-install June 2026 variant (Ramon)
+           )
   );
 END;
 $$;
@@ -202,7 +269,7 @@ REVOKE ALL ON FUNCTION public.get_current_role_is_owner() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_current_role_is_owner() TO authenticated;
 
 COMMENT ON FUNCTION public.get_current_role_is_owner() IS
-  'Compatibility shim (100_base_compat_shim, hotfixed v0.5.3.1). Derives owner status from public.staff (role = ''Owner / Agent'', is_active, auth_user_id = auth.uid()). Base master ships no is_current_user_owner() helper — this function IS the definition. Referenced by overlay migrations 107a-d, 108, 110, 112.';
+  'Compatibility shim (100_base_compat_shim, hotfixed v1.1.3). Dispatcher: if public.is_current_user_owner() exists (hand-installed pre-041b4321 Bases), delegates to it; otherwise derives owner status from public.staff (role IN canonical variants incl. ''Owner / Agent'', ''owner_producer'', ''producer_licensed''; is_active; auth_user_id = auth.uid()). Referenced by overlay migrations 107a-d, 108, 110, 112.';
 
 -- ============================================================================
 -- 4. Idempotency UNIQUE indexes on Base tables written to by overlay recipes
@@ -243,7 +310,7 @@ VALUES (
   'overlay_migration_applied',
   jsonb_build_object(
     'migration',       '100_base_compat_shim',
-    'overlay_version', '0.5.2.1',
+    'overlay_version', '1.1.3',
     'applied_at',      now()
   )
 );
