@@ -8,7 +8,7 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 //
 // SECTIONS:
 //   1. Dashboard     — Critical alerts, upcoming deadlines, status
-//   2. Rules Library — All 57 rules, searchable, filterable
+//   2. Rules Library — All rules from Supabase, searchable, filterable
 //   3. Pre-Post Checklist — 26-item social media checklist
 //   4. Calendar      — Compliance deadlines and recurring items
 //   5. Audit Log     — Record of reviews, flags, completions
@@ -265,8 +265,12 @@ const TabBar = ({ tabs, active, onChange }) => (
 // ─── Section: Compliance Dashboard ───────────────────────────
 const ComplianceDashboard = ({ rules = [], calendar = [], log = [] }) => {
   const critical = rules.filter(r => r.severity === "critical").length;
-  const dueItems = calendar.filter(c => c.status === "due" || (c.days_remaining != null && c.days_remaining <= 14)).length;
-  const overdueItems = calendar.filter(c => c.status === "overdue").length;
+  // Unified overdue derivation: treat any item with days_remaining <= 0 as overdue,
+  // regardless of the (possibly stale) status column. dueItems then excludes overdue
+  // to avoid double-counting in "Due within 14 days" vs "Overdue Items".
+  const isOverdueRow = (c) => (c.days_remaining != null && c.days_remaining <= 0) || c.status === "overdue";
+  const overdueItems = calendar.filter(isOverdueRow).length;
+  const dueItems = calendar.filter(c => !isOverdueRow(c) && (c.status === "due" || (c.days_remaining != null && c.days_remaining <= 14))).length;
 
   return (
     <div>
@@ -276,7 +280,7 @@ const ComplianceDashboard = ({ rules = [], calendar = [], log = [] }) => {
           { label:"Critical Rules",     value: critical,     color: T.red,   border: T.red   },
           { label:"Due Within 14 Days", value: dueItems,     color: T.amber, border: T.amber },
           { label:"Overdue Items",      value: overdueItems, color: overdueItems>0?T.red:T.green, border: overdueItems>0?T.red:T.green },
-          { label:"Rules in Library",   value: 57,           color: T.blue,  border: T.blue  },
+          { label:"Rules in Library",   value: rules.length, color: T.blue,  border: T.blue  },
         ].map((k,i) => (
           <div key={i} style={{ background:T.white, border:`1px solid ${T.slate200}`, borderTop:`3px solid ${k.border}`, borderRadius:12, padding:"14px 16px" }}>
             <div style={{ fontSize:11, color:T.slate500, fontWeight:500, marginBottom:6 }}>{k.label}</div>
@@ -293,7 +297,7 @@ const ComplianceDashboard = ({ rules = [], calendar = [], log = [] }) => {
             <AskBtn size="small" context="Here are my upcoming compliance deadlines. Help me prioritize what needs my immediate attention and what I should plan for in the next 90 days." />
           </div>
           {calendar.slice(0,6).map((item,i) => {
-            const sc = statusConfig(item.status);
+            const sc = statusConfig(isOverdueRow(item) ? "overdue" : item.status);
             const urgent = item.days_remaining <= 14;
             return (
               <div key={i} style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8, padding:"8px 0", borderBottom:i<5?`1px solid ${T.slate100}`:"none" }}>
@@ -754,7 +758,7 @@ export default function ComplianceCenter() {
 
   const sections = [
     { id:"dashboard", label:"Dashboard"         },
-    { id:"rules",     label:`Rules Library (${rules.length || 57})`},
+    { id:"rules",     label:`Rules Library (${rules.length})`},
     { id:"checklist", label:"Pre-Post Checklist"},
     { id:"calendar",  label:"Calendar"          },
     { id:"log",       label:"Audit Log"         },
@@ -767,7 +771,7 @@ export default function ComplianceCenter() {
         <div>
           <div style={{ fontSize:20, fontWeight:700, color:T.slate900, letterSpacing:"-0.02em" }}>Compliance Center</div>
           <div style={{ fontSize:12, color:T.slate500, marginTop:3 }}>
-            57 rules · AA05 contract-based · Claude enforces these in every conversation
+            {rules.length} rules · AA05 contract-based · Claude enforces these in every conversation
           </div>
         </div>
         <AskBtn context="I am reviewing my compliance center. I need you to act as my compliance advisor. What are the most critical compliance items I should be focused on right now as a State Farm agent? What are the most common compliance mistakes agents make?" />

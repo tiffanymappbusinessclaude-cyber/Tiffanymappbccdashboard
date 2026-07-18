@@ -440,10 +440,15 @@ const DocumentsOverview = ({ documents, onNavigate }) => {
   const isPartial = (d) => ["partial","parsed_duplicate"].includes(d.processing_status);
   const isFailed  = (d) => d.processing_status === "failed";
   const isSkipped = (d) => d.processing_status === "parse_skipped";
+  // Documents newly uploaded but not yet parsed — either explicitly "pending" or with no status
+  // set. Rolled up with "parse_skipped" into a single "In Queue" tile so the KPI row reconciles.
+  const isPending = (d) => !d.processing_status || d.processing_status === "pending";
   const complete = documents.filter(parsedOk).length;
   const partial  = documents.filter(isPartial).length;
   const failed   = documents.filter(isFailed).length;
   const skipped  = documents.filter(isSkipped).length;
+  const pending  = documents.filter(isPending).length;
+  const inQueue  = pending + skipped;
   const total    = documents.length;
 
   const byType = Object.keys(DOC_TYPES).map(type => ({
@@ -459,6 +464,7 @@ const DocumentsOverview = ({ documents, onNavigate }) => {
         {[
           { label:"Total Documents", value:total,    color:T.navy,  border:T.navy  },
           { label:"Complete",        value:complete, color:T.green, border:T.green },
+          { label:"In Queue",        value:inQueue,  color:inQueue>0?T.blue:T.slate500, border:inQueue>0?T.blue:T.slate500 },
           { label:"Partial Import",  value:partial,  color:partial>0?T.amber:T.green, border:partial>0?T.amber:T.green },
           { label:"Failed",          value:failed,   color:failed>0?T.red:T.green,   border:failed>0?T.red:T.green   },
         ].map((k,i) => (

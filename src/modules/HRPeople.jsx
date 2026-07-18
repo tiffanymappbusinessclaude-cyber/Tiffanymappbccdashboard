@@ -688,7 +688,7 @@ const HROverview = ({ applicants, staff, onboarding }) => {
               </div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:12, fontWeight:600, color:T.slate800 }}>{app.first_name} {app.last_name}</div>
-                <div style={{ fontSize:10, color:T.slate500 }}>{app.position} · {app.intake_received_at}</div>
+                <div style={{ fontSize:10, color:T.slate500 }}>{app.position || "Open Position"}{app.intake_received_at ? ` · ${app.intake_received_at}` : ""}</div>
               </div>
               <StageBadge status={app.status} />
             </div>
@@ -705,7 +705,7 @@ const HROverview = ({ applicants, staff, onboarding }) => {
               </div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:12, fontWeight:600, color:T.slate800 }}>{member.first_name} {member.last_name}</div>
-                <div style={{ fontSize:10, color:T.slate500 }}>{member.role || "(no role set)"} · {(member.employment_type||"").toUpperCase()}</div>
+                <div style={{ fontSize:10, color:T.slate500 }}>{member.role || "(no role set)"}{member.employment_type ? ` · ${member.employment_type.toUpperCase()}` : ""}</div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3 }}>
                 {member.licensed
@@ -739,7 +739,7 @@ const HROverview = ({ applicants, staff, onboarding }) => {
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12, fontWeight:600, color:T.slate500 }}>{member.first_name} {member.last_name}</div>
                     <div style={{ fontSize:10, color:T.slate400 }}>
-                      {member.role || "(no role)"} · {(member.employment_type||"").toUpperCase()}
+                      {member.role || "(no role)"}{member.employment_type ? ` · ${member.employment_type.toUpperCase()}` : ""}
                       {member.end_date && ` · ended ${member.end_date}`}
                     </div>
                   </div>

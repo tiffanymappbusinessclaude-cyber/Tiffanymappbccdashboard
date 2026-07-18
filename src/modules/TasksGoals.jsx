@@ -177,7 +177,13 @@ const MOCK_GOALS = [
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────
-const pct = (curr, target) => Math.min(100, Math.round((curr / target) * 100));
+const pct = (curr, target) => {
+  // Guard against target=0 for "at-most" goals (e.g. "Zero Compliance Findings")
+  // where meeting the goal means having zero of the tracked metric.
+  // Prevents NaN% when goal is expressed as an upper bound of zero.
+  if (!target) return curr === 0 ? 100 : 0;
+  return Math.min(100, Math.round((curr / target) * 100));
+};
 const fmt = (n, unit) => {
   if (unit === "dollars") return "$" + n.toLocaleString();
   if (unit === "percentage") return n + "%";
@@ -440,7 +446,9 @@ const TasksOverview = ({ tasks, goals, onComplete, onNavigate }) => {
       // lower-is-better : pct = target/current (1.0 when met; <1.0 when over budget)
       let pctDone;
       if (tv <= 0) {
-        pctDone = 0;
+        // At-most goal (target=0): met when current is also 0
+        // (e.g. "Zero Compliance Findings", "Zero Missed Renewals")
+        pctDone = cv === 0 ? 100 : 0;
       } else if (isLower) {
         pctDone = cv > 0 ? Math.min(100, (tv / cv) * 100) : 100;
       } else {
@@ -490,7 +498,7 @@ const TasksOverview = ({ tasks, goals, onComplete, onNavigate }) => {
                     {mod.icon} {mod.label} · {days===0?"Due today":days===1?"Due tomorrow":`${days} days`}
                   </div>
                 </div>
-                <button onClick={() => onComplete(task.id)} style={{ fontSize:9, color:T.green, background:T.greenLt, border:"none", borderRadius:5, padding:"3px 7px", cursor:"pointer", flexShrink:0, fontWeight:600 }}>Done</button>
+                <button onClick={() => onComplete(task.id)} style={{ fontSize:9, color:T.green, background:T.greenLt, border:"none", borderRadius:5, padding:"3px 7px", cursor:"pointer", flexShrink:0, fontWeight:600 }} title="Mark this task complete">Mark done</button>
               </div>
             );
           })}
