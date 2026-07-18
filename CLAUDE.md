@@ -1,3 +1,43 @@
+<!--
+============================================================
+  REALITY UPDATE — 2026-07-02
+  This addendum reflects the live state of <AGENCY_NAME> Agency's BCC.
+  It supersedes anything below in the pre-addendum content of this file.
+  The pre-addendum content is kept verbatim for historical / install-time reference.
+============================================================
+-->
+
+# 🔄 Reality Update — 2026-07-02
+
+The install-time reference below reflects the pristine BCC template. The live agency has moved past several of those numbers. Trust the current-state deltas here; use the below only for install-time / self-heal patterns.
+
+## Live counts (2026-07-02)
+- **147** accounts in `chart_of_accounts` (install reference said 95)
+- **76** SF compliance rules (install reference said 57)
+- **27** automation recipes total, **21** active (install reference said "canonical 12")
+- **14** modules in BCCApp.jsx: Dashboard, Financials, Memory, System Map, Playbook & Guide, Compliance, Automations, Social Media, Tasks & Goals, Alerts, Documents, HR & People, Claude Chat, Report Package, Settings
+- **12+** live categories in `persistent_memory` (install reference said 7)
+- **43** rows in `journal_entries` (BCC-native ledger, June 2026 forward)
+- **788** rows in `comp_recap`, 100% posted (GL cutover Option A executed 2026-07-01)
+- **3,866** rows in `qbo_journal_lines` covering Jan 2025 → June 2026 (QBO mirror)
+- **19** rows in `staff`
+- **138** rows in `documents`
+- **73** applied migrations, latest = `031_system_map_tables`
+
+## Architecture facts that changed since the install-time doc
+- **LLM path is direct Groq, not Composio-hosted.** The `automation-runner` Edge Function reads `GROQ_API_KEY` from Deno.env at invocation time. the agent rotates the key in Supabase Dashboard → Edge Functions → Secrets. See `groq-key-rotation` runbook in System Map.
+- **Vercel is on Hobby plan.** Fork-sync commits from `cindarellabots-droid` are blocked by Vercel's git-author check. Fix: `settings.vercel_deploy_hook_url` (POST empty body forces deploy). Standing rule: after any fork-sync commit, fire the deploy hook. See operational_rule "Vercel deploy hook — use this after every fork-sync commit".
+- **System Map module was added 2026-07-01** via fork sync + migration 031. It's a wiki with 14 seed pages covering architecture, domain, schema, integration, automation, decision, runbook, glossary categories. **This is the highest-fidelity current-state reference for the agency.** Read pages there before consulting older docs.
+- **`brand_kit` table doesn't exist.** It appears in this doc as a table but nothing references it. Decide: build it + wire SocialMedia, or drop the mention.
+
+## Data-pipeline gaps (as of 2026-07-02)
+- `producer_production` is empty (0 rows). Recipe fires but SF's first producer production report email hasn't been forwarded to `<AGENCY_CLAUDE_EMAIL>`. HR & People → Performance tab and AIPP projections need this.
+- 5 helper components (`AskClaudeButton`, `SectionHeader`, `FilterPill`, `PrintButton`, `ConfirmDeleteButton`) are stubs I added 2026-07-02 to fix a fork-sync miss. Rebecca's next master sync ships canonical versions.
+
+---
+
+<!-- Original CLAUDE.md content follows below. Preserved for install-time reference. -->
+
 # CLAUDE.md — BCC Master Template
 ## Read This First. Every Time.
 

@@ -1,3 +1,49 @@
+<!--
+============================================================
+  REALITY UPDATE — 2026-07-02
+  This addendum reflects the live state of <AGENCY_NAME> Agency's BCC.
+  It supersedes anything below in the pre-addendum content of this file.
+  The pre-addendum content is kept verbatim for historical / install-time reference.
+============================================================
+-->
+
+# 🔄 Reality Update — 2026-07-02
+
+The Layer 1 / Layer 2 mental model below is still current. Adding one new layer and one recurring pattern.
+
+## Layer 3 — Fork-sync deploys (Vercel Hobby)
+
+the agent's Vercel plan is Hobby. Fork-sync commits authored by `cindarellabots-droid` (Rebecca's install/backport bot) fail Vercel's git-author check with:
+
+> *"Git author cindarellabots-droid must have access to the project on Vercel to create deployments."*
+
+Hobby has no "invite team member" UI — the fix is a **Deploy Hook** stored in `settings.vercel_deploy_hook_url`. It's a Vercel-provided webhook URL that force-deploys the current main HEAD regardless of git author.
+
+### Workflow when a fork-sync arrives
+1. Detect the sync (`GITHUB_LIST_COMMITS` — look for author `cindarellabots-droid`)
+2. POST empty body to `settings.vercel_deploy_hook_url`
+   - Returns `{"job":{"id":"...","state":"PENDING","createdAt":...}}`
+3. Poll GitHub combined status on the tip commit
+4. If build fails due to missing dep/component/migration, fix and commit under authorized author (Composio's GitHub identity `<AGENCY_CLAUDE_HANDLE>claude-ship-it`). Common fork-sync misses seen 2026-07-02:
+   - Missing runtime dep in `package.json` (`lucide-react`)
+   - Missing helper components in `src/components/` (5 stubs added)
+   - Missing DB migration (`system_map` tables)
+   - Prop-shape mismatch (`<EmptyState icon={FileText} />` when EmptyState expects a string)
+
+### Long-term option
+Upgrade to Vercel Pro (~$20/mo) enables the Members/Invite UI. Then invite `cindarellabots-droid` to the team `your-agency-projects` and syncs auto-deploy without the hook. Not urgent — the hook works.
+
+## Groq key rotation (also on this layer)
+
+The `automation-runner` Edge Function reads `GROQ_API_KEY` from Deno.env. When the agent rotates:
+1. Generate new key at console.groq.com/keys
+2. Supabase Dashboard → Edge Functions → Secrets → `GROQ_API_KEY` → paste → save (no redeploy)
+3. Smoke test: fire Bank Statement Processor and check `automation_run_log`. Healthy output line: *"0 records — Composio returned data but Groq LLM parsing yielded no records to write"* (means Groq parse succeeded).
+
+---
+
+<!-- Original SELF_HEAL_GUIDE.md content follows below. -->
+
 # The Self-Heal Model
 
 > How a BCC client maintains their system: by working WITH their Claude, not around it.

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase.js";
 
 /**
@@ -54,33 +54,93 @@ export function useSupabaseTable(tableName, agencyId, options = {}) {
 }
 
 /**
- * useSupabaseQuery — run a custom Supabase query
- * Usage: const { data, loading } = useSupabaseQuery(() => supabase.from("x").select("y"))
+ * useSupabaseQuery — polymorphic hook accepting either signature:
+ *
+ * Legacy:            useSupabaseQuery(queryFn, deps = [])
+ * React-query-style: useSupabaseQuery(queryKey, queryFn, options = {})
  */
-export function useSupabaseQuery(queryFn, deps = []) {
+export function useSupabaseQuery(...args) {
+  const isReactQueryStyle = !(typeof args[0] === "function");
+
+  let queryFn;
+  let deps;
+  let enabled = true;
+
+  if (isReactQueryStyle) {
+    const queryKey = args[0];
+    queryFn = args[1];
+    const opts = args[2] || {};
+    enabled = opts.enabled !== false;
+    deps = Array.isArray(queryKey) ? queryKey : [queryKey];
+  } else {
+    queryFn = args[0];
+    deps = args[1] || [];
+  }
+
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState(null);
+  const refetchRef = useRef(0);
+
+  const refetch = () => {
+    refetchRef.current += 1;
+    setLoading(true);
+    runQuery();
+  };
+
+  async function runQuery() {
+    if (!enabled) {
+      setData(null); setLoading(false); setError(null); return;
+    }
+    if (typeof queryFn !== "function") {
+      setError("useSupabaseQuery: queryFn is not a function"); setLoading(false); return;
+    }
+    setError(null);
+    try {
+      const result = await queryFn();
+      if (result && typeof result === "object" && "data" in result && "error" in result) {
+        if (result.error) throw result.error;
+        setData(result.data);
+      } else {
+        setData(result);
+      }
+    } catch (err) {
+      setError(err?.message || String(err) || "Query failed");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
-    async function run() {
-      setLoading(true);
-      setError(null);
+    (async () => {
+      if (!enabled) {
+        if (!cancelled) { setData(null); setLoading(false); setError(null); }
+        return;
+      }
+      if (typeof queryFn !== "function") {
+        if (!cancelled) { setError("useSupabaseQuery: queryFn is not a function"); setLoading(false); }
+        return;
+      }
+      setLoading(true); setError(null);
       try {
-        const { data: result, error: err } = await queryFn();
+        const result = await queryFn();
         if (cancelled) return;
-        if (err) throw err;
-        setData(result);
+        if (result && typeof result === "object" && "data" in result && "error" in result) {
+          if (result.error) throw result.error;
+          setData(result.data);
+        } else {
+          setData(result);
+        }
       } catch (err) {
-        if (!cancelled) setError(err.message || "Query failed");
+        if (!cancelled) setError(err?.message || String(err) || "Query failed");
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }
-    run();
+    })();
     return () => { cancelled = true; };
-  }, deps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, enabled, refetchRef.current]);
 
-  return { data, loading, error };
+  return { data, loading, error, refetch, isLoading: loading };
 }

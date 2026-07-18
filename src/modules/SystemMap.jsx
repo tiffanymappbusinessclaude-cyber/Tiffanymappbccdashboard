@@ -1,111 +1,84 @@
-import { useState, useMemo, useRef, useEffect } from "react";
-import { useSupabaseQuery } from "../lib/hooks.js";
-import { supabase } from "../lib/supabase.js";
-import { fmtDate } from "../lib/utils.js";
-import LoadingState from "../components/LoadingState.jsx";
-import EmptyState from "../components/EmptyState.jsx";
+import { useMemo, useState } from 'react';
+import {
+  BookOpen, Search, Plus, Edit2, Save, X, ChevronLeft, CheckCircle2,
+  Clock, Link2, FileText, AlertTriangle, RefreshCw, History,
+} from 'lucide-react';
 
-// ============================================================
-// BCC WIKI & SYSTEM MAP MODULE v1.0
-// Business Command Center — State Farm Agent Edition
-// Built by Imaginary Farms LLC · imaginary-farms.com
-// DATA: Reads/writes public.system_map (migration 045).
-// ============================================================
+import SectionHeader from '../components/SectionHeader.jsx';
+import LoadingState from '../components/LoadingState.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import FilterPill from '../components/FilterPill.jsx';
+import PrintButton from '../components/PrintButton.jsx';
+import AskClaudeButton from '../components/AskClaudeButton.jsx';
+import ConfirmDeleteButton from '../components/ConfirmDeleteButton.jsx';
+import { supabase } from '../lib/supabase.js';
+import { useSupabaseQuery } from '../lib/hooks.js';
+import { fmtDate } from '../lib/utils.js';
 
-const T = {navy:"#1B2B4B",blue:"#2D7DD2",blueLt:"#EFF6FF",green:"#10B981",greenLt:"#D1FAE5",amber:"#F59E0B",amberLt:"#FEF3C7",red:"#EF4444",redLt:"#FEE2E2",purple:"#7C3AED",purpleLt:"#EDE9FE",teal:"#0D9488",tealLt:"#CCFBF1",slate50:"#F8FAFC",slate100:"#F1F5F9",slate200:"#E2E8F0",slate300:"#CBD5E1",slate400:"#94A3B8",slate500:"#64748B",slate600:"#475569",slate700:"#334155",slate800:"#1E293B",slate900:"#0F172A",white:"#FFFFFF"};
+// SystemMap module: a wiki-style browser/editor for public.system_map.
+// One page per row, grouped by category, full-text search, inline edit, revisions tracked.
+// Pages are markdown; renderer below covers the subset we actually use:
+// headings, bold, italic, inline code, fenced code blocks, bullet/numbered lists,
+// tables, blockquotes, links, and paragraphs.
 
 const CATEGORIES = [
-  { key: "all",         label: "All",         icon: "📚", color: T.slate600 },
-  { key: "overview",    label: "Overview",    icon: "🗺️", color: T.blue },
-  { key: "domain",      label: "Domain",      icon: "🏢", color: T.navy },
-  { key: "schema",      label: "Schema",      icon: "🗃️", color: T.purple },
-  { key: "integration", label: "Integration", icon: "🔌", color: T.teal },
-  { key: "automation",  label: "Automation",  icon: "⚡", color: T.amber },
-  { key: "decision",    label: "Decision",    icon: "🧭", color: T.green },
-  { key: "runbook",     label: "Runbook",     icon: "📖", color: T.red },
-  { key: "glossary",    label: "Glossary",    icon: "🔤", color: T.slate700 },
+  { key: 'all',         label: 'All pages',   short: 'All',         color: 'var(--text-secondary)', accent: 'var(--bg-panel)' },
+  { key: 'overview',    label: 'Overview',    short: 'Overview',    color: 'var(--accent-blue)', accent: 'var(--accent-blue-bg)' },
+  { key: 'domain',      label: 'Domain',      short: 'Domain',      color: 'var(--accent-purple)', accent: 'var(--accent-purple-bg)' },
+  { key: 'schema',      label: 'Schema',      short: 'Schema',      color: '#0891B2', accent: '#CFFAFE' },
+  { key: 'integration', label: 'Integration', short: 'Integration', color: '#EA580C', accent: '#FED7AA' },
+  { key: 'automation',  label: 'Automation',  short: 'Automation',  color: 'var(--success)', accent: 'var(--success-bg)' },
+  { key: 'decision',    label: 'Decision',    short: 'Decision',    color: '#DB2777', accent: '#FCE7F3' },
+  { key: 'runbook',     label: 'Runbook',     short: 'Runbook',     color: 'var(--danger)', accent: 'var(--danger-bg)' },
+  { key: 'glossary',    label: 'Glossary',    short: 'Glossary',    color: '#65A30D', accent: '#ECFCCB' },
 ];
-const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.key, c]));
+
+const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.short]));
+const CATEGORY_COLOR = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.color]));
+const CATEGORY_ACCENT = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.accent]));
+
+// "Stale" if no verification in this many days
 const STALE_DAYS = 30;
 
 function daysSince(iso) {
   if (!iso) return null;
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  const ms = Date.now() - new Date(iso).getTime();
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
 }
 
-function AskBtn({ context, size = "normal" }) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const ref = useRef(null);
-  const small = size === "small";
-  useEffect(() => {
-    if (!open) return;
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setTimeout(() => setCopied(false), 200); } };
-    const k = (e) => { if (e.key === "Escape") { setOpen(false); setTimeout(() => setCopied(false), 200); } };
-    document.addEventListener("mousedown", h); document.addEventListener("keydown", k);
-    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("keydown", k); };
-  }, [open]);
-  const ask = async () => {
-    setOpen(true);
-    try { await navigator.clipboard.writeText(context); setCopied(true); } catch { setCopied(true); }
-  };
-  return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
-      <button onClick={open ? () => setOpen(false) : ask} style={{ display: "flex", alignItems: "center", gap: 5, background: open ? T.slate100 : T.blue, color: open ? T.blue : T.white, border: open ? `1px solid ${T.blue}` : "1px solid transparent", borderRadius: 7, padding: small ? "5px 10px" : "7px 13px", fontSize: small ? 10 : 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>⚡ Ask Claude</button>
-      {open && (
-        <div role="dialog" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60, width: 300, background: T.white, border: `1px solid ${T.slate100}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(15,23,42,0.16)", padding: 14, textAlign: "left" }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#16A34A", marginBottom: 4 }}>{copied ? "✓ Context copied to your clipboard" : "Copying…"}</div>
-          <div style={{ fontSize: 11, color: T.slate500, marginBottom: 10, lineHeight: 1.5 }}>Paste it into your Claude.ai tab. Your BCC data goes with the prompt.</div>
-          <button onClick={() => window.open("https://claude.ai/new", "_blank", "noopener,noreferrer")} style={{ width: "100%", background: T.navy, color: T.white, border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Open Claude.ai in a new tab</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DeleteBtn({ onConfirm, label = "Delete" }) {
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 4000);
-    return () => clearTimeout(t);
-  }, [armed]);
-  return <button onClick={armed ? onConfirm : () => setArmed(true)} style={{ background: armed ? T.red : T.white, color: armed ? T.white : T.red, border: `1px solid ${T.red}`, borderRadius: 7, padding: "7px 13px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{armed ? "Click again to confirm" : label}</button>;
-}
-
-function CategoryBadge({ category }) {
-  const c = CATEGORY_MAP[category] || CATEGORY_MAP.all;
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: c.color, background: T.slate50, border: `1px solid ${T.slate200}`, padding: "3px 8px", borderRadius: 20 }}><span>{c.icon}</span><span>{c.label}</span></span>;
-}
-
-function StaleIndicator({ verifiedAt }) {
-  const d = daysSince(verifiedAt);
-  if (d === null) return <span style={{ fontSize: 10, color: T.slate400, fontStyle: "italic" }}>Never verified</span>;
-  const stale = d >= STALE_DAYS;
-  return <span style={{ fontSize: 10, color: stale ? T.red : T.slate500, display: "inline-flex", alignItems: "center", gap: 4 }}>{stale ? "⚠" : "🕒"} Verified {d === 0 ? "today" : `${d}d ago`}</span>;
-}
-
-function FilterPill({ active, onClick, children }) {
-  return <button onClick={onClick} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: active ? T.navy : T.white, color: active ? T.white : T.slate600, border: `1px solid ${active ? T.navy : T.slate200}`, borderRadius: 20, padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{children}</button>;
-}
+// ---------------------------------------------------------------------------
+// Markdown renderer (minimal). Built for the wiki content shape we control;
+// don't expect general-purpose markdown perfection.
+// ---------------------------------------------------------------------------
 
 function renderInline(text) {
+  // Process inline patterns in a single pass. Order matters: code first so its
+  // contents don't get re-processed by bold/italic/link.
   const parts = [];
-  let rest = text || "";
+  let rest = text;
   let idx = 0;
   const patterns = [
-    { re: /`([^`]+)`/,               render: (m, k) => <code key={k} style={{ background: T.slate100, padding: "2px 5px", borderRadius: 4, fontSize: "0.85em", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{m[1]}</code> },
-    { re: /\*\*([^*]+)\*\*/,         render: (m, k) => <strong key={k}>{m[1]}</strong> },
-    { re: /\*([^*]+)\*/,             render: (m, k) => <em key={k}>{m[1]}</em> },
-    { re: /\[([^\]]+)\]\(([^)]+)\)/, render: (m, k) => <a key={k} href={m[2]} target="_blank" rel="noreferrer" style={{ color: T.blue, textDecoration: "underline" }}>{m[1]}</a> },
+    { re: /`([^`]+)`/,           render: (m, k) => <code key={k} className="px-1 py-0.5 rounded bg-if-page text-xs font-mono">{m[1]}</code> },
+    { re: /\*\*([^*]+)\*\*/,     render: (m, k) => <strong key={k}>{m[1]}</strong> },
+    { re: /\*([^*]+)\*/,         render: (m, k) => <em key={k}>{m[1]}</em> },
+    { re: /\[([^\]]+)\]\(([^)]+)\)/, render: (m, k) => <a key={k} href={m[2]} target="_blank" rel="noreferrer" className="text-if-blue hover:underline">{m[1]}</a> },
   ];
   while (rest.length > 0) {
-    let earliest = null, earliestIdx = Infinity, earliestPattern = null;
+    let earliest = null;
+    let earliestIdx = Infinity;
+    let earliestPattern = null;
     for (const p of patterns) {
       const m = p.re.exec(rest);
-      if (m && m.index < earliestIdx) { earliest = m; earliestIdx = m.index; earliestPattern = p; }
+      if (m && m.index < earliestIdx) {
+        earliest = m;
+        earliestIdx = m.index;
+        earliestPattern = p;
+      }
     }
-    if (!earliest) { parts.push(rest); break; }
+    if (!earliest) {
+      parts.push(rest);
+      break;
+    }
     if (earliestIdx > 0) parts.push(rest.slice(0, earliestIdx));
     parts.push(earliestPattern.render(earliest, `inline-${idx++}`));
     rest = rest.slice(earliestIdx + earliest[0].length);
@@ -115,163 +88,420 @@ function renderInline(text) {
 
 function renderMarkdown(md) {
   if (!md) return null;
-  const src = md.split("\n");
-  const out = [];
-  let i = 0, k = 0;
-  while (i < src.length) {
-    const line = src[i];
-    if (line.startsWith("```")) {
+  const lines = md.split('\n');
+  const blocks = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (line.startsWith('```')) {
+      const langMatch = line.match(/^```(\w*)/);
+      const lang = langMatch?.[1] || '';
       const buf = [];
       i++;
-      while (i < src.length && !src[i].startsWith("```")) { buf.push(src[i]); i++; }
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        buf.push(lines[i]);
+        i++;
+      }
+      i++; // skip closing
+      blocks.push(
+        <pre key={blocks.length} className="bg-if-page border border-if-line rounded-md px-3 py-2 my-3 overflow-x-auto text-xs">
+          <code className="font-mono">{buf.join('\n')}</code>
+          {lang && <div className="text-[10px] uppercase tracking-wide text-if-muted mt-1">{lang}</div>}
+        </pre>,
+      );
+      continue;
+    }
+
+    // Heading
+    const hMatch = line.match(/^(#{1,4})\s+(.*)$/);
+    if (hMatch) {
+      const level = hMatch[1].length;
+      const text = hMatch[2];
+      const cls = ['text-base font-semibold mt-4 mb-2 text-if-navy', 'text-sm font-semibold mt-3 mb-1 text-if-navy', 'text-xs font-semibold mt-2 mb-1 text-if-navy uppercase tracking-wide', 'text-xs font-semibold mt-2 mb-1 text-if-muted'][Math.min(level - 1, 3)];
+      const Tag = `h${Math.min(level + 1, 6)}`;
+      blocks.push(<Tag key={blocks.length} className={cls}>{renderInline(text)}</Tag>);
       i++;
-      out.push(<pre key={`c-${k++}`} style={{ background: T.slate900, color: T.slate100, padding: 14, borderRadius: 8, fontSize: 12, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", overflowX: "auto", lineHeight: 1.55, margin: "10px 0" }}>{buf.join("\n")}</pre>);
       continue;
     }
-    const h = line.match(/^(#{1,4})\s+(.*)/);
-    if (h) {
-      const level = h[1].length;
-      const sizes = { 1: 22, 2: 18, 3: 15, 4: 13 };
-      const weights = { 1: 800, 2: 700, 3: 700, 4: 600 };
-      const margins = { 1: "20px 0 10px", 2: "18px 0 8px", 3: "14px 0 6px", 4: "12px 0 4px" };
-      out.push(<div key={`h-${k++}`} style={{ fontSize: sizes[level], fontWeight: weights[level], color: T.slate900, margin: margins[level], letterSpacing: "-0.01em" }}>{renderInline(h[2])}</div>);
-      i++;
-      continue;
-    }
-    if (line.startsWith("> ")) {
-      const buf = [];
-      while (i < src.length && src[i].startsWith("> ")) { buf.push(src[i].slice(2)); i++; }
-      out.push(<div key={`q-${k++}`} style={{ borderLeft: `3px solid ${T.blue}`, padding: "6px 12px", margin: "10px 0", background: T.blueLt, color: T.slate700, fontSize: 13, lineHeight: 1.6 }}>{renderInline(buf.join(" "))}</div>);
-      continue;
-    }
-    if (/^[-*]\s+/.test(line)) {
-      const items = [];
-      while (i < src.length && /^[-*]\s+/.test(src[i])) { items.push(src[i].replace(/^[-*]\s+/, "")); i++; }
-      out.push(<ul key={`u-${k++}`} style={{ margin: "8px 0 8px 20px", padding: 0, fontSize: 13, color: T.slate700, lineHeight: 1.6 }}>{items.map((it, ii) => <li key={ii} style={{ marginBottom: 4 }}>{renderInline(it)}</li>)}</ul>);
-      continue;
-    }
-    if (/^\d+\.\s+/.test(line)) {
-      const items = [];
-      while (i < src.length && /^\d+\.\s+/.test(src[i])) { items.push(src[i].replace(/^\d+\.\s+/, "")); i++; }
-      out.push(<ol key={`o-${k++}`} style={{ margin: "8px 0 8px 20px", padding: 0, fontSize: 13, color: T.slate700, lineHeight: 1.6 }}>{items.map((it, ii) => <li key={ii} style={{ marginBottom: 4 }}>{renderInline(it)}</li>)}</ol>);
-      continue;
-    }
-    if (line.includes("|") && i + 1 < src.length && /^[\s|:-]+$/.test(src[i + 1])) {
-      const parseRow = (r) => r.split("|").map((c) => c.trim()).filter((c, ii, arr) => !(ii === 0 && c === "") && !(ii === arr.length - 1 && c === ""));
-      const header = parseRow(line);
+
+    // Table (heuristic: line starts with | and next line is a divider)
+    if (line.startsWith('|') && lines[i + 1]?.match(/^\|[\s\-|:]+\|?\s*$/)) {
+      const header = line.split('|').slice(1, -1).map((c) => c.trim());
       i += 2;
       const rows = [];
-      while (i < src.length && src[i].includes("|") && src[i].trim() !== "") { rows.push(parseRow(src[i])); i++; }
-      out.push(<div key={`t-${k++}`} style={{ overflowX: "auto", margin: "10px 0", border: `1px solid ${T.slate200}`, borderRadius: 8 }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}><thead><tr style={{ background: T.slate50 }}>{header.map((h, ii) => <th key={ii} style={{ textAlign: "left", padding: "8px 10px", fontWeight: 700, color: T.slate700, borderBottom: `1px solid ${T.slate200}` }}>{renderInline(h)}</th>)}</tr></thead><tbody>{rows.map((r, ri) => <tr key={ri} style={{ borderBottom: `1px solid ${T.slate100}` }}>{r.map((c, ci) => <td key={ci} style={{ padding: "8px 10px", color: T.slate700, verticalAlign: "top" }}>{renderInline(c)}</td>)}</tr>)}</tbody></table></div>);
+      while (i < lines.length && lines[i].startsWith('|')) {
+        rows.push(lines[i].split('|').slice(1, -1).map((c) => c.trim()));
+        i++;
+      }
+      blocks.push(
+        <div key={blocks.length} className="my-3 overflow-x-auto">
+          <table className="text-xs border-collapse w-full">
+            <thead>
+              <tr>
+                {header.map((h, hi) => (
+                  <th key={hi} className="text-left font-semibold border-b border-if-line px-2 py-1 text-if-navy">{renderInline(h)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri} className="hover:bg-if-page">
+                  {r.map((c, ci) => (
+                    <td key={ci} className="border-b border-if-line px-2 py-1 align-top">{renderInline(c)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
       continue;
     }
-    if (line.trim() === "") { i++; continue; }
+
+    // Bullet list
+    if (line.match(/^[-*]\s+/)) {
+      const items = [];
+      while (i < lines.length && lines[i].match(/^[-*]\s+/)) {
+        items.push(lines[i].replace(/^[-*]\s+/, ''));
+        i++;
+      }
+      blocks.push(
+        <ul key={blocks.length} className="list-disc pl-5 my-2 text-sm space-y-1">
+          {items.map((item, ii) => <li key={ii}>{renderInline(item)}</li>)}
+        </ul>,
+      );
+      continue;
+    }
+
+    // Numbered list
+    if (line.match(/^\d+\.\s+/)) {
+      const items = [];
+      while (i < lines.length && lines[i].match(/^\d+\.\s+/)) {
+        items.push(lines[i].replace(/^\d+\.\s+/, ''));
+        i++;
+      }
+      blocks.push(
+        <ol key={blocks.length} className="list-decimal pl-5 my-2 text-sm space-y-1">
+          {items.map((item, ii) => <li key={ii}>{renderInline(item)}</li>)}
+        </ol>,
+      );
+      continue;
+    }
+
+    // Blockquote
+    if (line.startsWith('> ')) {
+      const buf = [];
+      while (i < lines.length && lines[i].startsWith('> ')) {
+        buf.push(lines[i].slice(2));
+        i++;
+      }
+      blocks.push(
+        <blockquote key={blocks.length} className="border-l-2 border-if-blue pl-3 my-2 text-sm text-if-muted italic">
+          {buf.map((b, bi) => <div key={bi}>{renderInline(b)}</div>)}
+        </blockquote>,
+      );
+      continue;
+    }
+
+    // Blank line
+    if (line.trim() === '') {
+      i++;
+      continue;
+    }
+
+    // Paragraph: collect until blank or block-starting line
     const buf = [line];
     i++;
-    while (i < src.length && src[i].trim() !== "" && !src[i].startsWith("#") && !src[i].startsWith("```") && !src[i].startsWith("> ") && !/^[-*]\s+/.test(src[i]) && !/^\d+\.\s+/.test(src[i]) && !src[i].includes("|")) { buf.push(src[i]); i++; }
-    out.push(<p key={`p-${k++}`} style={{ margin: "8px 0", fontSize: 13, color: T.slate700, lineHeight: 1.65 }}>{renderInline(buf.join(" "))}</p>);
+    while (
+      i < lines.length &&
+      lines[i].trim() !== '' &&
+      !lines[i].match(/^(#{1,4}\s|[-*]\s|\d+\.\s|>\s|```|\|)/)
+    ) {
+      buf.push(lines[i]);
+      i++;
+    }
+    blocks.push(
+      <p key={blocks.length} className="my-2 text-sm leading-relaxed text-if-ink">
+        {renderInline(buf.join(' '))}
+      </p>,
+    );
   }
-  return <div>{out}</div>;
+  return blocks;
+}
+
+// ---------------------------------------------------------------------------
+// Components
+// ---------------------------------------------------------------------------
+
+function CategoryBadge({ category }) {
+  const color = CATEGORY_COLOR[category] || 'var(--text-tertiary)';
+  const accent = CATEGORY_ACCENT[category] || 'var(--bg-panel)';
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide"
+      style={{ color, backgroundColor: accent, border: `1px solid ${color}22` }}
+    >
+      {CATEGORY_LABEL[category] || category}
+    </span>
+  );
+}
+
+function StaleIndicator({ verifiedAt }) {
+  const days = daysSince(verifiedAt);
+  if (days == null) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-if-warning">
+        <AlertTriangle size={11} /> unverified
+      </span>
+    );
+  }
+  if (days > STALE_DAYS) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-if-warning">
+        <Clock size={11} /> verified {days}d ago
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] text-if-muted">
+      <CheckCircle2 size={11} /> verified {days}d ago
+    </span>
+  );
 }
 
 function PageCard({ page, onOpen }) {
+  const preview = (page.body_md || '').slice(0, 220).replace(/[#*`>]/g, '').trim();
+  const color = CATEGORY_COLOR[page.category] || 'var(--text-tertiary)';
   return (
-    <button onClick={() => onOpen(page.slug)} style={{ display: "block", width: "100%", textAlign: "left", background: T.white, border: `1px solid ${T.slate200}`, borderRadius: 10, padding: 14, cursor: "pointer", transition: "border-color 0.15s, box-shadow 0.15s" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.blue; e.currentTarget.style.boxShadow = "0 4px 12px rgba(45,125,210,0.08)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.slate200; e.currentTarget.style.boxShadow = "none"; }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
+    <button
+      type="button"
+      onClick={() => onOpen(page.slug)}
+      className="group relative w-full text-left if-card hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer overflow-hidden"
+      style={{ borderLeft: `3px solid ${color}` }}
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <h4 className="text-sm font-semibold text-if-navy leading-snug group-hover:text-if-blue transition-colors">
+          {page.title}
+        </h4>
         <CategoryBadge category={page.category} />
+      </div>
+      <div className="text-[12px] text-if-muted leading-relaxed line-clamp-3 mb-3">
+        {preview}{preview.length === 220 ? '…' : ''}
+      </div>
+      <div className="flex items-center justify-between pt-2 border-t border-if-line">
+        <code className="text-[10px] text-if-muted font-mono">{page.slug}</code>
         <StaleIndicator verifiedAt={page.last_verified_at} />
       </div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: T.slate900, marginBottom: 4, lineHeight: 1.3 }}>{page.title}</div>
-      {page.summary && <div style={{ fontSize: 12, color: T.slate500, lineHeight: 1.5 }}>{page.summary.length > 140 ? page.summary.slice(0, 140).trim() + "…" : page.summary}</div>}
     </button>
   );
 }
 
-function PageDetail({ page, onBack, onEdit, onRefresh, allPagesBySlug }) {
+function PageDetail({ slug, onBack, onEdit, onRefresh, allPagesBySlug }) {
+  const { data: page, loading, error, refetch } = useSupabaseQuery(
+    () => supabase.from('system_map').select('*').eq('slug', slug).single(),
+    [slug],
+  );
   const [bumping, setBumping] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const bumpVerified = async () => {
-    if (!supabase) return;
+  const [bumpError, setBumpError] = useState(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  if (loading) return <LoadingState label="Loading page…" />;
+  if (error || !page) return <EmptyState title="Page not found" description={`No system_map row with slug "${slug}".`} />;
+
+  async function handleVerify() {
     setBumping(true);
+    setBumpError(null);
     try {
-      const { error } = await supabase.rpc("bump_system_map_verified", { p_slug: page.slug, p_by: "owner" });
-      if (error) throw error;
-      await onRefresh();
-    } catch (err) { alert("Could not update verified date: " + (err.message || err)); }
-    finally { setBumping(false); }
-  };
-  const askContext = `Wiki page: ${page.title}\nSlug: ${page.slug}\nCategory: ${page.category}\n\n---\n\n${page.body_md || ""}`;
-  const related = (page.related_slugs || []).map((s) => allPagesBySlug[s]).filter(Boolean);
+      const { error: e } = await supabase.rpc('bump_system_map_verified', {
+        p_slug: slug,
+        p_verified_by: (await supabase.auth.getUser())?.data?.user?.email ?? 'unknown',
+      });
+      if (e) throw e;
+      await refetch();
+      onRefresh?.();
+    } catch (e) {
+      setBumpError(e.message || String(e));
+    } finally {
+      setBumping(false);
+    }
+  }
+
+  const related = (page.related_slugs || []).map((s) => ({
+    slug: s,
+    title: allPagesBySlug.get(s)?.title || s,
+    category: allPagesBySlug.get(s)?.category || null,
+  }));
+
   return (
-    <div style={{ background: T.white, borderRadius: 12, border: `1px solid ${T.slate200}`, overflow: "hidden" }}>
-      <div style={{ padding: "16px 20px", borderBottom: `1px solid ${T.slate200}`, background: T.slate50, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        <button onClick={onBack} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: T.slate600, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>← Back to wiki</button>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={bumpVerified} disabled={bumping} style={{ background: T.white, color: T.green, border: `1px solid ${T.green}`, borderRadius: 7, padding: "7px 12px", fontSize: 11, fontWeight: 600, cursor: bumping ? "wait" : "pointer" }}>{bumping ? "Updating…" : "✓ Mark verified"}</button>
-          <button onClick={() => setShowHistory(true)} style={{ background: T.white, color: T.slate600, border: `1px solid ${T.slate300}`, borderRadius: 7, padding: "7px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>🕒 History</button>
-          <AskBtn context={askContext} size="small" />
-          <button onClick={onEdit} style={{ background: T.navy, color: T.white, border: "none", borderRadius: 7, padding: "7px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>✎ Edit</button>
+    <div>
+      <div className="flex items-center justify-between mb-3 if-no-print">
+        <button onClick={onBack} className="if-button-ghost text-xs inline-flex items-center gap-1">
+          <ChevronLeft size={14} /> Back to map
+        </button>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <button onClick={handleVerify} disabled={bumping} className="if-button-ghost text-xs inline-flex items-center gap-1">
+            <CheckCircle2 size={14} /> {bumping ? 'Marking…' : 'Verified now'}
+          </button>
+          <button
+            onClick={() => setHistoryOpen(true)}
+            className="if-button-ghost text-xs inline-flex items-center gap-1"
+            title="View past revisions of this page"
+          >
+            <History size={14} /> History
+          </button>
+          <PrintButton title={`BCC System Map — ${page.title}`} />
+          <AskClaudeButton
+            moduleLabel="System Map"
+            subject={`Wiki page: ${page.title} (${page.slug})`}
+            context={{
+              slug: page.slug,
+              title: page.title,
+              category: page.category,
+              last_verified_at: page.last_verified_at,
+              last_verified_by: page.last_verified_by,
+              related_slugs: page.related_slugs,
+              body_md: page.body_md,
+            }}
+            suggestedPrompt={`Help me work through what's on this BCC wiki page. What's outdated, missing, or worth updating?`}
+          />
+          <button onClick={() => onEdit(page)} className="if-button-ghost text-xs inline-flex items-center gap-1">
+            <Edit2 size={14} /> Edit
+          </button>
         </div>
       </div>
-      <div style={{ padding: "22px 26px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+
+      <div className="if-card">
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h2 className="text-if-navy">{page.title}</h2>
           <CategoryBadge category={page.category} />
-          <StaleIndicator verifiedAt={page.last_verified_at} />
-          {page.source_of_truth && <span style={{ fontSize: 10, color: T.slate500, background: T.slate50, border: `1px solid ${T.slate200}`, padding: "3px 8px", borderRadius: 6 }}>Source of truth: {page.source_of_truth}</span>}
         </div>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: T.slate900, margin: "6px 0 4px", letterSpacing: "-0.02em" }}>{page.title}</h1>
-        {page.summary && <div style={{ fontSize: 14, color: T.slate600, lineHeight: 1.6, marginBottom: 18, fontStyle: "italic" }}>{page.summary}</div>}
-        <div>{renderMarkdown(page.body_md)}</div>
+        <div className="flex items-center gap-3 text-[11px] text-if-muted mb-3">
+          <code className="font-mono">{page.slug}</code>
+          <span>•</span>
+          <StaleIndicator verifiedAt={page.last_verified_at} />
+          {page.last_verified_by && (
+            <>
+              <span>•</span>
+              <span>by {page.last_verified_by}</span>
+            </>
+          )}
+        </div>
+        {bumpError && (
+          <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+            {bumpError}
+          </div>
+        )}
+
+        <div className="prose-bcc">
+          {renderMarkdown(page.body_md)}
+        </div>
+
         {related.length > 0 && (
-          <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1px solid ${T.slate200}` }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: T.slate500, marginBottom: 10 }}>Related pages</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{related.map((r) => <button key={r.slug} onClick={() => onBack(r.slug)} style={{ background: T.blueLt, color: T.navy, border: `1px solid ${T.blue}`, borderRadius: 20, padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{r.title}</button>)}</div>
+          <div className="mt-6 pt-3 border-t border-if-line">
+            <div className="text-[11px] text-if-muted uppercase tracking-wide mb-2 inline-flex items-center gap-1">
+              <Link2 size={11} /> Related pages
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {related.map((r) => (
+                <button
+                  key={r.slug}
+                  onClick={() => onRefresh && onRefresh(r.slug)}
+                  className="text-xs px-2 py-1 rounded border border-if-line bg-if-page hover:border-if-blue transition-colors text-if-navy if-no-print"
+                  title={r.slug}
+                >
+                  {r.category && <span className="text-if-muted mr-1">[{r.category}]</span>}
+                  {r.title}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
-      {showHistory && <RevisionHistoryModal slug={page.slug} onClose={() => setShowHistory(false)} />}
+
+      {historyOpen && (
+        <RevisionHistoryModal slug={page.slug} onClose={() => setHistoryOpen(false)} />
+      )}
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Revision history: shows the snapshot rows from system_map_revisions, which
+// captures the pre-update state on every system_map UPDATE (trigger).
+// ---------------------------------------------------------------------------
+
 function RevisionHistoryModal({ slug, onClose }) {
-  const [revisions, setRevisions] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!supabase) { setErr("Database unavailable"); setLoading(false); return; }
-      try {
-        const { data, error } = await supabase.from("system_map_revisions").select("*").eq("slug", slug).order("revised_at", { ascending: false }).limit(30);
-        if (cancelled) return;
-        if (error) throw error;
-        setRevisions(data || []);
-      } catch (e) { if (!cancelled) setErr(e.message || String(e)); }
-      finally { if (!cancelled) setLoading(false); }
-    })();
-    return () => { cancelled = true; };
-  }, [slug]);
+  const { data, loading, error } = useSupabaseQuery(
+    () => supabase
+      .from('system_map_revisions')
+      .select('id, slug, title, category, body_md, edited_by, edited_at, reason')
+      .eq('slug', slug)
+      .order('edited_at', { ascending: false })
+      .limit(50),
+    [slug],
+  );
+  const [openId, setOpenId] = useState(null);
+  const rows = data ?? [];
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
-      <div style={{ background: T.white, borderRadius: 12, maxWidth: 720, width: "100%", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 50px rgba(0,0,0,0.25)" }}>
-        <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.slate200}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: T.slate900 }}>Revision history — {slug}</div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", fontSize: 20, color: T.slate500, cursor: "pointer", lineHeight: 1 }}>×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 if-no-print">
+      <div className="if-card max-w-3xl w-full max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between mb-3 flex-shrink-0">
+          <h3 className="text-if-navy inline-flex items-center gap-2">
+            <History size={16} /> Revision history — <code className="text-xs">{slug}</code>
+          </h3>
+          <button onClick={onClose} className="if-button-ghost text-xs">
+            <X size={14} /> Close
+          </button>
         </div>
-        <div style={{ padding: "14px 20px", overflowY: "auto" }}>
-          {loading && <LoadingState rows={3} message="Loading revisions…" />}
-          {err && <div style={{ color: T.red, fontSize: 12, padding: 12, background: T.redLt, borderRadius: 8 }}>{err}</div>}
-          {!loading && !err && revisions && revisions.length === 0 && <div style={{ padding: 20, textAlign: "center", color: T.slate500, fontSize: 12 }}>No revisions recorded yet.</div>}
-          {!loading && revisions && revisions.map((r, ii) => (
-            <div key={ii} style={{ padding: "10px 0", borderBottom: `1px solid ${T.slate100}`, fontSize: 12, color: T.slate600 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <div style={{ fontWeight: 600, color: T.slate800 }}>{r.title || "(untitled)"}</div>
-                <div style={{ fontSize: 11 }}>{fmtDate(r.revised_at)}</div>
-              </div>
-              <div style={{ fontSize: 11, color: T.slate500 }}>Category: {r.category} · Revised by: {r.revised_by || "unknown"}</div>
+
+        <div className="text-xs text-if-muted mb-3 flex-shrink-0">
+          Each row is the page state BEFORE that edit (captured on UPDATE by a Postgres trigger).
+          Most recent edit at top.
+        </div>
+
+        <div className="overflow-auto flex-1 min-h-0">
+          {loading && <LoadingState label="Loading revisions…" />}
+          {error && (
+            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+              {error.message}
             </div>
-          ))}
+          )}
+          {!loading && !error && rows.length === 0 && (
+            <EmptyState
+              title="No revisions yet"
+              description="This page hasn't been edited since it was created — there's nothing in the audit log."
+            />
+          )}
+          <ul className="space-y-2">
+            {rows.map((rev) => (
+              <li key={rev.id} className="border border-if-line rounded-md">
+                <button
+                  type="button"
+                  onClick={() => setOpenId(openId === rev.id ? null : rev.id)}
+                  className="w-full text-left px-3 py-2 hover:bg-if-blue-lt transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-if-navy">{rev.title || '(untitled)'}</span>
+                    <span className="text-[11px] text-if-muted">{fmtDate(rev.edited_at, 'PPpp')}</span>
+                  </div>
+                  <div className="text-[11px] text-if-muted mt-0.5">
+                    {rev.category} • edited by {rev.edited_by || 'unknown'}
+                    {rev.reason && <> • {rev.reason}</>}
+                  </div>
+                </button>
+                {openId === rev.id && (
+                  <div className="border-t border-if-line px-3 py-2 bg-if-page">
+                    <pre className="text-xs font-mono whitespace-pre-wrap text-if-ink max-h-64 overflow-auto">
+                      {rev.body_md || '(empty body)'}
+                    </pre>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </div>
@@ -279,129 +509,449 @@ function RevisionHistoryModal({ slug, onClose }) {
 }
 
 function PageEditor({ initial, onCancel, onSaved, onDeleted }) {
-  const isNew = !initial?.slug;
-  const [form, setForm] = useState({
-    slug: initial?.slug || "",
-    title: initial?.title || "",
-    category: initial?.category || "overview",
-    summary: initial?.summary || "",
-    body_md: initial?.body_md || "",
-    source_of_truth: initial?.source_of_truth || "",
-    sort_order: initial?.sort_order ?? 50,
-    related_slugs: (initial?.related_slugs || []).join(", "),
-  });
+  const isNew = !initial;
+  const [slug, setSlug] = useState(initial?.slug ?? '');
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [category, setCategory] = useState(initial?.category ?? 'domain');
+  const [bodyMd, setBodyMd] = useState(initial?.body_md ?? '');
+  const [relatedSlugs, setRelatedSlugs] = useState((initial?.related_slugs ?? []).join(', '));
+  const [sortOrder, setSortOrder] = useState(initial?.sort_order ?? 100);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState(null);
-  const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const save = async () => {
-    if (!supabase) { setErr("Database unavailable"); return; }
-    if (!form.slug || !form.title) { setErr("Slug and title are required"); return; }
-    setSaving(true); setErr(null);
+  const [error, setError] = useState(null);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
     try {
+      const userEmail = (await supabase.auth.getUser())?.data?.user?.email ?? 'unknown';
       const payload = {
-        slug: form.slug.trim(), title: form.title.trim(), category: form.category,
-        summary: form.summary || null, body_md: form.body_md || null,
-        source_of_truth: form.source_of_truth || null,
-        sort_order: Number.isFinite(+form.sort_order) ? +form.sort_order : 50,
-        related_slugs: form.related_slugs.split(",").map((s) => s.trim()).filter(Boolean),
+        slug: slug.trim(),
+        title: title.trim(),
+        category,
+        body_md: bodyMd,
+        related_slugs: relatedSlugs.split(',').map((s) => s.trim()).filter(Boolean),
+        sort_order: Number(sortOrder) || 100,
         last_verified_at: new Date().toISOString(),
-        last_verified_by: "owner",
-        updated_at: new Date().toISOString(),
+        last_verified_by: userEmail,
       };
-      let result;
-      if (isNew) result = await supabase.from("system_map").insert(payload).select().single();
-      else result = await supabase.from("system_map").update(payload).eq("slug", initial.slug).select().single();
-      if (result.error) throw result.error;
-      await onSaved(result.data);
-    } catch (e) { setErr(e.message || String(e)); }
-    finally { setSaving(false); }
-  };
-  const del = async () => {
-    if (!supabase || !initial?.slug) return;
+      let res;
+      if (isNew) {
+        res = await supabase.from('system_map').insert(payload).select().single();
+      } else {
+        res = await supabase.from('system_map').update(payload).eq('slug', initial.slug).select().single();
+      }
+      if (res.error) throw res.error;
+      onSaved(res.data.slug);
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setSaving(true);
+    setError(null);
     try {
-      const { error } = await supabase.from("system_map").delete().eq("slug", initial.slug);
-      if (error) throw error;
-      await onDeleted();
-    } catch (e) { setErr(e.message || String(e)); }
-  };
-  const field = { display: "block", width: "100%", padding: "8px 10px", fontSize: 12, border: `1px solid ${T.slate200}`, borderRadius: 7, background: T.white, color: T.slate900, boxSizing: "border-box", fontFamily: "inherit" };
-  const label = { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: T.slate600, marginBottom: 6, display: "block" };
+      const { error: delErr } = await supabase
+        .from('system_map')
+        .delete()
+        .eq('slug', initial.slug);
+      if (delErr) throw delErr;
+      onDeleted?.(initial.slug);
+    } catch (e) {
+      setError(e.message || String(e));
+      setSaving(false);
+    }
+  }
+
   return (
-    <div style={{ background: T.white, borderRadius: 12, border: `1px solid ${T.slate200}`, overflow: "hidden" }}>
-      <div style={{ padding: "16px 20px", borderBottom: `1px solid ${T.slate200}`, background: T.slate50, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: T.slate900 }}>{isNew ? "New wiki page" : `Edit — ${initial.title}`}</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={onCancel} style={{ background: T.white, color: T.slate600, border: `1px solid ${T.slate300}`, borderRadius: 7, padding: "7px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-          {!isNew && <DeleteBtn onConfirm={del} />}
-          <button onClick={save} disabled={saving} style={{ background: T.blue, color: T.white, border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 11, fontWeight: 700, cursor: saving ? "wait" : "pointer" }}>{saving ? "Saving…" : "💾 Save"}</button>
+    <div>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <button onClick={onCancel} className="if-button-ghost text-xs inline-flex items-center gap-1">
+          <X size={14} /> Cancel
+        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {!isNew && (
+            <ConfirmDeleteButton
+              onConfirm={handleDelete}
+              label="Delete page"
+              confirmLabel="Click again to permanently delete"
+              disabled={saving}
+            />
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving || !slug || !title}
+            className="if-button"
+          >
+            <Save size={14} /> {saving ? 'Saving…' : (isNew ? 'Create page' : 'Save changes')}
+          </button>
         </div>
       </div>
-      <div style={{ padding: "18px 22px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <div><div style={label}>Slug (URL-safe id)</div><input value={form.slug} onChange={(e) => update("slug", e.target.value)} disabled={!isNew} style={{ ...field, background: isNew ? T.white : T.slate50, color: isNew ? T.slate900 : T.slate500 }} placeholder="e.g. runbook-monthly-close" /></div>
-        <div><div style={label}>Category</div><select value={form.category} onChange={(e) => update("category", e.target.value)} style={field}>{CATEGORIES.filter((c) => c.key !== "all").map((c) => <option key={c.key} value={c.key}>{c.icon} {c.label}</option>)}</select></div>
-        <div style={{ gridColumn: "1 / -1" }}><div style={label}>Title</div><input value={form.title} onChange={(e) => update("title", e.target.value)} style={field} placeholder="Human-readable page title" /></div>
-        <div style={{ gridColumn: "1 / -1" }}><div style={label}>Summary (short paragraph)</div><textarea value={form.summary} onChange={(e) => update("summary", e.target.value)} rows={2} style={{ ...field, resize: "vertical", minHeight: 44 }} placeholder="One or two sentences that describe the page" /></div>
-        <div style={{ gridColumn: "1 / -1" }}><div style={label}>Body (markdown)</div><textarea value={form.body_md} onChange={(e) => update("body_md", e.target.value)} rows={16} style={{ ...field, resize: "vertical", minHeight: 240, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12 }} placeholder="# Heading" /></div>
-        <div><div style={label}>Source of truth</div><input value={form.source_of_truth} onChange={(e) => update("source_of_truth", e.target.value)} style={field} placeholder="e.g. AA05 § I.B, agency.settings" /></div>
-        <div><div style={label}>Sort order</div><input type="number" value={form.sort_order} onChange={(e) => update("sort_order", e.target.value)} style={field} /></div>
-        <div style={{ gridColumn: "1 / -1" }}><div style={label}>Related slugs (comma-separated)</div><input value={form.related_slugs} onChange={(e) => update("related_slugs", e.target.value)} style={field} placeholder="bcc-overview, integration-composio" /></div>
-        {err && <div style={{ gridColumn: "1 / -1", background: T.redLt, color: T.red, border: `1px solid ${T.red}`, padding: 10, borderRadius: 7, fontSize: 12 }}>{err}</div>}
+
+      <div className="if-card space-y-3">
+        <h3 className="text-if-navy">{isNew ? 'New system map page' : 'Edit page'}</h3>
+
+        {error && (
+          <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-if-navy mb-1">Slug</label>
+            <input
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              disabled={!isNew}
+              placeholder="lowercase-hyphenated-id"
+              className="w-full px-2 py-1.5 border border-if-line rounded-md text-sm font-mono disabled:opacity-60 bg-if-card"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-if-navy mb-1">Sort order</label>
+            <input
+              type="number"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="w-full px-2 py-1.5 border border-if-line rounded-md text-sm bg-if-card"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-if-navy mb-1">Title</label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full px-2 py-1.5 border border-if-line rounded-md text-sm bg-if-card"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-if-navy mb-1">Category</label>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="w-full px-2 py-1.5 border border-if-line rounded-md text-sm bg-if-card"
+          >
+            {CATEGORIES.filter((c) => c.key !== 'all').map((c) => (
+              <option key={c.key} value={c.key}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-if-navy mb-1">Related slugs (comma-separated)</label>
+          <input
+            value={relatedSlugs}
+            onChange={(e) => setRelatedSlugs(e.target.value)}
+            placeholder="slug-one, slug-two"
+            className="w-full px-2 py-1.5 border border-if-line rounded-md text-sm font-mono bg-if-card"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-if-navy mb-1">
+            Body (Markdown — headings, bold, italic, code, lists, tables, links, blockquotes)
+          </label>
+          <textarea
+            value={bodyMd}
+            onChange={(e) => setBodyMd(e.target.value)}
+            rows={24}
+            className="w-full px-2 py-1.5 border border-if-line rounded-md text-xs font-mono bg-if-card"
+          />
+        </div>
       </div>
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main module
+// ---------------------------------------------------------------------------
+
 export default function SystemMap() {
-  const { data, loading, error } = useSupabaseQuery(() => supabase.from("system_map").select("*").order("sort_order", { ascending: true }), []);
-  const pages = data || [];
-  const [selectedSlug, setSelectedSlug] = useState(null);
-  const [category, setCategory] = useState("all");
-  const [query, setQuery] = useState("");
-  const [mode, setMode] = useState("browse");
-  const [editing, setEditing] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const forceReload = () => setReloadKey((k) => k + 1);
-  const refetch = useSupabaseQuery(() => supabase.from("system_map").select("*").order("sort_order", { ascending: true }), [reloadKey]);
-  const livePages = reloadKey === 0 ? pages : (refetch.data || pages);
-  const pagesBySlug = useMemo(() => Object.fromEntries(livePages.map((p) => [p.slug, p])), [livePages]);
+  const [view, setView] = useState({ mode: 'list' }); // {mode:'list'} | {mode:'detail',slug} | {mode:'edit',page?} | {mode:'new'}
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const { data: pagesRaw, loading, error, refetch } = useSupabaseQuery(
+    () => supabase
+      .from('system_map')
+      .select('slug, title, category, body_md, related_slugs, sort_order, last_verified_at, last_verified_by, updated_at')
+      .order('category')
+      .order('sort_order'),
+    [refreshKey],
+  );
+  const pages = pagesRaw ?? [];
+
+  const allPagesBySlug = useMemo(() => {
+    const m = new Map();
+    for (const p of pages) m.set(p.slug, p);
+    return m;
+  }, [pages]);
+
+  // Filter pipeline
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return livePages.filter((p) => {
-      if (category !== "all" && p.category !== category) return false;
-      if (!q) return true;
-      const hay = [p.title, p.summary, p.body_md, p.slug].filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(q);
-    });
-  }, [livePages, category, query]);
+    let out = pages;
+    if (categoryFilter !== 'all') {
+      out = out.filter((p) => p.category === categoryFilter);
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      out = out.filter(
+        (p) => p.title.toLowerCase().includes(q)
+            || p.slug.toLowerCase().includes(q)
+            || (p.body_md || '').toLowerCase().includes(q),
+      );
+    }
+    return out;
+  }, [pages, categoryFilter, search]);
+
+  // Group by category for list view
   const grouped = useMemo(() => {
-    const groups = {};
-    for (const p of filtered) { const k = p.category || "overview"; if (!groups[k]) groups[k] = []; groups[k].push(p); }
-    return groups;
+    const m = new Map();
+    for (const p of filtered) {
+      if (!m.has(p.category)) m.set(p.category, []);
+      m.get(p.category).push(p);
+    }
+    return m;
   }, [filtered]);
-  const selected = selectedSlug ? pagesBySlug[selectedSlug] : null;
-  if (mode === "edit" || mode === "new") return (<div style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}><PageEditor initial={mode === "edit" ? editing : null} onCancel={() => { setMode("browse"); setEditing(null); }} onSaved={(row) => { setMode("browse"); setEditing(null); setSelectedSlug(row.slug); forceReload(); }} onDeleted={() => { setMode("browse"); setEditing(null); setSelectedSlug(null); forceReload(); }} /></div>);
-  if (selected) return (<div style={{ padding: 24, maxWidth: 1000, margin: "0 auto" }}><PageDetail page={selected} onBack={(nextSlug) => { setSelectedSlug(typeof nextSlug === "string" ? nextSlug : null); }} onEdit={() => { setEditing(selected); setMode("edit"); }} onRefresh={async () => { forceReload(); }} allPagesBySlug={pagesBySlug} /></div>);
+
+  // Counts for category pills
+  const counts = useMemo(() => {
+    const c = { all: pages.length };
+    for (const p of pages) c[p.category] = (c[p.category] || 0) + 1;
+    return c;
+  }, [pages]);
+
+  function openPage(slug) {
+    setView({ mode: 'detail', slug });
+    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+  }
+
+  if (loading) return <LoadingState label="Loading system map…" />;
+  if (error) {
+    return (
+      <div className="if-card text-sm text-red-700">
+        Failed to load system_map: {error.message}
+        <button onClick={() => refetch()} className="if-button-ghost text-xs ml-3"><RefreshCw size={12} /> Retry</button>
+      </div>
+    );
+  }
+
+  // ---- View dispatch ----
+
+  if (view.mode === 'edit') {
+    return (
+      <PageEditor
+        initial={view.page}
+        onCancel={() => setView({ mode: 'detail', slug: view.page.slug })}
+        onSaved={(slug) => {
+          setRefreshKey((k) => k + 1);
+          setView({ mode: 'detail', slug });
+        }}
+        onDeleted={() => {
+          setRefreshKey((k) => k + 1);
+          setView({ mode: 'list' });
+        }}
+      />
+    );
+  }
+
+  if (view.mode === 'new') {
+    return (
+      <PageEditor
+        initial={null}
+        onCancel={() => setView({ mode: 'list' })}
+        onSaved={(slug) => {
+          setRefreshKey((k) => k + 1);
+          setView({ mode: 'detail', slug });
+        }}
+      />
+    );
+  }
+
+  if (view.mode === 'detail') {
+    return (
+      <PageDetail
+        slug={view.slug}
+        allPagesBySlug={allPagesBySlug}
+        onBack={() => setView({ mode: 'list' })}
+        onEdit={(page) => setView({ mode: 'edit', page })}
+        onRefresh={(slug) => {
+          setRefreshKey((k) => k + 1);
+          if (slug && typeof slug === 'string') setView({ mode: 'detail', slug });
+        }}
+      />
+    );
+  }
+
+  // ---- List view ----
+
+  // Stats for hero
+  const verifiedRecently = pages.filter(p => {
+    const d = daysSince(p.last_verified_at);
+    return d != null && d <= STALE_DAYS;
+  }).length;
+  const activeCategories = new Set(pages.map(p => p.category)).size;
+
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16, marginBottom: 20 }}>
-        <div><div style={{ fontSize: 26, fontWeight: 800, color: T.slate900, letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: 10 }}>🗺️ Wiki & System Map</div><div style={{ fontSize: 13, color: T.slate500, marginTop: 4 }}>Everything this BCC is and how it works. Editable — every change is revision-tracked.</div></div>
-        <button onClick={() => { setEditing(null); setMode("new"); }} style={{ background: T.blue, color: T.white, border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ New page</button>
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16, alignItems: "center" }}>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="🔍 Search titles, summaries, body…" style={{ flex: "1 1 260px", maxWidth: 400, padding: "9px 12px", fontSize: 12, border: `1px solid ${T.slate200}`, borderRadius: 8, background: T.white, color: T.slate900, boxSizing: "border-box" }} />
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{CATEGORIES.map((c) => <FilterPill key={c.key} active={category === c.key} onClick={() => setCategory(c.key)}><span>{c.icon}</span><span>{c.label}</span></FilterPill>)}</div>
-      </div>
-      {loading && <LoadingState rows={4} message="Loading wiki pages…" />}
-      {error && <div style={{ background: T.redLt, color: T.red, border: `1px solid ${T.red}`, padding: 12, borderRadius: 8, fontSize: 12 }}>Failed to load wiki: {error}</div>}
-      {!loading && !error && livePages.length === 0 && <EmptyState icon="🗺️" title="No wiki pages yet" description='Seed pages should have been loaded from migration 045 + seed 02. Click "New page" to add one, or contact your Claude to reseed.' />}
-      {!loading && !error && livePages.length > 0 && filtered.length === 0 && <div style={{ background: T.white, border: `1px solid ${T.slate200}`, padding: 30, borderRadius: 10, textAlign: "center", color: T.slate500, fontSize: 13 }}>No pages match your search or filter.</div>}
-      {!loading && !error && filtered.length > 0 && (
-        <div>{CATEGORIES.filter((c) => c.key !== "all" && grouped[c.key]?.length).map((c) => (
-          <div key={c.key} style={{ marginBottom: 26 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><span style={{ fontSize: 13 }}>{c.icon}</span><span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: T.slate600 }}>{c.label}</span><span style={{ fontSize: 11, color: T.slate400 }}>({grouped[c.key].length})</span></div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>{grouped[c.key].map((p) => <PageCard key={p.slug} page={p} onOpen={(slug) => setSelectedSlug(slug)} />)}</div>
+    <div>
+      {/* Hero header — welcoming, big search */}
+      <div
+        className="relative rounded-2xl overflow-hidden mb-6"
+        style={{
+          background: 'linear-gradient(135deg, #1B2B4B 0%, #2D3E63 55%, #2D7DD2 100%)',
+          padding: '28px 28px 24px',
+          color: 'white',
+        }}
+      >
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <BookOpen size={22} />
+              <h2 className="text-xl font-bold m-0">Wiki &amp; System Map</h2>
+            </div>
+            <p className="text-sm opacity-90 max-w-2xl leading-relaxed m-0">
+              Your living reference — how the BCC is wired, what every system does, where every decision came from.
+              Search anything, jump anywhere.
+            </p>
           </div>
-        ))}</div>
+          <button
+            onClick={() => setView({ mode: 'new' })}
+            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors"
+            style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white' }}
+          >
+            <Plus size={14} /> New page
+          </button>
+        </div>
+
+        {/* Big search bar */}
+        <div className="relative">
+          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search page titles, slugs, or full content across all pages…"
+            className="w-full pl-11 pr-11 py-3 rounded-xl text-sm bg-white/95 text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white/50"
+            style={{ border: 'none' }}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-slate-200 transition-colors"
+            >
+              <X size={14} className="text-slate-600" />
+            </button>
+          )}
+        </div>
+
+        {/* Stat strip */}
+        <div className="flex items-center gap-6 mt-4 text-xs">
+          <div className="opacity-90">
+            <span className="font-bold text-base mr-1">{pages.length}</span> pages
+          </div>
+          <div className="opacity-90">
+            <span className="font-bold text-base mr-1">{activeCategories}</span> categories
+          </div>
+          <div className="opacity-90">
+            <span className="font-bold text-base mr-1">{verifiedRecently}</span> verified in last {STALE_DAYS} days
+          </div>
+          {search && (
+            <div className="opacity-90 ml-auto">
+              <span className="font-bold text-base mr-1">{filtered.length}</span> match{filtered.length === 1 ? '' : 'es'}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Category filter chips */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        {CATEGORIES.map((c) => {
+          const active = categoryFilter === c.key;
+          const count = counts[c.key] || 0;
+          return (
+            <button
+              key={c.key}
+              onClick={() => setCategoryFilter(c.key)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+              style={{
+                backgroundColor: active ? c.color : c.accent,
+                color: active ? 'white' : c.color,
+                border: `1px solid ${active ? c.color : c.color + '33'}`,
+              }}
+            >
+              <span>{c.short}</span>
+              <span
+                className="inline-flex items-center justify-center rounded-full text-[10px] font-bold min-w-[20px] h-[18px] px-1.5"
+                style={{
+                  backgroundColor: active ? 'rgba(255,255,255,0.22)' : 'white',
+                  color: active ? 'white' : c.color,
+                }}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="if-card text-center py-12">
+          <div className="mb-3 flex justify-center">
+            <div className="rounded-full p-3" style={{ backgroundColor: 'var(--if-page)' }}>
+              <FileText size={32} className="text-if-muted" />
+            </div>
+          </div>
+          <div className="text-base font-semibold text-if-navy mb-1">
+            {search ? 'No pages match your search' : 'No pages in this category yet'}
+          </div>
+          <div className="text-sm text-if-muted mb-4 max-w-md mx-auto">
+            {search
+              ? `Nothing matches "${search}" in titles, slugs, or content. Try a different term or clear the filter.`
+              : 'Start building this section of the wiki by creating a new page.'}
+          </div>
+          {search ? (
+            <button onClick={() => setSearch('')} className="if-button-ghost text-xs">
+              <X size={12} /> Clear search
+            </button>
+          ) : (
+            <button onClick={() => setView({ mode: 'new' })} className="if-button text-xs">
+              <Plus size={12} /> New page
+            </button>
+          )}
+        </div>
+      ) : (
+        Array.from(grouped.entries()).map(([cat, list]) => {
+          const color = CATEGORY_COLOR[cat] || 'var(--text-tertiary)';
+          return (
+            <div key={cat} className="mb-7">
+              <div className="flex items-baseline gap-2 mb-3 pb-1.5 border-b border-if-line">
+                <div
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: color }}
+                />
+                <div className="text-xs font-bold uppercase tracking-wider" style={{ color }}>
+                  {CATEGORY_LABEL[cat] || cat}
+                </div>
+                <div className="text-[11px] text-if-muted">
+                  {list.length} page{list.length === 1 ? '' : 's'}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {list.map((p) => (
+                  <PageCard key={p.slug} page={p} onOpen={openPage} />
+                ))}
+              </div>
+            </div>
+          );
+        })
       )}
     </div>
   );

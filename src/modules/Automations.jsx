@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { AGENCY_ID } from "../lib/supabase.js";
+import { supabase, AGENCY_ID } from "../lib/supabase.js";
 import { useSupabaseTable } from "../lib/hooks.js";
 import EmptyState from "../components/EmptyState.jsx";
 
@@ -30,33 +30,175 @@ import EmptyState from "../components/EmptyState.jsx";
 
 // ─── Design Tokens ────────────────────────────────────────────
 const T = {
-  navy:    "#1B2B4B",
-  blue:    "#2D7DD2",
-  blueLt:  "#EFF6FF",
-  green:   "#10B981",
-  greenLt: "#D1FAE5",
-  amber:   "#F59E0B",
-  amberLt: "#FEF3C7",
-  red:     "#EF4444",
-  redLt:   "#FEE2E2",
-  purple:  "#7C3AED",
-  purpleLt:"#EDE9FE",
+  navy:    "var(--accent-navy)",
+  blue:    "var(--accent-blue)",
+  blueLt:  "var(--accent-navy-bg)",
+  green:   "var(--success)",
+  greenLt: "var(--success-bg)",
+  amber:   "var(--warning)",
+  amberLt: "var(--warning-bg)",
+  red:     "var(--danger)",
+  redLt:   "var(--danger-bg)",
+  purple:  "var(--accent-purple)",
+  purpleLt:"var(--accent-purple-bg)",
   teal:    "#0D9488",
   tealLt:  "#CCFBF1",
-  slate50: "#F8FAFC",
-  slate100:"#F1F5F9",
-  slate200:"#E2E8F0",
-  slate300:"#CBD5E1",
-  slate400:"#94A3B8",
-  slate500:"#64748B",
-  slate600:"#475569",
-  slate700:"#334155",
-  slate800:"#1E293B",
-  slate900:"#0F172A",
-  white:   "#FFFFFF",
+  slate50: "var(--bg-panel-subtle)",
+  slate100:"var(--bg-panel)",
+  slate200:"var(--border-subtle)",
+  slate300:"var(--border-strong)",
+  slate400:"var(--text-quaternary)",
+  slate500:"var(--text-tertiary)",
+  slate600:"var(--text-secondary)",
+  slate700:"var(--text-secondary)",
+  slate800:"var(--text-primary)",
+  slate900:"var(--text-primary)",
+  white:   "var(--bg-card)",
+  textOnColor: "#FFFFFF",
 };
 
 // ─── Mock Data ────────────────────────────────────────────────
+const MOCK_RECIPES = [
+  {
+    id:"r1", recipe_name:"Daily Briefing Email",
+    recipe_description:"Generates and sends a morning briefing email at 6AM with revenue snapshot, AIPP progress, open tasks, active alerts, compliance deadlines, and today's social posts.",
+    trigger_type:"cron", cron_expression:"0 6 * * *", cron_label:"Daily at 6:00 AM",
+    composio_action:"GMAIL_SEND_EMAIL", composio_connection:"gmail",
+    uses_groq:true, category:"communication",
+    is_active:true, last_run_at:"Today 6:02 AM", last_run_status:"failed",
+    run_count_30d:28, success_rate:96,
+  },
+  {
+    id:"r2", recipe_name:"Gmail Organizer",
+    recipe_description:"Scans inbox hourly, labels and files emails by category (SF Comp, Documents, Clients, Resumes), flags anything requiring agent attention.",
+    trigger_type:"cron", cron_expression:"0 * * * *", cron_label:"Every hour",
+    composio_action:"GMAIL_LIST_THREADS", composio_connection:"gmail",
+    uses_groq:false, category:"email",
+    is_active:true, last_run_at:"Today 7:14 AM", last_run_status:"success",
+    run_count_30d:712, success_rate:99,
+  },
+  {
+    id:"r3", recipe_name:"Document Importer",
+    recipe_description:"Monitors Gmail for financial documents — COMP_RECAP, payroll exports, bank statements. Saves to Google Drive, parses with the Composio-hosted LLM, routes data to correct Supabase tables.",
+    trigger_type:"cron", cron_expression:"0 * * * *", cron_label:"Every hour",
+    composio_action:"GMAIL_LIST_THREADS", composio_connection:"gmail",
+    uses_groq:true, category:"documents",
+    is_active:true, last_run_at:"Yesterday 2:30 PM", last_run_status:"partial",
+    run_count_30d:712, success_rate:94,
+  },
+  {
+    id:"r4", recipe_name:"Resume Scanner",
+    recipe_description:"Scans Gmail daily for incoming resumes. Auto-creates applicant records, scores candidates with the Composio-hosted LLM, generates One Page Interview Focus, fires new applicant alert.",
+    trigger_type:"cron", cron_expression:"0 7 * * *", cron_label:"Daily at 7:00 AM",
+    composio_action:"GMAIL_LIST_THREADS", composio_connection:"gmail",
+    uses_groq:true, category:"hr",
+    is_active:true, last_run_at:"Today 7:00 AM", last_run_status:"success",
+    run_count_30d:28, success_rate:100,
+  },
+  {
+    id:"r5", recipe_name:"Drive Filer",
+    recipe_description:"Nightly sweep ensuring all processed documents are correctly filed in Google Drive by year, month, and document type.",
+    trigger_type:"cron", cron_expression:"0 23 * * *", cron_label:"Daily at 11:00 PM",
+    composio_action:"GDRIVE_CREATE_FILE", composio_connection:"gdrive",
+    uses_groq:false, category:"documents",
+    is_active:true, last_run_at:"Yesterday 11:00 PM", last_run_status:"success",
+    run_count_30d:28, success_rate:100,
+  },
+  {
+    id:"r6", recipe_name:"Facebook Post Scheduler",
+    recipe_description:"Posts scheduled Facebook content from the content calendar. Writes post_url back to content_calendar on success.",
+    trigger_type:"cron", cron_expression:"0 8 * * *", cron_label:"Daily at 8:00 AM",
+    composio_action:"FACEBOOK_CREATE_POST", composio_connection:"facebook",
+    uses_groq:false, category:"social",
+    is_active:true, last_run_at:"Yesterday 9:00 AM", last_run_status:"success",
+    run_count_30d:28, success_rate:96,
+  },
+  {
+    id:"r7", recipe_name:"LinkedIn Post Scheduler",
+    recipe_description:"Posts scheduled LinkedIn content from the content calendar. Writes post_url back on success.",
+    trigger_type:"cron", cron_expression:"0 8 * * *", cron_label:"Daily at 8:00 AM",
+    composio_action:"LINKEDIN_CREATE_POST", composio_connection:"linkedin",
+    uses_groq:false, category:"social",
+    is_active:true, last_run_at:"Yesterday 12:00 PM", last_run_status:"success",
+    run_count_30d:28, success_rate:93,
+  },
+  {
+    id:"r8", recipe_name:"Instagram Manual Post Reminder",
+    recipe_description:"Instagram cannot be auto-posted via API. Checks for scheduled Instagram posts daily and creates a reminder alert for manual posting.",
+    trigger_type:"cron", cron_expression:"0 8 * * *", cron_label:"Daily at 8:00 AM",
+    composio_action:null, composio_connection:null,
+    uses_groq:false, category:"social",
+    is_active:true, last_run_at:"Today 8:00 AM", last_run_status:"success",
+    run_count_30d:28, success_rate:100,
+  },
+  {
+    id:"r9", recipe_name:"Compliance Deadline Monitor",
+    recipe_description:"Checks compliance calendar daily and fires alerts for upcoming deadlines based on each rule's alert_days_before setting.",
+    trigger_type:"cron", cron_expression:"0 7 * * *", cron_label:"Daily at 7:00 AM",
+    composio_action:null, composio_connection:null,
+    uses_groq:false, category:"compliance",
+    is_active:true, last_run_at:"Today 7:00 AM", last_run_status:"success",
+    run_count_30d:28, success_rate:100,
+  },
+  {
+    id:"r10", recipe_name:"Monthly Performance Reminder",
+    recipe_description:"Fires on the 1st of each month reminding agent to log staff performance metrics for the prior month.",
+    trigger_type:"cron", cron_expression:"0 8 1 * *", cron_label:"1st of month at 8:00 AM",
+    composio_action:null, composio_connection:null,
+    uses_groq:false, category:"hr",
+    is_active:true, last_run_at:"Apr 1 8:00 AM", last_run_status:"success",
+    run_count_30d:1, success_rate:100,
+  },
+];
+
+const MOCK_RUN_LOG = [
+  { id:"l1",  recipe_name:"Gmail Organizer",          run_at:"Today 7:14 AM",        status:"success", records_processed:14, duration_seconds:3,  output_summary:"14 emails labeled and filed. 2 flagged for agent review." },
+  { id:"l2",  recipe_name:"Daily Briefing Email",     run_at:"Today 6:02 AM",        status:"failed",  records_processed:0,  duration_seconds:8,  output_summary:"Error: Gmail connection timeout. Authentication may need refresh.", error_message:"Gmail OAuth token expired — reconnect in Composio Settings" },
+  { id:"l3",  recipe_name:"Compliance Deadline Monitor",run_at:"Today 7:00 AM",     status:"success", records_processed:3,  duration_seconds:1,  output_summary:"3 upcoming deadlines checked. 1 alert created (E&O renewal 96 days out)." },
+  { id:"l4",  recipe_name:"Resume Scanner",           run_at:"Today 7:00 AM",        status:"success", records_processed:0,  duration_seconds:4,  output_summary:"No new resumes detected in inbox." },
+  { id:"l5",  recipe_name:"Instagram Reminder",       run_at:"Today 8:00 AM",        status:"success", records_processed:1,  duration_seconds:1,  output_summary:"1 Instagram post scheduled today — manual posting reminder alert created." },
+  { id:"l6",  recipe_name:"Facebook Post Scheduler",  run_at:"Yesterday 9:00 AM",    status:"success", records_processed:1,  duration_seconds:6,  output_summary:"1 post published successfully. post_url saved to content_calendar." },
+  { id:"l7",  recipe_name:"LinkedIn Post Scheduler",  run_at:"Yesterday 12:00 PM",   status:"success", records_processed:1,  duration_seconds:5,  output_summary:"1 post published successfully. post_url saved to content_calendar." },
+  { id:"l8",  recipe_name:"Document Importer",        run_at:"Yesterday 2:30 PM",    status:"partial", records_processed:1,  duration_seconds:22, output_summary:"1 document detected (payroll export). LLM classification: payroll_export. 2 tables updated. 1 file could not be parsed — saved to Drive for manual review." },
+  { id:"l9",  recipe_name:"Drive Filer",              run_at:"Yesterday 11:00 PM",   status:"success", records_processed:3,  duration_seconds:4,  output_summary:"3 documents filed to correct Drive folders. BCC/2026/April/ structure verified." },
+  { id:"l10", recipe_name:"Gmail Organizer",          run_at:"Yesterday 6:14 PM",    status:"success", records_processed:7,  duration_seconds:3,  output_summary:"7 emails labeled and filed." },
+  { id:"l11", recipe_name:"Gmail Organizer",          run_at:"Yesterday 5:14 PM",    status:"success", records_processed:2,  duration_seconds:2,  output_summary:"2 emails labeled and filed." },
+  { id:"l12", recipe_name:"Daily Briefing Email",     run_at:"Yesterday 6:01 AM",    status:"success", records_processed:1,  duration_seconds:11, output_summary:"Briefing email sent to jane@smithagency.com. Subject: Your Agency Snapshot — Sunday April 26." },
+];
+
+const MOCK_CONNECTIONS = [
+  { id:"c1", platform:"Gmail",        icon:"📧", status:"error",   connected_account:"jane@smithagency.com", last_sync:"Today 6:00 AM",    note:"OAuth token expired — needs reconnection in Composio" },
+  { id:"c2", platform:"Google Drive", icon:"📁", status:"healthy", connected_account:"jane@smithagency.com", last_sync:"Yesterday 11:00 PM", note:"All Drive operations running normally" },
+  { id:"c3", platform:"Google Calendar",icon:"📅",status:"healthy",connected_account:"jane@smithagency.com", last_sync:"Today 7:00 AM",    note:"Calendar sync active" },
+  { id:"c4", platform:"Facebook",     icon:"👥", status:"healthy", connected_account:"Smith Insurance Agency Page", last_sync:"Yesterday 9:00 AM", note:"Page posting active" },
+  { id:"c5", platform:"LinkedIn",     icon:"💼", status:"healthy", connected_account:"Jane Smith",           last_sync:"Yesterday 12:00 PM", note:"Profile posting active" },
+  { id:"c6", platform:"Instagram",    icon:"📸", status:"manual",  connected_account:"@smithinsurance",      last_sync:"N/A",              note:"Instagram requires manual daily posting — no API scheduling available" },
+];
+
+const MOCK_BRIEFINGS = [
+  {
+    id:"b1", date:"Apr 26, 2026", sent_at:"6:01 AM", delivered:true, opened:true,
+    content:"Good morning Jane — here's your agency snapshot for Sunday April 26.\n\n💰 Revenue MTD: $48,240 (↑12% vs last year)\n🎯 AIPP: 47.5% of $142,000 target — on track\n📋 Tasks: 7 open, 2 due this week\n⚠️ Alerts: 3 active (1 critical — SF social media audit due May 11)\n📱 Social: 2 posts scheduled today (Facebook 9AM, LinkedIn 12PM) + Instagram manual needed\n🔴 Automation: Drive Filer ran successfully last night\n\nHave a great Sunday."
+  },
+  {
+    id:"b2", date:"Apr 25, 2026", sent_at:"6:01 AM", delivered:true, opened:true,
+    content:"Good morning Jane — here's your agency snapshot for Saturday April 25.\n\n💰 Revenue MTD: $48,240 (↑12% vs last year)\n🎯 AIPP: 47.5% of $142,000 target — on track\n📋 Tasks: 7 open, 2 due this week\n⚠️ Alerts: 2 active\n📱 Social: Facebook post scheduled 9AM\n✅ All automations ran successfully overnight."
+  },
+  {
+    id:"b3", date:"Apr 24, 2026", sent_at:"6:01 AM", delivered:true, opened:false,
+    content:"Good morning Jane — here's your agency snapshot for Friday April 24.\n\n💰 Revenue MTD: $42,400 (↑9% vs last year)\n🎯 AIPP: 44.2% of $142,000 target\n📋 Tasks: 8 open, 3 due this week\n⚠️ Alerts: 2 active\n📱 Social: Facebook and LinkedIn posts scheduled\n✅ All automations ran successfully overnight."
+  },
+];
+
+const MOCK_IMPORTS = [
+  { id:"i1", date:"Apr 25, 2026", file_name:"april_payroll_export.csv",   source:"Email from Gusto",            status:"complete", groq_type:"payroll_export",  tables:["payroll_runs","payroll_detail"], records:4 },
+  { id:"i2", date:"Apr 20, 2026", file_name:"SF_COMP_April_2026.pdf",     source:"Email from State Farm",       status:"complete", groq_type:"comp_recap",      tables:["comp_recap","aipp_tracking"],   records:5 },
+  { id:"i3", date:"Apr 15, 2026", file_name:"chase_march_statement.pdf",  source:"Email from Chase",            status:"partial",  groq_type:"bank_statement",  tables:["journal_entries"],              records:18 },
+  { id:"i4", date:"Apr 10, 2026", file_name:"resume_marcus_t.pdf",        source:"Email from candidate",        status:"complete", groq_type:"resume",          tables:["applicants","documents"],       records:1  },
+  { id:"i5", date:"Apr 5, 2026",  file_name:"SF_COMP_March_2026.pdf",     source:"Email from State Farm",       status:"complete", groq_type:"comp_recap",      tables:["comp_recap","aipp_tracking"],   records:4  },
+  { id:"i6", date:"Apr 1, 2026",  file_name:"q1_tax_estimate_2026.pdf",   source:"Email from Club Capital Tax", status:"complete", groq_type:"tax_document",    tables:["documents"],                    records:0  },
+];
+
 // ─── Shared Components ────────────────────────────────────────
 const Card = ({ children, style={} }) => (
   <div style={{ background:T.white, border:`1px solid ${T.slate200}`, borderRadius:12, padding:"16px 18px", ...style }}>
@@ -92,73 +234,6 @@ const CategoryBadge = ({ category }) => {
   return <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:s.bg, color:s.color }}>{s.label}</span>;
 };
 
-
-// ─── Live-data Synthesis Helpers ──────────────────────────────────────────
-// Convert raw DB rows into the display-friendly shape the UI was originally
-// designed around. Replaces fields that used to come from MOCK_RECIPES
-// (cron_label, category) and joins run_log rows to recipes by recipe_id.
-
-// Cron expression → human-readable cadence. Degrades to raw expression.
-const formatCron = (expr) => {
-  if (!expr || typeof expr !== "string") return "—";
-  const m = expr.trim().match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/);
-  if (!m) return expr;
-  const [, min, hr, dom, mon, dow] = m;
-  const stepMin = (min.match(/^\*\/(\d+)$/) || [])[1];
-  if (stepMin && hr === "*" && dom === "*" && mon === "*" && dow === "*") {
-    return `Every ${stepMin} min`;
-  }
-  if (/^\d+,\d+$/.test(min) && hr === "*") return "Twice an hour";
-  if (/^\d+$/.test(min) && /^\d+$/.test(hr) && dom === "*" && mon === "*" && dow === "*") {
-    return `Daily ${hr.padStart(2,"0")}:${min.padStart(2,"0")} UTC`;
-  }
-  if (/^\d+$/.test(min) && /^\d+$/.test(hr) && dom === "*" && mon === "*" && /^\d+$/.test(dow)) {
-    const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    return `Weekly ${days[parseInt(dow,10)] || `day ${dow}`} ${hr.padStart(2,"0")}:${min.padStart(2,"0")} UTC`;
-  }
-  if (/^\d+$/.test(min) && /^\d+$/.test(hr) && /^\d+$/.test(dom) && mon === "*" && dow === "*") {
-    return `Monthly day ${dom} ${hr.padStart(2,"0")}:${min.padStart(2,"0")} UTC`;
-  }
-  return expr;
-};
-
-const recipeCategory = (r) => {
-  const h = (r?.internal_handler || "").toLowerCase();
-  const a = (r?.composio_action  || "").toLowerCase();
-  if (/(gl|payroll|bank|cc|credit|comp_recap)/.test(h)) return "Financial";
-  if (/(document|doc_|drive|archive)/.test(h))           return "Documents";
-  if (/(briefing|email|mail|notif)/.test(h) || /gmail/.test(a)) return "Communication";
-  if (/(compliance|close|monitor|frontrunner|underperformance|silent_failure|goals)/.test(h)) return "Operations";
-  if (/(facebook|linkedin|instagram|social)/.test(h) || /(facebook|linkedin)/.test(a)) return "Social";
-  return "System";
-};
-
-const recipeStats = (recipeId, runLog) => {
-  if (!Array.isArray(runLog)) return { runs: 0, success_rate: 0 };
-  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const rows = runLog.filter(r => r.recipe_id === recipeId && new Date(r.run_at).getTime() >= cutoff);
-  const runs = rows.length;
-  const ok = rows.filter(r => r.status === "success").length;
-  return { runs, success_rate: runs > 0 ? Math.round((ok / runs) * 100) : 0 };
-};
-
-const recipeNameFor = (recipeId, recipes) => {
-  if (!Array.isArray(recipes)) return "(unknown)";
-  const r = recipes.find(r => r.id === recipeId);
-  return r?.recipe_name || "(unknown)";
-};
-
-const formatTimestamp = (iso) => {
-  if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "—";
-    const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase().replace(" ", "");
-    return `${dateStr}, ${timeStr}`;
-  } catch { return "—"; }
-};
-
 const AskBtn = ({ context, size = "normal", demoMode = false }) => {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -183,7 +258,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
       <button
         onClick={open ? () => { setOpen(false); setTimeout(() => { setCopied(false); setOpened(false); }, 200); } : ask}
         style={{ display: "flex", alignItems: "center", gap: 5, background: open ? T.slate100 : T.blue, color: open ? T.blue : T.white, border: open ? `1px solid ${T.blue}` : "1px solid transparent", borderRadius: 7, padding: small ? "5px 10px" : "7px 13px", fontSize: small ? 10 : 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-      >\u26a1 Ask Claude</button>
+      >⚡ Ask Claude</button>
       {open && (
         <div role="dialog" aria-label="Ask Claude" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60, width: 300, background: T.white, border: `1px solid ${T.slate100}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(15,23,42,0.16)", padding: 14, textAlign: "left" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#16A34A", marginBottom: 4 }}>
@@ -195,7 +270,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
           <div style={{ fontSize: 11, lineHeight: 1.55, color: T.slate500, background: T.slate100, borderRadius: 8, padding: 9, maxHeight: 92, overflow: "hidden", whiteSpace: "pre-wrap" }}>{preview}</div>
           <div style={{ marginTop: 10 }}>
             {!opened ? (
-              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.white, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.textOnColor, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Open Claude.ai &amp; paste
               </button>
             ) : demoMode ? (
@@ -220,11 +295,30 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
 // ─── Section: Overview ────────────────────────────────────────
 const AutomationOverview = ({ recipes, runLog, connections }) => {
   const active    = recipes.filter(r => r.is_active).length;
-  const failed    = runLog.filter(r => r.status === "failed").length;
+  // Enrich live runLog with recipe_name from recipes (live table only has recipe_id FK).
+  const recipeNameById = useMemo(() => {
+    const m = new Map();
+    (recipes || []).forEach(r => { if (r.id) m.set(r.id, r.recipe_name); });
+    return m;
+  }, [recipes]);
+  const enrichedRunLog = useMemo(() =>
+    runLog.map(r => ({ ...r, recipe_name: r.recipe_name || recipeNameById.get(r.recipe_id) || "Unknown recipe" })),
+    [runLog, recipeNameById]
+  );
+  const failed    = enrichedRunLog.filter(r => r.status === "failed").length;
+  // Only failures in the last 24h matter for the Action Required banner — historical
+  // failures are noise (e.g. from before a recipe was deactivated or before a fix shipped).
+  const recentFailed = enrichedRunLog.filter(r => {
+    if (r.status !== "failed") return false;
+    const ts = new Date(r.run_at || r.created_at || 0).getTime();
+    return Number.isFinite(ts) && (Date.now() - ts) < 24*60*60*1000;
+  });
+  const recentFailedRecipes = [...new Set(recentFailed.map(r => r.recipe_name).filter(Boolean))];
+  const erroredConnections = connections.filter(c => c.status === "error");
   const partial   = runLog.filter(r => r.status === "partial").length;
   const connError = connections.filter(c => c.status === "error").length;
 
-  const recentRuns = runLog.slice(0, 8);
+  const recentRuns = enrichedRunLog.slice(0, 8);
 
   return (
     <div>
@@ -244,13 +338,21 @@ const AutomationOverview = ({ recipes, runLog, connections }) => {
       </div>
 
       {/* Failed/Partial Alert */}
-      {(failed > 0 || connError > 0) && (
+      {(recentFailedRecipes.length > 0 || erroredConnections.length > 0) && (
         <div style={{ background:T.redLt, border:`1px solid #FECACA`, borderLeft:`4px solid ${T.red}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
           <div style={{ fontSize:12, fontWeight:700, color:"#991B1B", marginBottom:4 }}>⚠️ Action Required</div>
-          {connError > 0 && <div style={{ fontSize:12, color:"#991B1B", marginBottom:2 }}>• Gmail connection error — OAuth token expired. Go to Connections tab to reconnect.</div>}
-          {failed > 0 && <div style={{ fontSize:12, color:"#991B1B" }}>• Daily Briefing failed today — check Run Log for details.</div>}
+          {erroredConnections.map(c => (
+            <div key={`c-${c.id}`} style={{ fontSize:12, color:"#991B1B", marginBottom:2 }}>
+              • {c.platform} not connected — {c.note}
+            </div>
+          ))}
+          {recentFailedRecipes.map(name => (
+            <div key={`r-${name}`} style={{ fontSize:12, color:"#991B1B", marginBottom:2 }}>
+              • {name} failed in the last 24 hours — check Run Log for details.
+            </div>
+          ))}
           <div style={{ marginTop:8 }}>
-            <AskBtn size="small" context="My BCC has automation failures: Gmail OAuth token expired causing Daily Briefing to fail. Help me understand what steps I need to take to reconnect Gmail in Composio and get my Daily Briefing running again." />
+            <AskBtn size="small" context={`BCC automation alerts — recent failures: ${recentFailedRecipes.join(", ") || "none"}. Connection errors: ${erroredConnections.map(c => `${c.platform} (${c.note})`).join("; ") || "none"}. Help me diagnose and resolve these specifically.`} />
           </div>
         </div>
       )}
@@ -270,8 +372,8 @@ const AutomationOverview = ({ recipes, runLog, connections }) => {
           {recentRuns.map((run,i) => (
             <div key={run.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"7px 0", borderBottom:i<recentRuns.length-1?`1px solid ${T.slate100}`:"none" }}>
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:12, fontWeight:500, color:T.slate800, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{recipeNameFor(run.recipe_id, recipes)}</div>
-                <div style={{ fontSize:10, color:T.slate400 }}>{formatTimestamp(run.run_at)} · {run.duration_seconds}s</div>
+                <div style={{ fontSize:12, fontWeight:500, color:T.slate800, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{run.recipe_name}</div>
+                <div style={{ fontSize:10, color:T.slate400 }}>{run.run_at} · {run.duration_seconds}s</div>
               </div>
               <StatusPill status={run.status} />
             </div>
@@ -339,7 +441,7 @@ const RunLog = ({ runLog }) => {
               >
                 <div style={{ flex:1 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
-                    <span style={{ fontSize:12, fontWeight:600, color:T.slate800 }}>{recipeNameFor(run.recipe_id, recipes)}</span>
+                    <span style={{ fontSize:12, fontWeight:600, color:T.slate800 }}>{run.recipe_name}</span>
                     <StatusPill status={run.status} />
                   </div>
                   <div style={{ fontSize:10, color:T.slate400 }}>
@@ -360,7 +462,7 @@ const RunLog = ({ runLog }) => {
                     </div>
                   )}
                   <div style={{ marginTop:8 }}>
-                    <AskBtn size="small" context={`Automation run details:\nRecipe: ${recipeNameFor(run.recipe_id, recipes)}\nStatus: ${run.status}\nTime: ${run.run_at}\nDuration: ${run.duration_seconds}s\nRecords processed: ${run.records_processed}\nSummary: ${run.output_summary}${run.error_message?"\nError: "+run.error_message:""}\n\nHelp me understand this result and what action I should take.`} />
+                    <AskBtn size="small" context={`Automation run details:\nRecipe: ${run.recipe_name}\nStatus: ${run.status}\nTime: ${run.run_at}\nDuration: ${run.duration_seconds}s\nRecords processed: ${run.records_processed}\nSummary: ${run.output_summary}${run.error_message?"\nError: "+run.error_message:""}\n\nHelp me understand this result and what action I should take.`} />
                   </div>
                 </div>
               )}
@@ -392,10 +494,13 @@ const Recipes = ({ recipes, onToggle }) => {
                 <div style={{ flex:1, cursor:"pointer" }} onClick={() => setExpanded(isExpanded?null:recipe.id)}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" }}>
                     <span style={{ fontSize:13, fontWeight:600, color:recipe.is_active?T.slate900:T.slate400 }}>{recipe.recipe_name}</span>
-                    <CategoryBadge category={recipeCategory(recipe)} />
-              </div>
+                    <CategoryBadge category={recipe.category} />
+                    {recipe.uses_groq && (
+                      <span style={{ fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:20, background:T.tealLt, color:T.teal }}>LLM</span>
+                    )}
+                  </div>
                   <div style={{ fontSize:11, color:T.slate400 }}>
-                    {formatCron(recipe.cron_expression)} · Last run: {formatTimestamp(recipe.last_run_at)} · {recipeStats(recipe.id, runLog).runs} runs/30d · {recipeStats(recipe.id, runLog).success_rate}% success
+                    {recipe.cron_label} · Last run: {recipe.last_run_at} · {recipe.run_count_30d} runs/30 days · {recipe.success_rate}% success
                   </div>
                 </div>
 
@@ -430,17 +535,18 @@ const Recipes = ({ recipes, onToggle }) => {
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:8, marginBottom:12 }}>
                     {[
-                      { label:"Trigger",    value:formatCron(recipe.cron_expression) },
+                      { label:"Trigger",    value:recipe.cron_label },
                       { label:"Action",     value:recipe.composio_action || "Internal only" },
                       { label:"Connection", value:recipe.composio_connection ? recipe.composio_connection.charAt(0).toUpperCase()+recipe.composio_connection.slice(1) : "None needed" },
-                        ].map((detail,i) => (
+                      { label:"Processing", value:recipe.uses_groq?"Composio LLM (free)":"None" },
+                    ].map((detail,i) => (
                       <div key={i} style={{ background:T.slate50, borderRadius:8, padding:"8px 10px" }}>
                         <div style={{ fontSize:10, color:T.slate400, marginBottom:2 }}>{detail.label}</div>
                         <div style={{ fontSize:11, fontWeight:500, color:T.slate700 }}>{detail.value}</div>
                       </div>
                     ))}
                   </div>
-                  <AskBtn size="small" context={`Automation recipe details:\nName: ${recipe.recipe_name}\nDescription: ${recipe.recipe_description}\nTrigger: ${formatCron(recipe.cron_expression)}\nComposio Action: ${recipe.composio_action || "None"}\nConnection: ${recipe.composio_connection || "None"}\nRuns (30d): ${recipeStats(recipe.id, runLog).runs} at ${recipeStats(recipe.id, runLog).success_rate}% success\n\nHelp me understand what this automation does and whether it's configured optimally for my agency.`} />
+                  <AskBtn size="small" context={`Automation recipe details:\nName: ${recipe.recipe_name}\nDescription: ${recipe.recipe_description}\nTrigger: ${recipe.cron_label}\nComposio Action: ${recipe.composio_action || "None"}\nConnection: ${recipe.composio_connection || "None"}\nUses Composio LLM parsing: ${recipe.uses_groq}\nSuccess Rate: ${recipe.success_rate}%\n\nHelp me understand what this automation does and whether it's configured optimally for my agency.`} />
                 </div>
               )}
             </div>
@@ -458,11 +564,7 @@ const Connections = ({ connections }) => (
       These are your Composio connected accounts. Every automation that interacts with Gmail, Drive, Facebook, LinkedIn, or other services uses one of these connections. If a connection shows an error, automations that depend on it will fail until it is reconnected.
     </div>
 
-    {(!connections || connections.length === 0) && (
-      <div style={{ textAlign:"center", padding:32, color:T.slate400, fontSize:13 }}>Loading connections…</div>
-    )}
-
-    {(connections || []).map(conn => (
+    {connections.map(conn => (
       <Card key={conn.id}>
         <div style={{ display:"flex", alignItems:"flex-start", gap:14 }}>
           <div style={{ width:44, height:44, borderRadius:12, background:T.slate50, border:`1px solid ${T.slate200}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
@@ -587,7 +689,7 @@ const DocImporter = ({ imports }) => {
       <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
         {imports.map(doc => {
           const isExpanded = expanded === doc.id;
-          const tc = typeColor(doc.document_type);
+          const tc = typeColor(doc.groq_type);
           return (
             <div key={doc.id} style={{ border:`1px solid ${isExpanded?T.blue:T.slate200}`, borderRadius:8, overflow:"hidden" }}>
               <div
@@ -597,7 +699,7 @@ const DocImporter = ({ imports }) => {
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2, flexWrap:"wrap" }}>
                     <span style={{ fontSize:12, fontWeight:500, color:T.slate800, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{doc.file_name}</span>
-                    <span style={{ fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:20, background:tc.bg, color:tc.color, flexShrink:0 }}>{typeLabel(doc.document_type)}</span>
+                    <span style={{ fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:20, background:tc.bg, color:tc.color, flexShrink:0 }}>{typeLabel(doc.groq_type)}</span>
                   </div>
                   <div style={{ fontSize:10, color:T.slate400 }}>{doc.date} · {doc.source} · {doc.records} records loaded</div>
                 </div>
@@ -621,7 +723,7 @@ const DocImporter = ({ imports }) => {
                       ⚠ Partial import — one or more pages could not be parsed. File saved to Google Drive for manual review.
                     </div>
                   )}
-                  <AskBtn size="small" context={`Document import record:\nFile: ${doc.file_name}\nDate: ${doc.date}\nSource: ${doc.source}\nClassification: ${doc.document_type}\nStatus: ${doc.status}\nRecords loaded: ${doc.records}\nTables updated: ${doc.tables.join(", ")}\n\nHelp me verify this import looks correct and identify any follow-up needed.`} />
+                  <AskBtn size="small" context={`Document import record:\nFile: ${doc.file_name}\nDate: ${doc.date}\nSource: ${doc.source}\nLLM Classification: ${doc.groq_type}\nStatus: ${doc.status}\nRecords loaded: ${doc.records}\nTables updated: ${doc.tables.join(", ")}\n\nHelp me verify this import looks correct and identify any follow-up needed.`} />
                 </div>
               )}
             </div>
@@ -637,150 +739,76 @@ export default function Automations() {
   const [section, setSection] = useState("overview");
   const { data: liveRecipes, loading: recipesLoading } = useSupabaseTable("automation_recipes", AGENCY_ID, { orderBy: "created_at", ascending: false });
   const { data: liveRunLog }   = useSupabaseTable("automation_run_log", AGENCY_ID, { orderBy: "run_at", ascending: false });
-  const { data: liveDocs }     = useSupabaseTable("documents", AGENCY_ID, { orderBy: "uploaded_at", ascending: false });
+  const { data: liveSettings } = useSupabaseTable("settings", AGENCY_ID, {});
+  const { data: liveSocialAccounts } = useSupabaseTable("social_accounts", AGENCY_ID, {});
+  const useMockData = import.meta.env.VITE_USE_MOCK_DATA !== "false";
 
-  // Normalize documents rows to the shape DocImporter renders.
-  // Kept to the 25 most-recent for a lightweight recent-history view;
-  // the full archive lives in the Documents module.
-  const docImports = (Array.isArray(liveDocs) ? liveDocs : []).slice(0, 25).map(d => ({
-    id:            d.id,
-    file_name:     d.file_name || d.source_filename || "(unnamed)",
-    document_type: d.document_type || d.groq_classification || "other",
-    date:          d.uploaded_at ? new Date(d.uploaded_at).toLocaleString("en-US", { month:"short", day:"numeric", year:"numeric", hour:"numeric", minute:"2-digit" }) : "—",
-    source:        d.upload_source || "—",
-    records:       d.records_created ?? 0,
-    status:        d.processing_status || "pending",
-    tables:        Array.isArray(d.tables_updated) ? d.tables_updated : [],
-  }));
-
-  const [recipes, setRecipes] = useState([]);
+  // Pull google_account_email separately — agency is a single-row fetch, not a list.
+  const [agencyEmail, setAgencyEmail] = useState("");
   useEffect(() => {
-    if (Array.isArray(liveRecipes)) setRecipes(liveRecipes);
-  }, [liveRecipes]);
-
-  const runLog = Array.isArray(liveRunLog) ? liveRunLog : [];
-
-  // ── Live connections from settings table ─────────────────────
-  const [connections, setConnections] = useState([]);
-
-  useEffect(() => {
-    async function loadConnections() {
-      const { data } = await supabase
-        .from("settings")
-        .select("setting_key, setting_value")
-        .eq("agency_id", AGENCY_ID)
-        .in("setting_key", [
-          "google_account_email",
-          "composio_gmail_account_id",
-          "composio_googledrive_account_id",
-          "composio_googlecalendar_account_id",
-          "composio_googledocs_account_id",
-          "instagram_manual_reminder",
-          "instagram_handle",
-          "facebook_page_name",
-          "linkedin_url",
-        ]);
-
-      if (!data) return;
-      const s = Object.fromEntries(data.map(r => [r.setting_key, r.setting_value]));
-      const email = s.google_account_email || "tiffanymapp.businessclaude@gmail.com";
-
-      setConnections([
-        {
-          id: "c1",
-          platform: "Gmail",
-          icon: "📧",
-          status: s.composio_gmail_account_id ? "healthy" : "error",
-          connected_account: email,
-          last_sync: "Daily at 8:00 AM ET",
-          note: s.composio_gmail_account_id
-            ? `Account ID: ${s.composio_gmail_account_id} — Daily Briefing + Document Processor use this connection`
-            : "Not connected — reconnect in Composio",
-        },
-        {
-          id: "c2",
-          platform: "Google Drive",
-          icon: "📁",
-          status: s.composio_googledrive_account_id ? "healthy" : "error",
-          connected_account: email,
-          last_sync: "On document upload",
-          note: s.composio_googledrive_account_id
-            ? `Account ID: ${s.composio_googledrive_account_id} — Email Archiver files documents here`
-            : "Not connected — reconnect in Composio",
-        },
-        {
-          id: "c3",
-          platform: "Google Calendar",
-          icon: "📅",
-          status: s.composio_googlecalendar_account_id ? "healthy" : "error",
-          connected_account: email,
-          last_sync: "On compliance events",
-          note: s.composio_googlecalendar_account_id
-            ? `Account ID: ${s.composio_googlecalendar_account_id} — Compliance calendar sync`
-            : "Not connected — reconnect in Composio",
-        },
-        {
-          id: "c4",
-          platform: "Facebook",
-          icon: "📘",
-          status: "pending",
-          connected_account: s.facebook_page_name || "Page not yet connected",
-          last_sync: "N/A",
-          note: "Facebook page connection pending — connect in Composio to enable auto-posting",
-        },
-        {
-          id: "c5",
-          platform: "LinkedIn",
-          icon: "💼",
-          status: "pending",
-          connected_account: s.linkedin_url || "Profile not yet connected",
-          last_sync: "N/A",
-          note: "LinkedIn connection pending — connect in Composio to enable auto-posting",
-        },
-        {
-          id: "c6",
-          platform: "Instagram",
-          icon: "📸",
-          status: "manual",
-          connected_account: s.instagram_handle || "@tiffanymappstatefarm",
-          last_sync: "N/A",
-          note: "Instagram requires manual daily posting — no API scheduling available. You post manually each day.",
-        },
-        {
-          id: "c7",
-          platform: "GitHub",
-          icon: "⚙️",
-          status: "healthy",
-          connected_account: "tiffanymappbusinessclaude-cyber",
-          last_sync: "On every app update",
-          note: "BCC web app repo — Claude pushes code changes here, Vercel auto-deploys",
-        },
-        {
-          id: "c8",
-          platform: "Supabase",
-          icon: "🗄️",
-          status: "healthy",
-          connected_account: "aerutjqyjlbzrklgpwzv",
-          last_sync: "Live — every automation",
-          note: "Agency database — all automations read and write here",
-        },
-      ]);
-    }
-    loadConnections();
+    if (!supabase) return;
+    supabase.from("agency").select("google_account_email,primary_email").eq("id", AGENCY_ID).single()
+      .then(({ data }) => {
+        if (data) setAgencyEmail(data.google_account_email || data.primary_email || "");
+      });
   }, []);
 
-  // Toggle is_active with optimistic local update + DB persist. Errors
-  // log to console; next refresh reflects authoritative DB state either way.
-  const toggleRecipe = async (id) => {
-    const current = recipes.find(r => r.id === id);
-    if (!current) return;
-    const next = !current.is_active;
-    setRecipes(prev => prev.map(r => r.id === id ? { ...r, is_active: next } : r));
-    try {
-      await supabase.from("automation_recipes").update({ is_active: next }).eq("id", id);
-    } catch (e) {
-      console.error("Failed to toggle recipe:", e);
-    }
+  // Derive live connections from settings.composio_*_account_id rows + social_accounts.
+  // Never falls back to MOCK_CONNECTIONS once liveSettings has arrived — even if a
+  // connection is missing it shows "Not connected" instead of fake jane@smithagency.com data.
+  const liveConnections = useMemo(() => {
+    const byKey = new Map((liveSettings || []).map(s => [s.setting_key, s.setting_value]));
+    const fbAcc = (liveSocialAccounts || []).find(a => a.platform === "facebook");
+    const liAcc = (liveSocialAccounts || []).find(a => a.platform === "linkedin");
+    const igAcc = (liveSocialAccounts || []).find(a => a.platform === "instagram");
+    const dash = "—";
+    return [
+      { id:"c1", platform:"Gmail",          icon:"📧",
+        status: byKey.get("composio_gmail_account_id") ? "healthy" : "error",
+        connected_account: agencyEmail || dash, last_sync:"Live via Composio",
+        note: byKey.get("composio_gmail_account_id") ? `Composio account: ${byKey.get("composio_gmail_account_id")}` : "Not connected — reauth in Composio" },
+      { id:"c2", platform:"Google Drive",   icon:"📁",
+        status: byKey.get("composio_googledrive_account_id") ? "healthy" : "error",
+        connected_account: agencyEmail || dash, last_sync:"Live via Composio",
+        note: byKey.get("composio_googledrive_account_id") ? `Composio account: ${byKey.get("composio_googledrive_account_id")}` : "Not connected — reauth in Composio" },
+      { id:"c3", platform:"Google Calendar",icon:"📅",
+        status: byKey.get("composio_googlecalendar_account_id") ? "healthy" : "error",
+        connected_account: agencyEmail || dash, last_sync:"Live via Composio",
+        note: byKey.get("composio_googlecalendar_account_id") ? `Composio account: ${byKey.get("composio_googlecalendar_account_id")}` : "Not connected — reauth in Composio" },
+      { id:"c4", platform:"GitHub",         icon:"🐙",
+        status: byKey.get("composio_github_account_id") ? "healthy" : "error",
+        connected_account: "[AGENCY_CLAUDE_HANDLE]claude-ship-it", last_sync:"Live via Composio",
+        note: byKey.get("composio_github_account_id") ? `Composio account: ${byKey.get("composio_github_account_id")}` : "Not connected" },
+      { id:"c5", platform:"QuickBooks",     icon:"💰",
+        status: byKey.get("composio_qbo_account_id") ? "warning" : "error",
+        connected_account: byKey.get("composio_qbo_account_id") ? "Owned by install vendor" : dash, last_sync:"Manual refresh",
+        note: byKey.get("composio_qbo_account_id") ? "Refresh requires Composio user_id reconciliation — see open alert" : "Not connected" },
+      { id:"c6", platform:"Facebook",       icon:"👥",
+        status: fbAcc ? "healthy" : "error",
+        connected_account: fbAcc?.handle || fbAcc?.page_name || dash, last_sync: fbAcc ? "Live" : dash,
+        note: fbAcc ? "Page posting active" : "Not connected — Composio reauth needed" },
+      { id:"c7", platform:"LinkedIn",       icon:"💼",
+        status: liAcc ? "healthy" : "error",
+        connected_account: liAcc?.handle || dash, last_sync: liAcc ? "Live" : dash,
+        note: liAcc ? "Profile posting active" : "Not connected — Composio reauth needed" },
+      { id:"c8", platform:"Instagram",      icon:"📸",
+        status: "manual",
+        connected_account: igAcc?.handle || "Manual posting", last_sync: "N/A",
+        note: "Instagram requires manual daily posting — no API scheduling available" },
+    ];
+  }, [liveSettings, liveSocialAccounts, agencyEmail]);
+
+  const [recipes, setRecipes] = useState(useMockData ? MOCK_RECIPES : []);
+  useEffect(() => {
+    if (liveRecipes && liveRecipes.length > 0) setRecipes(liveRecipes);
+  }, [liveRecipes]);
+
+  const runLog = (liveRunLog && liveRunLog.length > 0)
+    ? liveRunLog
+    : useMockData ? MOCK_RUN_LOG : [];
+
+  const toggleRecipe = (id) => {
+    setRecipes(prev => prev.map(r => r.id === id ? { ...r, is_active: !r.is_active } : r));
   };
 
   if (recipesLoading) return <div style={{padding:40,textAlign:"center",fontSize:13,color:"#64748B"}}>Loading automations…</div>;
@@ -789,7 +817,7 @@ export default function Automations() {
   const sections = [
     { id:"overview",  label:"Overview"          },
     { id:"runlog",    label:"Run Log"            },
-    { id:"recipes",   label:`Recipes (${recipes.length})` },
+    { id:"recipes",   label:`Recipes (${recipes.filter(r => r.is_active !== false).length})` },
     { id:"connections",label:"Connections"       },
     { id:"briefing",  label:"Daily Briefing"     },
     { id:"importer",  label:"Doc Importer"       },
@@ -802,7 +830,7 @@ export default function Automations() {
         <div>
           <div style={{ fontSize:20, fontWeight:700, color:T.slate900, letterSpacing:"-0.02em" }}>Automations</div>
           <div style={{ fontSize:12, color:T.slate500, marginTop:3 }}>
-            {recipes.filter(r => r.is_active).length} active recipes · Composio + Supabase execute · All results logged here
+            {recipes.filter(r => r.is_active !== false).length} active recipes · Composio executes · Composio LLM parses · All results logged here
           </div>
         </div>
         <AskBtn context="I'm reviewing my BCC automations. Give me a health check — what's running well, what needs attention, and are there any automation improvements I should consider for my agency?" />
@@ -818,12 +846,12 @@ export default function Automations() {
       </div>
 
       {/* Section Content */}
-      {section === "overview"    && <AutomationOverview recipes={recipes} runLog={runLog} connections={connections} />}
+      {section === "overview"    && <AutomationOverview recipes={recipes} runLog={runLog} connections={liveConnections} />}
       {section === "runlog"      && <RunLog runLog={runLog} />}
       {section === "recipes"     && <Recipes recipes={recipes} onToggle={toggleRecipe} />}
-      {section === "connections" && <Connections connections={connections} />}
-      {section === "briefing"    && <DailyBriefingSection briefings={[]} />}
-      {section === "importer"    && <DocImporter imports={docImports} />}
+      {section === "connections" && <Connections connections={liveConnections} />}
+      {section === "briefing"    && <DailyBriefingSection briefings={MOCK_BRIEFINGS} />}
+      {section === "importer"    && <DocImporter imports={MOCK_IMPORTS} />}
     </div>
   );
 }

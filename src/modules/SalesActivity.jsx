@@ -332,8 +332,6 @@ export default function SalesActivity() {
         }
       />
 
-      <PIIWarningBanner />
-
       {loading && !profile.data ? (
         <LoadingState message="Loading sales activity…" rows={4} />
       ) : profile.data ? (
@@ -610,7 +608,8 @@ function weekDelta(curr, prior) {
   if (curr == null || prior == null || prior === 0) return null;
   const diff = curr - prior;
   const pct = Math.round((diff / prior) * 100);
-  return { diff, pct };
+  const sign = diff > 0 ? "+" : "";
+  return `${sign}${diff} (${sign}${pct}%)`;
 }
 
 // Producers whose CURRENT-MONTH activity dropped 25%+ vs PRIOR-MONTH.
@@ -1383,9 +1382,7 @@ function LogActivityModal({ profile, staffList, onClose, onSaved, canPickProduce
         </div>
 
         <div className="p-5 space-y-4">
-          <PIIWarningBanner />
-
-          {/* Top-4 activity types — big buttons, equal weight */}
+              {/* Top-4 activity types — big buttons, equal weight */}
           <div>
             <div className="text-xs uppercase tracking-wide text-if-muted mb-2">
               Activity type

@@ -1,3 +1,53 @@
+<!--
+============================================================
+  REALITY UPDATE — 2026-07-02
+  This addendum reflects the live state of <AGENCY_NAME> Agency's BCC.
+  It supersedes anything below in the pre-addendum content of this file.
+  The pre-addendum content is kept verbatim for historical / install-time reference.
+============================================================
+-->
+
+# 🔄 Reality Update — 2026-07-02
+
+The install-time doc below describes the canonical 12 recipes. the agent's live BCC now runs **27 recipes total, 21 active**. All 12 canonical recipes are present and healthy — nothing missing. The 15 additional recipes are listed here.
+
+## Additional recipes beyond canonical 12
+
+### Internal handlers added after install
+| Recipe | Cron (UTC) | Handler | Purpose |
+|---|---|---|---|
+| Bank GL Writer | `30 16 * * *` | `bank_gl_writer` | Posts bank_transactions → journal_entries |
+| Credit Card GL Writer | `45 16 * * *` | `cc_gl_writer` | Posts credit_transactions → journal_entries |
+| Payroll GL Writer | `15 16 * * *` | `payroll_gl_writer` | Posts payroll_runs → journal_entries |
+| Monthly Close Checklist Generator | `0 14 1 * *` | `monthly_close_generator` | Seeds monthly close checklist on the 1st (**activated 2026-07-02**) |
+| AIPP Refresher | `30 15 * * *` | `aipp_refresher` | Recomputes AIPP YTD projections nightly |
+| Goal Progress Tracker | `0 11 * * *` | `goal_progress_tracker` | Updates goals.progress from live data |
+| Calendar Sync | `0 * * * *` | `calendar_sync_pending` | Syncs BCC calendar_events → Google Calendar hourly |
+| Staff Performance Snapshot Writer | `0 12 5 * *` | `staff_performance_snapshot_writer` | Monthly snapshot on the 5th |
+| Working Capital Trend Watcher | `30 11 * * *` | `working_capital_trend_watcher` | Alerts on working-capital drift |
+| S-Corp Medical Year-End W-2 Prep | `0 13 1,15,22,29 11,12 *` | `s_corp_medical_w2_prep` | Nov/Dec cadence for W-2 gross-up prep |
+
+### External recipes added
+| Recipe | Cron (UTC) | Composio action |
+|---|---|---|
+| SF Reportable Benefits Processor | `15 15 * * *` | `GMAIL_FETCH_EMAILS` |
+| Document Processor | `7,37 * * * *` | INTERNAL (inactive) |
+| Document Parser | `17,47 * * * *` | INTERNAL (inactive) |
+| Social Media Scheduler — LinkedIn | `0 14 * * *` | `LINKEDIN_CREATE_POST` (inactive — OAuth pending) |
+| Social Media Scheduler — Instagram | `30 13 * * *` | `instagram_manual_reminder` (inactive — needs owner_email + scheduled content) |
+
+## LLM path correction
+
+The install-time doc references `COMPOSIO_SEARCH_GROQ_CHAT` as the LLM endpoint with no API key needed. **This is no longer accurate.** The live `automation-runner` Edge Function calls Groq directly via `Deno.env.get("GROQ_API_KEY")`. Rotation happens in Supabase Dashboard → Edge Functions → Secrets → `GROQ_API_KEY`. No redeploy needed. See runbook `groq-key-rotation` in System Map.
+
+## Two-stage recipe helpers (migration 030, applied 2026-07-02)
+
+Migration `030_two_stage_recipe_helpers` added 11 PL/pgSQL helper functions that support fork-sync-style external recipes (email archive prep + log, document processor prep + log + mark, social prep functions for Facebook/LinkedIn/Instagram, AA05 word-block detection). These are used by the new TS orchestrators in `automation-runner` v9 (`runEmailArchiver`, `runDocumentProcessor`, `runInstagramManualReminder`).
+
+---
+
+<!-- Original AUTOMATIONS_INSTALL.md content follows below. -->
+
 # Automations Install Playbook
 
 > How to wire up the canonical automation recipes for a new client BCC.

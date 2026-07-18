@@ -1,3 +1,34 @@
+<!--
+============================================================
+  REALITY UPDATE — 2026-07-02
+  This addendum reflects the live state of <AGENCY_NAME> Agency's BCC.
+  It supersedes anything below in the pre-addendum content of this file.
+  The pre-addendum content is kept verbatim for historical / install-time reference.
+============================================================
+-->
+
+# 🔄 Reality Update — 2026-07-02
+
+The install-time doc below covers the canonical 12 recipes as the document importer. Still accurate for those 12. Two clarifications for the current state:
+
+## Migration `030_two_stage_recipe_helpers` (2026-07-02)
+
+Adds 11 PL/pgSQL helper functions supporting fork-sync-style two-stage recipes:
+- `prepare_email_archive_batch`, `log_email_archive_result`
+- `prepare_document_processor_batch`, `log_document_processor_result`, `mark_document_parsed`, `run_document_processor_backfill`
+- `prepare_facebook_post_batch`, `prepare_linkedin_post_batch`, `prepare_instagram_reminder_batch`, `log_social_post_result`
+- `has_aa05_prohibited_terms` (AA05 word block detection)
+
+These functions are called by TS orchestrators in `automation-runner` v9. The dispatch order in the runner is: orchestrator (if handler matches) → SQL `run_internal_recipe` fallback.
+
+## LLM path is direct Groq, not Composio
+
+Wherever this guide says "Composio LLM" or "no LLM key needed" — that was true at install but not at runtime. The Edge Function uses `Deno.env.get("GROQ_API_KEY")`. Rotate the key in Supabase Dashboard → Edge Functions → Secrets. No redeploy needed.
+
+---
+
+<!-- Original DOCUMENT_IMPORTER_GUIDE.md content follows below. -->
+
 # Document Importer Guide
 
 > **The 12 canonical recipes ARE the document importer.** Do NOT build a parallel importer.

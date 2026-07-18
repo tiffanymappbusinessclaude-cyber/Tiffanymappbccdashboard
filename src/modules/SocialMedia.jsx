@@ -25,34 +25,35 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 //       social_analytics tables in Supabase
 // ============================================================
 
+
 // ─── Design Tokens ────────────────────────────────────────────
 const T = {
-  navy:    "#1B2B4B",
-  blue:    "#2D7DD2",
-  blueLt:  "#EFF6FF",
-  green:   "#10B981",
-  greenLt: "#D1FAE5",
-  amber:   "#F59E0B",
-  amberLt: "#FEF3C7",
-  red:     "#EF4444",
-  redLt:   "#FEE2E2",
-  purple:  "#7C3AED",
-  purpleLt:"#EDE9FE",
+  navy:    "var(--accent-navy)",
+  blue:    "var(--accent-blue)",
+  blueLt:  "var(--accent-navy-bg)",
+  green:   "var(--success)",
+  greenLt: "var(--success-bg)",
+  amber:   "var(--warning)",
+  amberLt: "var(--warning-bg)",
+  red:     "var(--danger)",
+  redLt:   "var(--danger-bg)",
+  purple:  "var(--accent-purple)",
+  purpleLt:"var(--accent-purple-bg)",
   pink:    "#EC4899",
   pinkLt:  "#FCE7F3",
   teal:    "#0D9488",
   tealLt:  "#CCFBF1",
-  slate50: "#F8FAFC",
-  slate100:"#F1F5F9",
-  slate200:"#E2E8F0",
-  slate300:"#CBD5E1",
-  slate400:"#94A3B8",
-  slate500:"#64748B",
-  slate600:"#475569",
-  slate700:"#334155",
-  slate800:"#1E293B",
-  slate900:"#0F172A",
-  white:   "#FFFFFF",
+  slate50: "var(--bg-panel-subtle)",
+  slate100:"var(--bg-panel)",
+  slate200:"var(--border-subtle)",
+  slate400:"var(--text-quaternary)",
+  slate500:"var(--text-tertiary)",
+  slate600:"var(--text-secondary)",
+  slate700:"var(--text-secondary)",
+  slate800:"var(--text-primary)",
+  slate900:"var(--text-primary)",
+  white:   "var(--bg-card)",
+  textOnColor: "#FFFFFF",
 };
 
 // ─── Platform Config ──────────────────────────────────────────
@@ -71,6 +72,110 @@ const PILLARS = {
   celebrate: { label:"Celebrate", color:T.amber,  bg:T.amberLt  },
   invite:    { label:"Invite",    color:T.teal,   bg:T.tealLt   },
 };
+
+// ─── Mock Data ────────────────────────────────────────────────
+const MOCK_POSTS = [
+  { id:"p1",  platform:"facebook",  date:"Apr 27", time:"9:00 AM",  status:"scheduled", pillar:"educate",   caption:"Monday motivation — your agency runs on relationships, not just policies. Here are 3 things every homeowner should review this spring... 🏠", requires_manual:false, engagement:null },
+  { id:"p2",  platform:"linkedin",  date:"Apr 27", time:"12:00 PM", status:"scheduled", pillar:"connect",   caption:"3 things State Farm agents overlook in their Q2 planning — and what I do differently to stay ahead of the numbers.", requires_manual:false, engagement:null },
+  { id:"p3",  platform:"instagram", date:"Apr 27", time:"11:00 AM", status:"scheduled", pillar:"connect",   caption:"Behind the scenes at the agency this Monday morning. Coffee, team huddle, and a full week ahead. ☕", requires_manual:true, engagement:null },
+  { id:"p4",  platform:"facebook",  date:"Apr 26", time:"9:00 AM",  status:"posted",    pillar:"community", caption:"Huge shoutout to the Sarasota Food Bank for their incredible work this month. Proud to support our community! 🙌", requires_manual:false, engagement:{ likes:42, comments:8, shares:6, reach:680 } },
+  { id:"p5",  platform:"linkedin",  date:"Apr 26", time:"12:00 PM", status:"posted",    pillar:"educate",   caption:"The biggest financial mistake I see new homeowners make — and it's easier to fix than you think.", requires_manual:false, engagement:{ likes:31, comments:4, shares:2, reach:410 } },
+  { id:"p6",  platform:"instagram", date:"Apr 26", time:"11:00 AM", status:"posted",    pillar:"community", caption:"Saturday morning walk through Lakewood Ranch. This community never gets old. 🌿", requires_manual:true, engagement:{ likes:89, comments:12, shares:0, reach:920 } },
+  { id:"p7",  platform:"facebook",  date:"Apr 25", time:"9:00 AM",  status:"posted",    pillar:"celebrate", caption:"Happy work anniversary to Marcus! 4 years of helping Sarasota families feel confident about their coverage. 🎉", requires_manual:false, engagement:{ likes:67, comments:22, shares:3, reach:1100 } },
+  { id:"p8",  platform:"facebook",  date:"Apr 24", time:"9:00 AM",  status:"posted",    pillar:"educate",   caption:"Spring storm season reminder — here are 4 things every Florida homeowner should check before June 1st.", requires_manual:false, engagement:{ likes:38, comments:5, shares:11, reach:820 } },
+  { id:"p9",  platform:"instagram", date:"Apr 25", time:"11:00 AM", status:"failed",    pillar:"celebrate", caption:"Team Friday! Celebrating Marcus's work anniversary at lunch today. 🎂", requires_manual:true, engagement:null },
+  { id:"p10", platform:"twitter",   date:"Apr 26", time:"9:00 AM",  status:"posted",    pillar:"educate",   caption:"Florida homeowners: your policy probably doesn't cover flooding. Worth a 5-minute conversation to find out for sure.", requires_manual:false, engagement:{ likes:18, comments:3, shares:7, reach:290 } },
+  { id:"p11", platform:"facebook",  date:"Apr 28", time:"9:00 AM",  status:"draft",     pillar:"community", caption:"Local Love Tuesday — this week we're spotlighting a favorite local business in the area...", requires_manual:false, engagement:null },
+  { id:"p12", platform:"linkedin",  date:"Apr 29", time:"12:00 PM", status:"draft",     pillar:"educate",   caption:"Thursday Thoughts: what the best-run independent insurance agencies have in common.", requires_manual:false, engagement:null },
+  { id:"p13", platform:"facebook",  date:"Apr 30", time:"9:00 AM",  status:"draft",     pillar:"invite",    caption:"End of April — if you haven't done a policy review this year, my door is always open. No pressure, just a conversation.", requires_manual:false, engagement:null },
+  { id:"p14", platform:"instagram", date:"Apr 28", time:"11:00 AM", status:"draft",     pillar:"educate",   caption:"Myth Monday: does a red car actually cost more to insure? Let's bust this one. 🚗❓", requires_manual:true, engagement:null },
+];
+
+const MOCK_ANALYTICS = {
+  this_week: { total_posts:8, total_reach:4220, total_likes:285, total_comments:54, total_shares:29 },
+  last_week: { total_posts:7, total_reach:3890, total_likes:241, total_comments:41, total_shares:21 },
+  by_platform: [
+    { platform:"facebook",  posts:4, reach:2600, likes:147, comments:35, shares:20, best_post:"Marcus anniversary" },
+    { platform:"instagram", posts:2, reach:1420, likes:101, comments:12, shares:0,  best_post:"Saturday walk" },
+    { platform:"linkedin",  posts:1, reach:410,  likes:31,  comments:4,  shares:2,  best_post:"Homeowner mistake" },
+    { platform:"twitter",   posts:1, reach:290,  likes:18,  comments:3,  shares:7,  best_post:"Flood coverage tip" },
+  ],
+  by_pillar: [
+    { pillar:"educate",   posts:4, avg_reach:712, avg_likes:28 },
+    { pillar:"community", posts:2, avg_reach:890, avg_likes:55 },
+    { pillar:"connect",   posts:1, avg_reach:410, avg_likes:31 },
+    { pillar:"celebrate", posts:1, avg_reach:1100,avg_likes:67 },
+  ],
+};
+
+// ─── Live Analytics Derivation ────────────────────────────────
+// When VITE_USE_MOCK_DATA=false, MOCK_ANALYTICS isn't used. Derive a real
+// analytics shape from content_calendar.engagement_notes so Overview KPI
+// cards and the Analytics tab don't crash on undefined.
+function deriveAnalytics(posts) {
+  const zeroWeek = { total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 };
+  const list = Array.isArray(posts) ? posts : [];
+  const posted = list.filter(p => p && p.status === "posted" && p.engagement);
+
+  const now = Date.now();
+  const ONE_DAY = 86400000;
+  const cutoffThis = now - 7  * ONE_DAY;
+  const cutoffLast = now - 14 * ONE_DAY;
+
+  const parseDate = (d) => {
+    if (!d) return NaN;
+    const t = new Date(d).getTime();
+    if (Number.isFinite(t)) return t;
+    const cur = new Date(`${d}, ${new Date().getFullYear()}`).getTime();
+    return Number.isFinite(cur) ? cur : NaN;
+  };
+
+  const sumBucket = (arr) => arr.reduce((acc, p) => {
+    const e = p.engagement || {};
+    acc.total_posts++;
+    acc.total_reach    += Number(e.reach    || 0);
+    acc.total_likes    += Number(e.likes    || 0);
+    acc.total_comments += Number(e.comments || 0);
+    acc.total_shares   += Number(e.shares   || 0);
+    return acc;
+  }, { ...zeroWeek });
+
+  const this_week = posted.length ? sumBucket(posted.filter(p => {
+    const t = parseDate(p.date); return Number.isFinite(t) && t >= cutoffThis;
+  })) : zeroWeek;
+  const last_week = posted.length ? sumBucket(posted.filter(p => {
+    const t = parseDate(p.date); return Number.isFinite(t) && t >= cutoffLast && t < cutoffThis;
+  })) : zeroWeek;
+
+  const plat = {};
+  posted.forEach(p => {
+    const k = p.platform || "other";
+    if (!plat[k]) plat[k] = { platform:k, posts:0, reach:0, likes:0, comments:0, shares:0, best_post:"" };
+    const e = p.engagement || {};
+    plat[k].posts++;
+    plat[k].reach    += Number(e.reach    || 0);
+    plat[k].likes    += Number(e.likes    || 0);
+    plat[k].comments += Number(e.comments || 0);
+    plat[k].shares   += Number(e.shares   || 0);
+  });
+
+  const pill = {};
+  posted.forEach(p => {
+    const k = p.pillar || "other";
+    if (!pill[k]) pill[k] = { pillar:k, _posts:0, _reach:0, _likes:0 };
+    const e = p.engagement || {};
+    pill[k]._posts++;
+    pill[k]._reach += Number(e.reach || 0);
+    pill[k]._likes += Number(e.likes || 0);
+  });
+  const by_pillar = Object.values(pill).map(o => ({
+    pillar: o.pillar, posts: o._posts,
+    avg_reach: o._posts > 0 ? Math.round(o._reach / o._posts) : 0,
+    avg_likes: o._posts > 0 ? Math.round(o._likes / o._posts) : 0,
+  }));
+
+  return { this_week, last_week, by_platform: Object.values(plat), by_pillar };
+}
 
 // ─── Shared Components ────────────────────────────────────────
 const Card = ({ children, style={} }) => (
@@ -135,7 +240,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
       <button
         onClick={open ? () => { setOpen(false); setTimeout(() => { setCopied(false); setOpened(false); }, 200); } : ask}
         style={{ display: "flex", alignItems: "center", gap: 5, background: open ? T.slate100 : T.blue, color: open ? T.blue : T.white, border: open ? `1px solid ${T.blue}` : "1px solid transparent", borderRadius: 7, padding: small ? "5px 10px" : "7px 13px", fontSize: small ? 10 : 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-      >\u26a1 Ask Claude</button>
+      >⚡ Ask Claude</button>
       {open && (
         <div role="dialog" aria-label="Ask Claude" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60, width: 300, background: T.white, border: `1px solid ${T.slate100}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(15,23,42,0.16)", padding: 14, textAlign: "left" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#16A34A", marginBottom: 4 }}>
@@ -147,7 +252,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
           <div style={{ fontSize: 11, lineHeight: 1.55, color: T.slate500, background: T.slate100, borderRadius: 8, padding: 9, maxHeight: 92, overflow: "hidden", whiteSpace: "pre-wrap" }}>{preview}</div>
           <div style={{ marginTop: 10 }}>
             {!opened ? (
-              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.white, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.textOnColor, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Open Claude.ai &amp; paste
               </button>
             ) : demoMode ? (
@@ -176,109 +281,23 @@ const StatBar = ({ value, max, color }) => (
   </div>
 );
 
-// ─── Aggregator ───────────────────────────────────────────────
-// aggregateSocialAnalytics turns raw social_analytics rows (one per post
-// per day) into the { this_week, last_week, by_platform, by_pillar } shape
-// both SocialOverview and Analytics render. Pure function — safe to call in
-// the load effect once and pass the result through props.
-//
-// Inputs:
-//   rows            — array of social_analytics rows (may be [])
-//   contentMap      — Map<content_calendar_id, {caption, pillar}> from posts
-//   oneWeekAgoISO   — 'YYYY-MM-DD' inclusive boundary for this_week
-//   twoWeeksAgoISO  — 'YYYY-MM-DD' inclusive boundary for last_week
-//
-// Rows with post_date >= oneWeekAgoISO count as this_week.
-// Rows with twoWeeksAgoISO <= post_date < oneWeekAgoISO count as last_week.
-export function aggregateSocialAnalytics(rows, contentMap, oneWeekAgoISO, twoWeeksAgoISO) {
-  const zero = () => ({ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 });
-  const this_week = zero();
-  const last_week = zero();
-  const thisWeekRows = [];
-  const safeRows = Array.isArray(rows) ? rows : [];
-  const map = contentMap instanceof Map ? contentMap : new Map();
-
-  for (const r of safeRows) {
-    const d = r?.post_date;
-    if (!d) continue;
-    const reach    = Number(r.reach)    || 0;
-    const likes    = Number(r.likes)    || 0;
-    const comments = Number(r.comments) || 0;
-    const shares   = Number(r.shares)   || 0;
-    if (d >= oneWeekAgoISO) {
-      this_week.total_posts++;
-      this_week.total_reach    += reach;
-      this_week.total_likes    += likes;
-      this_week.total_comments += comments;
-      this_week.total_shares   += shares;
-      thisWeekRows.push(r);
-    } else if (d >= twoWeeksAgoISO) {
-      last_week.total_posts++;
-      last_week.total_reach    += reach;
-      last_week.total_likes    += likes;
-      last_week.total_comments += comments;
-      last_week.total_shares   += shares;
-    }
-  }
-
-  // by_platform (this-week metrics + best-reach post's caption)
-  const platMap = new Map();
-  const pillarMap = new Map();
-  for (const r of thisWeekRows) {
-    const plat = r.platform || "unknown";
-    const cur = platMap.get(plat) || { platform:plat, posts:0, reach:0, likes:0, comments:0, shares:0, _bestReach:-1, best_post:"—" };
-    cur.posts++;
-    cur.reach    += Number(r.reach)    || 0;
-    cur.likes    += Number(r.likes)    || 0;
-    cur.comments += Number(r.comments) || 0;
-    cur.shares   += Number(r.shares)   || 0;
-    const meta = map.get(r.content_calendar_id) || {};
-    if ((Number(r.reach) || 0) > cur._bestReach) {
-      cur._bestReach = Number(r.reach) || 0;
-      cur.best_post = (meta.caption || "").slice(0, 80) || "—";
-    }
-    platMap.set(plat, cur);
-
-    // by_pillar (needs the content_calendar join)
-    const pillar = meta.pillar || "other";
-    const pcur = pillarMap.get(pillar) || { pillar, posts:0, reach:0, likes:0, comments:0, shares:0 };
-    pcur.posts++;
-    pcur.reach    += Number(r.reach)    || 0;
-    pcur.likes    += Number(r.likes)    || 0;
-    pcur.comments += Number(r.comments) || 0;
-    pcur.shares   += Number(r.shares)   || 0;
-    pillarMap.set(pillar, pcur);
-  }
-  const by_platform = Array.from(platMap.values()).map(({_bestReach, ...rest}) => rest);
-  const by_pillar   = Array.from(pillarMap.values());
-
-  return { this_week, last_week, by_platform, by_pillar };
-}
-
 // ─── Section: Overview ────────────────────────────────────────
-const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowScheduler, newPost, setNewPost, savePost, editingPost, setEditingPost, approvePost }) => {
-  // Loading state
-  if (loading) return (
-    <div style={{ textAlign:"center", padding:48, color:T.slate400, fontSize:13 }}>Loading social data…</div>
-  );
-
+const SocialOverview = ({ posts, analytics }) => {
   // Dynamic today filter — formats current date as "Mon DD" to match post date format
   const todayLabel = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const safePosts  = Array.isArray(posts) ? posts : [];
-  const todayPosts = safePosts.filter(p => p.date === todayLabel);
-  const scheduledThisWeek = safePosts.filter(p => p.status === "scheduled" || p.status === "draft").length;
-  const failedRecent = safePosts.filter(p => p.status === "failed").length;
-  const manualNeeded = safePosts.filter(p => p.status === "scheduled" && p.requires_manual).length;
+  const todayPosts = posts.filter(p => p.date === todayLabel);
+  const scheduledThisWeek = posts.filter(p => p.status === "scheduled" || p.status === "draft").length;
+  const failedRecent = posts.filter(p => p.status === "failed").length;
+  const manualNeeded = posts.filter(p => p.status === "scheduled" && p.requires_manual).length;
 
-  // The `analytics` prop is the aggregate shape produced by
-  // aggregateSocialAnalytics in the load effect: { this_week, last_week,
-  // by_platform, by_pillar }. emptyAgg below is a safety net for the
-  // transitional null-while-loading case.
-  const emptyAgg = { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, by_platform:[], by_pillar:[] };
-  const ana = (analytics && analytics.this_week && analytics.last_week) ? analytics : emptyAgg;
+  // Guard against divide-by-zero when last_week is empty.
+  const lwReach = analytics.last_week?.total_reach || 0;
+  const lwLikes = analytics.last_week?.total_likes || 0;
+  const twReach = analytics.this_week?.total_reach || 0;
+  const twLikes = analytics.this_week?.total_likes || 0;
   const weekChange = {
-    reach: ana.last_week.total_reach > 0 ? Math.round(((ana.this_week.total_reach - ana.last_week.total_reach) / ana.last_week.total_reach) * 100) : 0,
-    likes: ana.last_week.total_likes > 0 ? Math.round(((ana.this_week.total_likes - ana.last_week.total_likes) / ana.last_week.total_likes) * 100) : 0,
+    reach: lwReach > 0 ? Math.round(((twReach - lwReach) / lwReach) * 100) : 0,
+    likes: lwLikes > 0 ? Math.round(((twLikes - lwLikes) / lwLikes) * 100) : 0,
   };
 
   return (
@@ -286,8 +305,8 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
       {/* KPI Row */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10, marginBottom:16 }}>
         {[
-          { label:"Posts This Week",    value:ana.this_week.total_posts,  color:T.blue,  border:T.blue  },
-          { label:"Total Reach",        value:(ana.this_week.total_reach||0).toLocaleString(), color:T.green, border:T.green, sub:`↑${weekChange.reach}% vs last week` },
+          { label:"Posts This Week",    value:analytics.this_week?.total_posts || 0,  color:T.blue,  border:T.blue  },
+          { label:"Total Reach",        value:(analytics.this_week?.total_reach || 0).toLocaleString(), color:T.green, border:T.green, sub:`↑${weekChange.reach}% vs last week` },
           { label:"Drafts Scheduled",   value:scheduledThisWeek, color:T.amber, border:T.amber },
           { label:"Manual Posts Needed",value:manualNeeded,      color:manualNeeded>0?T.purple:T.green, border:manualNeeded>0?T.purple:T.green },
         ].map((k,i) => (
@@ -314,7 +333,7 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
       {failedRecent > 0 && (
         <div style={{ background:T.redLt, border:`1px solid #FECACA`, borderLeft:`4px solid ${T.red}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
           <div style={{ fontSize:12, fontWeight:700, color:"#991B1B", marginBottom:2 }}>⚠️ Failed post detected</div>
-          <div style={{ fontSize:11, color:"#991B1B" }}>{failedRecent} post{failedRecent===1?"":"s"} failed recently. Review the calendar and repost manually.</div>
+          <div style={{ fontSize:11, color:"#991B1B" }}>1 Instagram post failed on Apr 25. Review the calendar and repost manually.</div>
         </div>
       )}
 
@@ -324,86 +343,10 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
         <button onClick={()=>setShowScheduler(s=>!s)} style={{padding:"8px 16px",fontSize:12,fontWeight:600,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>➕ Schedule New Post</button>
       </div>
-
-      {showScheduler && (
-        <Card style={{marginBottom:12, background:"#F8FAFC", border:"1px solid #CBD5E1"}}>
-          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12}}>
-            <span style={{fontSize:13, fontWeight:700, color:"#1E3A5F"}}>{editingPost ? "✏️ Edit Post" : "📝 Schedule New Post"}</span>
-            <button onClick={()=>{ setShowScheduler(false); setEditingPost(null); }} style={{fontSize:11, color:"#64748B", background:"none", border:"none", cursor:"pointer", fontWeight:600}}>✕ Cancel</button>
-          </div>
-          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10}}>
-            <div>
-              <label style={{fontSize:10, fontWeight:700, color:"#475569", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:0.4}}>Platform</label>
-              <select value={newPost?.platform || "facebook"} onChange={e => setNewPost({...newPost, platform: e.target.value})} style={{width:"100%", padding:"8px 10px", fontSize:12, border:"1px solid #CBD5E1", borderRadius:6, background:"#fff"}}>
-                <option value="facebook">Facebook</option>
-                <option value="instagram">Instagram (manual post)</option>
-                <option value="linkedin">LinkedIn</option>
-              </select>
-              {newPost?.platform === "instagram" && (
-                <div style={{marginTop:6, padding:"6px 8px", background:"#FEF3C7", border:"1px solid #FDE68A", borderRadius:5, fontSize:10, color:"#92400E", lineHeight:1.5}}>
-                  📱 <strong>Instagram = manual posting.</strong> Meta's Graph API blocks third-party auto-posting unless you have an Instagram <em>Business</em> account linked to a Facebook Page. Until that's set up in Composio, the system will save this draft and send you a morning reminder to post it yourself.
-                </div>
-              )}
-            </div>
-            <div>
-              <label style={{fontSize:10, fontWeight:700, color:"#475569", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:0.4}}>Content Pillar</label>
-              <select value={newPost?.content_pillar || "educate"} onChange={e => setNewPost({...newPost, content_pillar: e.target.value})} style={{width:"100%", padding:"8px 10px", fontSize:12, border:"1px solid #CBD5E1", borderRadius:6, background:"#fff"}}>
-                <option value="educate">Educate</option>
-                <option value="community">Community</option>
-                <option value="connect">Connect</option>
-                <option value="celebrate">Celebrate</option>
-                <option value="invite">Invite (max 20%)</option>
-              </select>
-            </div>
-          </div>
-          <div style={{marginBottom:10}}>
-            <label style={{fontSize:10, fontWeight:700, color:"#475569", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:0.4}}>Scheduled Date</label>
-            <input type="date" value={newPost?.scheduled_date || ""} onChange={e => setNewPost({...newPost, scheduled_date: e.target.value})} style={{width:"100%", padding:"8px 10px", fontSize:12, border:"1px solid #CBD5E1", borderRadius:6, background:"#fff"}} />
-          </div>
-          <div style={{marginBottom:10}}>
-            <label style={{fontSize:10, fontWeight:700, color:"#475569", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:0.4}}>Caption</label>
-            <textarea value={newPost?.caption || ""} onChange={e => setNewPost({...newPost, caption: e.target.value})} placeholder="Compose your post. AA05 rules will be applied by Claude when you generate via Create Content tab." rows={4} style={{width:"100%", padding:"10px 12px", fontSize:12, color:"#1E293B", border:"1px solid #CBD5E1", borderRadius:6, outline:"none", resize:"vertical", fontFamily:"inherit"}} />
-          </div>
-          <div style={{background:"#FEF3C7", border:"1px solid #FDE68A", borderRadius:6, padding:"8px 10px", marginBottom:10, fontSize:10.5, color:"#92400E", lineHeight:1.5}}>
-            <strong>Reminder:</strong> Customer not client · No "best/expert/specialist/advisor" · No pricing or rate language · No investment/wealth language · No giveaways with chance · English only
-          </div>
-          <div style={{display:"flex", gap:8, justifyContent:"flex-end"}}>
-            <button onClick={()=>{ setShowScheduler(false); setEditingPost(null); }} style={{padding:"8px 14px", fontSize:12, fontWeight:600, color:"#475569", background:"#fff", border:"1px solid #CBD5E1", borderRadius:6, cursor:"pointer"}}>Cancel</button>
-            <button
-              onClick={async () => {
-                if (!newPost?.caption?.trim() || !newPost?.scheduled_date) {
-                  alert("Caption and scheduled date are both required.");
-                  return;
-                }
-                // If editing an existing post, include its id so the upsert
-                // updates that row instead of inserting a new one. Preserve
-                // its status too, so an "approved" post edited into a fixed
-                // typo doesn't get demoted back to "draft".
-                const payload = {
-                  platform: newPost.platform || "facebook",
-                  content_type: newPost.content_pillar || "educate",
-                  scheduled_date: newPost.scheduled_date,
-                  caption: newPost.caption,
-                  status: editingPost ? (editingPost.status || "draft") : "draft",
-                  requires_manual: (newPost.platform === "instagram"),
-                };
-                if (editingPost?.id) payload.id = editingPost.id;
-                await savePost(payload);
-                setNewPost({platform:"facebook", caption:"", scheduled_date:"", content_pillar:"educate", status:"draft"});
-              }}
-              disabled={!newPost?.caption?.trim() || !newPost?.scheduled_date}
-              style={{padding:"8px 16px", fontSize:12, fontWeight:700, color:"#fff", background: (newPost?.caption?.trim() && newPost?.scheduled_date) ? "#1E3A5F" : "#94A3B8", border:"none", borderRadius:6, cursor: (newPost?.caption?.trim() && newPost?.scheduled_date) ? "pointer" : "not-allowed"}}
-            >
-              {editingPost ? "💾 Save Changes" : "💾 Save as Draft"}
-            </button>
-          </div>
-        </Card>
-      )}
-
 <Card>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-            <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Today — {new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" })}</span>
-            <AskBtn size="small" context={`Today's social media posts:\n${todayPosts.map(p=>`${(p.platform || 'POST').toUpperCase()} at ${p.time}: "${p.caption}" — Status: ${p.status}${p.requires_manual?" (MANUAL POSTING REQUIRED)":""}`).join("\n")}\n\nHelp me review today's content for compliance and engagement quality. Check against the 80/20 rule and the pre-post checklist.`} />
+            <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Today — Monday April 27</span>
+            <AskBtn size="small" context={`Today's social media posts:\n${todayPosts.map(p=>`${p.platform.toUpperCase()} at ${p.time}: "${p.caption}" — Status: ${p.status}${p.requires_manual?" (MANUAL POSTING REQUIRED)":""}`).join("\n")}\n\nHelp me review today's content for compliance and engagement quality. Check against the 80/20 rule and the pre-post checklist.`} />
           </div>
           {todayPosts.length === 0 ? (
             <div style={{ fontSize:12, color:T.slate400, textAlign:"center", padding:"20px 0" }}>No posts scheduled for today</div>
@@ -421,20 +364,7 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
                     ✅ Approve
                   </button>
                 )}
-                <button
-                  onClick={()=>{
-                    // Populate the scheduler form from this post's fields, then open it.
-                    setEditingPost(post);
-                    setNewPost({
-                      platform:       post.platform || "facebook",
-                      content_pillar: post.pillar   || "educate",
-                      scheduled_date: post.scheduled_date_raw || "",
-                      caption:        post.caption || "",
-                      status:         post.status  || "draft",
-                    });
-                    setShowScheduler(true);
-                  }}
-                  style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:"#DBEAFE",color:"#2563EB",border:"none",borderRadius:5,cursor:"pointer"}}>
+                <button onClick={()=>setEditingPost(post)} style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:"#DBEAFE",color:"#2563EB",border:"none",borderRadius:5,cursor:"pointer"}}>
                   ✏️ Edit
                 </button>
               </div>
@@ -445,17 +375,17 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
         {/* Platform Breakdown */}
         <Card>
           <div style={{ fontSize:13, fontWeight:600, color:T.slate800, marginBottom:12 }}>This week by platform</div>
-          {(ana.by_platform||[]).map((p,i) => (
+          {analytics.by_platform.map((p,i) => (
             <div key={i} style={{ marginBottom:12 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
                 <PlatformBadge platform={p.platform} />
                 <div style={{ display:"flex", gap:12 }}>
                   <span style={{ fontSize:10, color:T.slate500 }}>{p.posts} posts</span>
-                  <span style={{ fontSize:10, color:T.slate500 }}>{(p.reach||0).toLocaleString()} reach</span>
+                  <span style={{ fontSize:10, color:T.slate500 }}>{p.reach.toLocaleString()} reach</span>
                   <span style={{ fontSize:10, fontWeight:600, color:T.slate700 }}>{p.likes} ❤️</span>
                 </div>
               </div>
-              <StatBar value={p.reach} max={ana.this_week.total_reach||1} color={PLATFORMS[p.platform]?.color || T.blue} />
+              <StatBar value={p.reach} max={Math.max(1, analytics.this_week?.total_reach || 0)} color={PLATFORMS[p.platform]?.color || T.blue} />
             </div>
           ))}
         </Card>
@@ -471,9 +401,9 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
           <AskBtn size="small" context="Review my social media content mix for this month. Am I following the 80/20 rule correctly? 80% should be value-first (educate, community, connect, celebrate) and max 20% business-adjacent (invite). Never hard-sell." />
         </div>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-          {(ana.by_pillar || []).map((p,i) => {
+          {analytics.by_pillar.map((p,i) => {
             const pl = PILLARS[p.pillar];
-            const pct = ana.this_week.total_posts > 0 ? Math.round((p.posts / ana.this_week.total_posts) * 100) : 0;
+            const pct = Math.round((p.posts / analytics.this_week.total_posts) * 100);
             return (
               <div key={i} style={{ flex:1, minWidth:100, background:pl?.bg||T.slate50, borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
                 <div style={{ fontSize:10, fontWeight:600, color:pl?.color||T.slate500, marginBottom:4 }}>{pl?.label||p.pillar}</div>
@@ -489,14 +419,12 @@ const SocialOverview = ({ posts, analytics, loading, showScheduler, setShowSched
 };
 
 // ─── Section: Content Calendar ────────────────────────────────
-const ContentCalendar = ({ posts, loading }) => {
+const ContentCalendar = ({ posts }) => {
   const [platformFilter, setPlatformFilter] = useState("all");
   const [statusFilter,   setStatusFilter]   = useState("all");
   const [expanded,       setExpanded]       = useState(null);
 
-  const safePosts = Array.isArray(posts) ? posts : [];
-
-  const filtered = useMemo(() => safePosts.filter(p => {
+  const filtered = useMemo(() => posts.filter(p => {
     if (platformFilter !== "all" && p.platform !== platformFilter) return false;
     if (statusFilter   !== "all" && p.status   !== statusFilter)   return false;
     return true;
@@ -509,15 +437,10 @@ const ContentCalendar = ({ posts, loading }) => {
     return acc;
   }, {});
 
-  const dates = Object.keys(grouped).sort((a, b) => {
-    // Parse "Mon DD" format to comparable dates
-    const parse = s => { try { return new Date(s + " 2026"); } catch { return new Date(0); } };
-    return parse(b) - parse(a); // newest first
+  const dates = Object.keys(grouped).sort((a,b) => {
+    const order = ["Apr 30","Apr 29","Apr 28","Apr 27","Apr 26","Apr 25","Apr 24"];
+    return order.indexOf(a) - order.indexOf(b);
   });
-
-  if (loading) return (
-    <div style={{ textAlign:"center", padding:48, color:T.slate400, fontSize:13 }}>Loading calendar…</div>
-  );
 
   return (
     <div>
@@ -539,13 +462,6 @@ const ContentCalendar = ({ posts, loading }) => {
 
       {/* Calendar */}
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-        {dates.length === 0 && (
-          <div style={{ textAlign:"center", padding:40, color:T.slate500 }}>
-            <div style={{ fontSize:28, marginBottom:10 }}>📅</div>
-            <div style={{ fontSize:14, fontWeight:600, color:T.slate700, marginBottom:5 }}>No posts scheduled yet</div>
-            <div style={{ fontSize:12, color:T.slate500 }}>Use the <strong>Create Content</strong> tab to build your content calendar.</div>
-          </div>
-        )}
         {dates.map(date => (
           <div key={date}>
             {/* Date Header */}
@@ -628,40 +544,19 @@ const ContentCalendar = ({ posts, loading }) => {
 };
 
 // ─── Section: Analytics ───────────────────────────────────────
-const Analytics = ({ analytics, posts, loading }) => {
-  if (loading) return (
-    <div style={{ textAlign:"center", padding:48, color:T.slate400, fontSize:13 }}>Loading analytics…</div>
-  );
-
-  // analytics is the aggregate shape from aggregateSocialAnalytics.
-  // Same emptyAgg safety net as Overview for the null-while-loading case.
-  const emptyAgg = { this_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, last_week:{ total_posts:0, total_reach:0, total_likes:0, total_comments:0, total_shares:0 }, by_platform:[], by_pillar:[] };
-  const ana = (analytics && analytics.this_week && analytics.last_week) ? analytics : emptyAgg;
-  const safePosts = Array.isArray(posts) ? posts : [];
-  const hasRealAggregate = !!(analytics && analytics.this_week);
-
-  if (!hasRealAggregate && safePosts.length === 0) return (
-    <div style={{ textAlign:"center", padding:48, color:T.slate500 }}>
-      <div style={{ fontSize:32, marginBottom:12 }}>📊</div>
-      <div style={{ fontSize:15, fontWeight:600, color:T.slate700, marginBottom:6 }}>No analytics data yet</div>
-      <div style={{ fontSize:13, color:T.slate500, maxWidth:340, margin:"0 auto" }}>
-        Analytics will populate once posts are scheduled and published. Use the <strong>Create Content</strong> tab to start building your content calendar.
-      </div>
-    </div>
-  );
-
-  const maxReach = ana.by_platform.length > 0 ? Math.max(...ana.by_platform.map(p => p.reach)) : 1;
+const Analytics = ({ analytics }) => {
+  const maxReach = Math.max(...analytics.by_platform.map(p => p.reach));
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
       {/* Weekly Summary */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10 }}>
         {[
-          { label:"Total Reach",    value:(ana.this_week.total_reach||0).toLocaleString(),    sub:`vs ${(ana.last_week.total_reach||0).toLocaleString()} last week`, up:true },
-          { label:"Total Likes",    value:ana.this_week.total_likes||0,    sub:`vs ${ana.last_week.total_likes||0} last week`, up:true },
-          { label:"Total Comments", value:ana.this_week.total_comments||0, sub:`vs ${ana.last_week.total_comments||0} last week`, up:true },
-          { label:"Total Shares",   value:ana.this_week.total_shares||0,   sub:`vs ${ana.last_week.total_shares||0} last week`, up:true },
-          { label:"Posts Published",value:ana.this_week.total_posts||0,    sub:`vs ${ana.last_week.total_posts||0} last week`, up:true },
+          { label:"Total Reach",    value:(analytics.this_week?.total_reach || 0).toLocaleString(),    sub:`vs ${(analytics.last_week?.total_reach || 0).toLocaleString()} last week`, up:true },
+          { label:"Total Likes",    value:analytics.this_week.total_likes,    sub:`vs ${analytics.last_week.total_likes} last week`, up:true },
+          { label:"Total Comments", value:analytics.this_week.total_comments, sub:`vs ${analytics.last_week.total_comments} last week`, up:true },
+          { label:"Total Shares",   value:analytics.this_week.total_shares,   sub:`vs ${analytics.last_week.total_shares} last week`, up:true },
+          { label:"Posts Published",value:analytics.this_week.total_posts,    sub:`vs ${analytics.last_week.total_posts} last week`, up:true },
         ].map((k,i) => (
           <div key={i} style={{ background:T.white, border:`1px solid ${T.slate200}`, borderRadius:12, padding:"14px 16px" }}>
             <div style={{ fontSize:11, color:T.slate500, fontWeight:500, marginBottom:6 }}>{k.label}</div>
@@ -675,7 +570,7 @@ const Analytics = ({ analytics, posts, loading }) => {
       <Card>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
           <div style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Performance by platform — this week</div>
-          <AskBtn size="small" context={`My social media analytics this week:\n${(ana.by_platform||[]).map(p=>`${p.platform}: ${p.posts} posts, ${p.reach} reach, ${p.likes} likes, ${p.comments} comments, ${p.shares} shares. Best post: "${p.best_post}"`).join("\n")}\n\nAnalyze my platform performance. Which platform is performing best? What content is working? What should I focus on next week?`} />
+          <AskBtn size="small" context={`My social media analytics this week:\n${analytics.by_platform.map(p=>`${p.platform}: ${p.posts} posts, ${p.reach} reach, ${p.likes} likes, ${p.comments} comments, ${p.shares} shares. Best post: "${p.best_post}"`).join("\n")}\n\nAnalyze my platform performance. Which platform is performing best? What content is working? What should I focus on next week?`} />
         </div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
@@ -686,11 +581,11 @@ const Analytics = ({ analytics, posts, loading }) => {
             </tr>
           </thead>
           <tbody>
-            {(ana.by_platform||[]).map((p,i) => (
+            {analytics.by_platform.map((p,i) => (
               <tr key={i} style={{ borderBottom:`1px solid ${T.slate100}` }}>
                 <td style={{ padding:"10px 8px" }}><PlatformBadge platform={p.platform} /></td>
                 <td style={{ padding:"10px 8px", fontSize:12, fontWeight:600, color:T.slate900, textAlign:"right" }}>{p.posts}</td>
-                <td style={{ padding:"10px 8px", fontSize:12, color:T.slate700, textAlign:"right" }}>{(p.reach||0).toLocaleString()}</td>
+                <td style={{ padding:"10px 8px", fontSize:12, color:T.slate700, textAlign:"right" }}>{p.reach.toLocaleString()}</td>
                 <td style={{ padding:"10px 8px", fontSize:12, color:T.slate700, textAlign:"right" }}>{p.likes}</td>
                 <td style={{ padding:"10px 8px", fontSize:12, color:T.slate700, textAlign:"right" }}>{p.comments}</td>
                 <td style={{ padding:"10px 8px", fontSize:12, color:T.slate700, textAlign:"right" }}>{p.shares}</td>
@@ -704,7 +599,7 @@ const Analytics = ({ analytics, posts, loading }) => {
       {/* By Pillar */}
       <Card>
         <div style={{ fontSize:13, fontWeight:600, color:T.slate800, marginBottom:14 }}>Performance by content pillar</div>
-        {(ana.by_pillar || []).map((p,i) => {
+        {analytics.by_pillar.map((p,i) => {
           const pl = PILLARS[p.pillar];
           return (
             <div key={i} style={{ marginBottom:14 }}>
@@ -923,7 +818,50 @@ Please draft a complete, compliant post ready to publish. Include:
 
 // ─── Main Social Media Module ─────────────────────────────────
 export default function SocialMedia() {
+  const useMockData = import.meta.env.VITE_USE_MOCK_DATA !== "false";
   const [section, setSection] = useState("overview");
+  const [posts, setPosts] = useState(useMockData ? MOCK_POSTS : []);
+  const [postsLoading, setPostsLoading] = useState(true);
+
+  // Load content_calendar from Supabase. Live data wins; MOCK_POSTS only when env allows.
+  // Field mapping required because DB column names differ from mock shape:
+  //   scheduled_date -> date, scheduled_time -> time, content_type -> pillar,
+  //   engagement_notes -> engagement.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!supabase || !AGENCY_ID) { setPostsLoading(false); return; }
+      try {
+        const { data, error } = await supabase
+          .from("content_calendar")
+          .select("id, platform, content_type, caption, scheduled_date, scheduled_time, status, requires_manual, post_url, engagement_notes, hashtags")
+          .eq("agency_id", AGENCY_ID)
+          .order("scheduled_date", { ascending: false });
+        if (cancelled) return;
+        if (error) { console.error("SocialMedia load error:", error); return; }
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map(p => ({
+            id: p.id,
+            platform: p.platform,
+            date: p.scheduled_date,
+            time: p.scheduled_time,
+            status: p.status,
+            pillar: p.content_type,
+            caption: p.caption,
+            requires_manual: p.requires_manual,
+            engagement: p.engagement_notes || null,
+            post_url: p.post_url,
+            hashtags: p.hashtags || [],
+          }));
+          setPosts(mapped);
+        }
+      } finally {
+        if (!cancelled) setPostsLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   const sections = [
     { id:"overview",  label:"Overview"      },
@@ -935,120 +873,22 @@ export default function SocialMedia() {
 
   const [editingPost, setEditingPost] = useState(null);
   const [showScheduler, setShowScheduler] = useState(false);
-  const [newPost, setNewPost] = useState({platform:"facebook", caption:"", scheduled_date:"", content_pillar:"educate", status:"draft"});
-
-  // ── Live data from Supabase ──────────────────────────────────
-  const [posts, setPosts]           = useState([]);
-  const [analytics, setAnalytics]   = useState(null);
-  const [loadingData, setLoadingData] = useState(true);
-
-  useEffect(() => {
-    async function loadSocialData() {
-      setLoadingData(true);
-      try {
-        // Load content calendar posts
-        const { data: calData } = await supabase
-          .from("content_calendar")
-          .select("*")
-          .eq("agency_id", AGENCY_ID)
-          .order("scheduled_date", { ascending: false })
-          .limit(60);
-
-        // Normalize rows to match component expectations. Preserve raw
-        // scheduled_date so the Edit workflow can populate the scheduler
-        // date input (which needs YYYY-MM-DD, not "Jul 15").
-        const normalized = (calData || []).map(row => ({
-          id:              row.id,
-          platform:        row.platform,
-          date:            row.scheduled_date
-            ? new Date(row.scheduled_date).toLocaleDateString("en-US", { month:"short", day:"numeric" })
-            : "",
-          scheduled_date_raw: row.scheduled_date || "",   // for edit-mode repopulation
-          time:            row.scheduled_time || "",
-          status:          row.status,
-          pillar:          row.content_type || "educate",
-          caption:         row.caption || "",
-          requires_manual: row.requires_manual || false,
-          engagement:      null,
-        }));
-        setPosts(normalized);
-
-        // Load 14 days of social_analytics rows and aggregate client-side
-        // into the shape the render components read. Empty result produces
-        // an aggregate of zeros — the components render gracefully.
-        const today = new Date();
-        const oneWeekAgoISO  = new Date(today.getTime() -  7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const twoWeeksAgoISO = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const { data: anaData } = await supabase
-          .from("social_analytics")
-          .select("*")
-          .eq("agency_id", AGENCY_ID)
-          .gte("post_date", twoWeeksAgoISO)
-          .order("post_date", { ascending: false });
-
-        // content_calendar_id → { caption, pillar } for best_post + by_pillar lookup.
-        const contentMap = new Map(
-          (calData || []).map(row => [row.id, { caption: row.caption || "", pillar: row.content_type || "other" }])
-        );
-
-        setAnalytics(aggregateSocialAnalytics(anaData || [], contentMap, oneWeekAgoISO, twoWeeksAgoISO));
-      } catch (err) {
-        console.error("Social data load error:", err);
-      } finally {
-        setLoadingData(false);
-      }
-    }
-    loadSocialData();
-  }, []);
+  const [newPost, setNewPost] = useState({platform:"facebook", content:"", post_date:"", status:"draft"});
 
   const savePost = async (post) => {
-    try {
-      const { data, error } = await supabase
-        .from("content_calendar")
-        .upsert({ ...post, agency_id: AGENCY_ID })
-        .select()
-        .single();
-      if (error) throw error;
-      // Normalize into the shape the render code expects
-      const normalized = {
-        id: data.id,
-        platform: data.platform,
-        date: data.scheduled_date
-          ? new Date(data.scheduled_date).toLocaleDateString("en-US", { month:"short", day:"numeric" })
-          : "",
-        scheduled_date_raw: data.scheduled_date || "",   // for edit-mode repopulation
-        time: data.scheduled_time || "",
-        status: data.status,
-        pillar: data.content_type || "educate",
-        caption: data.caption || "",
-        requires_manual: data.requires_manual || false,
-        engagement: null,
-      };
-      setPosts(prev => {
-        const rest = prev.filter(p => p.id !== normalized.id);
-        return [normalized, ...rest];
-      });
-      setEditingPost(null);
-      setShowScheduler(false);
-    } catch (e) {
-      console.error("content_calendar upsert error:", e);
-      alert("Could not save post: " + (e?.message || "unknown error"));
-    }
+    const { error } = await supabase.from("content_calendar").upsert([{
+      ...post,
+      agency_id: AGENCY_ID,
+      updated_at: new Date().toISOString()
+    }]);
+    if (!error) { setEditingPost(null); setShowScheduler(false); window.location.reload(); }
   };
 
   const approvePost = async (postId) => {
-    try {
-      const { error } = await supabase
-        .from("content_calendar")
-        .update({ status: "approved" })
-        .eq("id", postId);
-      if (error) throw error;
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: "approved" } : p));
-    } catch (e) {
-      console.error("content_calendar approve error:", e);
-      alert("Could not approve post: " + (e?.message || "unknown error"));
-    }
+    await supabase.from("content_calendar").update({status:"approved"}).eq("id", postId);
+    window.location.reload();
   };
+
 
   return (
     <div>
@@ -1072,12 +912,13 @@ export default function SocialMedia() {
         ))}
       </div>
 
-      {/* Section Content */}
-      {section === "overview"  && <SocialOverview  posts={posts} analytics={analytics} loading={loadingData} showScheduler={showScheduler} setShowScheduler={setShowScheduler} newPost={newPost} setNewPost={setNewPost} savePost={savePost} editingPost={editingPost} setEditingPost={setEditingPost} approvePost={approvePost} />}
-      {section === "calendar"  && <ContentCalendar  posts={posts} loading={loadingData} />}
-      {section === "analytics" && <Analytics        analytics={analytics} posts={posts} loading={loadingData} />}
+      {/* Section Content — live content_calendar wins; analytics still mock (no analytics table yet) */}
+      {section === "overview"  && <SocialOverview  posts={posts} analytics={(useMockData && posts === MOCK_POSTS) ? MOCK_ANALYTICS : deriveAnalytics(posts)} />}
+      {section === "calendar"  && <ContentCalendar  posts={posts} />}
+      {section === "analytics" && <Analytics        analytics={(useMockData && posts === MOCK_POSTS) ? MOCK_ANALYTICS : deriveAnalytics(posts)} />}
       {section === "platforms" && <PlatformGuide />}
       {section === "create"    && <CreateContent />}
     </div>
   );
 }
+

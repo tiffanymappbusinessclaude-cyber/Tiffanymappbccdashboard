@@ -37,36 +37,52 @@ import EmptyState from "../components/EmptyState.jsx";
 
 // ─── Design Tokens ────────────────────────────────────────────
 const T = {
-  navy:    "#1B2B4B",
-  blue:    "#2D7DD2",
-  blueLt:  "#EFF6FF",
-  green:   "#10B981",
-  greenLt: "#D1FAE5",
-  amber:   "#F59E0B",
-  amberLt: "#FEF3C7",
-  red:     "#EF4444",
-  redLt:   "#FEE2E2",
-  purple:  "#7C3AED",
-  purpleLt:"#EDE9FE",
+  navy:    "var(--accent-navy)",
+  blue:    "var(--accent-blue)",
+  blueLt:  "var(--accent-navy-bg)",
+  green:   "var(--success)",
+  greenLt: "var(--success-bg)",
+  amber:   "var(--warning)",
+  amberLt: "var(--warning-bg)",
+  red:     "var(--danger)",
+  redLt:   "var(--danger-bg)",
+  purple:  "var(--accent-purple)",
+  purpleLt:"var(--accent-purple-bg)",
   teal:    "#0D9488",
   tealLt:  "#CCFBF1",
-  slate50: "#F8FAFC",
-  slate100:"#F1F5F9",
-  slate200:"#E2E8F0",
-  slate400:"#94A3B8",
-  slate500:"#64748B",
-  slate600:"#475569",
-  slate700:"#334155",
-  slate800:"#1E293B",
-  slate900:"#0F172A",
-  white:   "#FFFFFF",
+  slate50: "var(--bg-panel-subtle)",
+  slate100:"var(--bg-panel)",
+  slate200:"var(--border-subtle)",
+  slate400:"var(--text-quaternary)",
+  slate500:"var(--text-tertiary)",
+  slate600:"var(--text-secondary)",
+  slate700:"var(--text-secondary)",
+  slate800:"var(--text-primary)",
+  slate900:"var(--text-primary)",
+  white:   "var(--bg-card)",
+  textOnColor: "#FFFFFF",
 };
 
 // ─── Document Type Config ─────────────────────────────────────
 const DOC_TYPES = {
-  comp_recap:     { label:"COMP_RECAP",      color:T.green,  bg:T.greenLt,  icon:"📊" },
-  payroll_export: { label:"Payroll Export",  color:T.blue,   bg:T.blueLt,   icon:"💼" },
+  // Canonical vocabulary from docs/DRIVE_FOLDER_SETUP.md §2
+  bank_statements:        { label:"Bank Statement",        color:T.teal,     bg:T.tealLt,     icon:"🏦" },
+  credit_card_statements: { label:"Credit Card Statement", color:T.purple,   bg:T.purpleLt,   icon:"💳" },
+  comp_recap:             { label:"COMP_RECAP",            color:T.green,    bg:T.greenLt,    icon:"📊" },
+  deductions:             { label:"SF Deduction",          color:T.amber,    bg:T.amberLt,    icon:"📉" },
+  payroll:                { label:"Payroll",               color:T.blue,     bg:T.blueLt,     icon:"💼" },
+  production_reports:     { label:"Production Report",     color:T.green,    bg:T.greenLt,    icon:"📈" },
+  commission_reports:     { label:"Commission Report",     color:T.navy,     bg:T.slate100,   icon:"💰" },
+  team_production:        { label:"Team Production",       color:T.navy,     bg:T.slate100,   icon:"👥" },
+  receipts:               { label:"Receipt",               color:T.slate500, bg:T.slate100,   icon:"🧾" },
+  contracts:              { label:"Contract",              color:T.navy,     bg:T.slate100,   icon:"📜" },
+  archive_bundles:        { label:"Archive Bundle",        color:T.slate500, bg:T.slate100,   icon:"📦" },
+  tax_returns:            { label:"Tax Return",            color:T.amber,    bg:T.amberLt,    icon:"📋" },
+  general:                { label:"General",               color:T.slate500, bg:T.slate100,   icon:"📄" },
+  unsorted:               { label:"Unsorted",              color:T.red,      bg:T.redLt,      icon:"❓" },
+  // Backwards-compat / mock-data keys (kept so mock and any legacy strings still render)
   bank_statement: { label:"Bank Statement",  color:T.teal,   bg:T.tealLt,   icon:"🏦" },
+  payroll_export: { label:"Payroll Export",  color:T.blue,   bg:T.blueLt,   icon:"💼" },
   tax_document:   { label:"Tax Document",    color:T.amber,  bg:T.amberLt,  icon:"📋" },
   resume:         { label:"Resume",          color:T.purple, bg:T.purpleLt, icon:"👤" },
   aipp_report:    { label:"AIPP Report",     color:T.green,  bg:T.greenLt,  icon:"🎯" },
@@ -77,15 +93,153 @@ const DOC_TYPES = {
 };
 
 // ─── Mock Data ────────────────────────────────────────────────
+const MOCK_DOCUMENTS = [
+  {
+    id:"d1",  file_name:"SF_COMP_April_2026.pdf",
+    file_type:"pdf", doc_type:"comp_recap",
+    upload_source:"email_auto", drive_url:"#",
+    processing_status:"complete", processing_type:"database_import",
+    groq_classification:"comp_recap",
+    tables_updated:["comp_recap","aipp_tracking"],
+    records_created:5, uploaded_at:"Apr 26 2:28 PM",
+    processed_at:"Apr 26 2:30 PM",
+    notes:"April 2026 COMP_RECAP. Total: $48,240. AIPP updated to 47.5%.",
+    size:"284 KB",
+  },
+  {
+    id:"d2",  file_name:"april_payroll_export.csv",
+    file_type:"csv", doc_type:"payroll_export",
+    upload_source:"email_auto", drive_url:"#",
+    processing_status:"complete", processing_type:"database_import",
+    groq_classification:"payroll_export",
+    tables_updated:["payroll_runs","payroll_detail"],
+    records_created:4, uploaded_at:"Apr 25 10:14 AM",
+    processed_at:"Apr 25 10:16 AM",
+    notes:"April 1-15 payroll. 3 staff. Gross: $6,200. Taxes: $744.",
+    size:"18 KB",
+  },
+  {
+    id:"d3",  file_name:"chase_march_statement.pdf",
+    file_type:"pdf", doc_type:"bank_statement",
+    upload_source:"email_auto", drive_url:"#",
+    processing_status:"partial", processing_type:"database_import",
+    groq_classification:"bank_statement",
+    tables_updated:["journal_entries"],
+    records_created:18, uploaded_at:"Apr 15 2:58 PM",
+    processed_at:"Apr 15 3:01 PM",
+    notes:"March bank statement. 18 of 21 transactions loaded. 3 pages could not be parsed — saved to Drive for manual review.",
+    size:"1.2 MB",
+  },
+  {
+    id:"d4",  file_name:"resume_jamie_chen.pdf",
+    file_type:"pdf", doc_type:"resume",
+    upload_source:"email_auto", drive_url:"#",
+    processing_status:"complete", processing_type:"database_import",
+    groq_classification:"resume",
+    tables_updated:["applicants","documents"],
+    records_created:1, uploaded_at:"Apr 26 9:12 AM",
+    processed_at:"Apr 26 9:14 AM",
+    notes:"Applicant: Jamie Chen. Score: 8/10. One Page Interview Focus generated. Position: Licensed Sales Agent.",
+    size:"142 KB",
+  },
+  {
+    id:"d5",  file_name:"SF_COMP_March_2026.pdf",
+    file_type:"pdf", doc_type:"comp_recap",
+    upload_source:"email_auto", drive_url:"#",
+    processing_status:"complete", processing_type:"database_import",
+    groq_classification:"comp_recap",
+    tables_updated:["comp_recap","aipp_tracking"],
+    records_created:4, uploaded_at:"Apr 5 11:20 AM",
+    processed_at:"Apr 5 11:22 AM",
+    notes:"March 2026 COMP_RECAP. Total: $44,600.",
+    size:"276 KB",
+  },
+  {
+    id:"d6",  file_name:"q1_tax_estimate_2026.pdf",
+    file_type:"pdf", doc_type:"tax_document",
+    upload_source:"email_auto", drive_url:"#",
+    processing_status:"complete", processing_type:"database_import",
+    groq_classification:"tax_document",
+    tables_updated:["documents"],
+    records_created:0, uploaded_at:"Apr 1 3:45 PM",
+    processed_at:"Apr 1 3:47 PM",
+    notes:"Q1 2026 estimated tax document from Club Capital Tax. Archived to Drive. No data extracted.",
+    size:"89 KB",
+  },
+  {
+    id:"d7",  file_name:"EO_Policy_2025_2026.pdf",
+    file_type:"pdf", doc_type:"eo_insurance",
+    upload_source:"direct_upload", drive_url:"#",
+    processing_status:"complete", processing_type:"archive",
+    groq_classification:"eo_insurance",
+    tables_updated:["documents"],
+    records_created:0, uploaded_at:"Aug 15, 2025",
+    processed_at:"Aug 15, 2025",
+    notes:"E&O policy Hartford. Policy #HRT-8821-IL. Renews August 2026. Archived to Drive.",
+    size:"412 KB",
+  },
+  {
+    id:"d8",  file_name:"IL_License_Renewal_2024.pdf",
+    file_type:"pdf", doc_type:"license",
+    upload_source:"direct_upload", drive_url:"#",
+    processing_status:"complete", processing_type:"archive",
+    groq_classification:"license",
+    tables_updated:["documents"],
+    records_created:0, uploaded_at:"Oct 15, 2024",
+    processed_at:"Oct 15, 2024",
+    notes:"IL Producer License renewal certificate. Expires October 2026.",
+    size:"156 KB",
+  },
+  {
+    id:"d9",  file_name:"feb_payroll_export.csv",
+    file_type:"csv", doc_type:"payroll_export",
+    upload_source:"email_auto", drive_url:"#",
+    processing_status:"complete", processing_type:"database_import",
+    groq_classification:"payroll_export",
+    tables_updated:["payroll_runs","payroll_detail"],
+    records_created:4, uploaded_at:"Mar 5 9:30 AM",
+    processed_at:"Mar 5 9:32 AM",
+    notes:"February 16-28 payroll. 3 staff.",
+    size:"17 KB",
+  },
+  {
+    id:"d10", file_name:"mystery_document.pdf",
+    file_type:"pdf", doc_type:"other",
+    upload_source:"email_auto", drive_url:"#",
+    processing_status:"failed", processing_type:"database_import",
+    groq_classification:null,
+    tables_updated:[],
+    records_created:0, uploaded_at:"Apr 20 4:15 PM",
+    processed_at:"Apr 20 4:17 PM",
+    notes:"Groq could not classify this document. File saved to Drive for manual review.",
+    size:"2.1 MB",
+  },
+];
 
+const MOCK_INTAKE_LOG = [
+  { id:"i1", date:"Apr 26", time:"2:28 PM", file:"SF_COMP_April_2026.pdf",     source:"Email — State Farm",          status:"complete", type:"comp_recap",      tables:["comp_recap","aipp_tracking"],   records:5  },
+  { id:"i2", date:"Apr 26", time:"9:12 AM", file:"resume_jamie_chen.pdf",       source:"Email — Jamie Chen",          status:"complete", type:"resume",          tables:["applicants","documents"],       records:1  },
+  { id:"i3", date:"Apr 25", time:"10:14 AM",file:"april_payroll_export.csv",    source:"Email — Gusto",               status:"complete", type:"payroll_export",  tables:["payroll_runs","payroll_detail"],records:4  },
+  { id:"i4", date:"Apr 20", time:"4:15 PM", file:"mystery_document.pdf",        source:"Email — Unknown",             status:"failed",   type:null,              tables:[],                               records:0  },
+  { id:"i5", date:"Apr 15", time:"2:58 PM", file:"chase_march_statement.pdf",   source:"Email — Chase",               status:"partial",  type:"bank_statement",  tables:["journal_entries"],              records:18 },
+  { id:"i6", date:"Apr 5",  time:"11:20 AM",file:"SF_COMP_March_2026.pdf",      source:"Email — State Farm",          status:"complete", type:"comp_recap",      tables:["comp_recap","aipp_tracking"],   records:4  },
+  { id:"i7", date:"Apr 1",  time:"3:45 PM", file:"q1_tax_estimate_2026.pdf",    source:"Email — Club Capital Tax",    status:"complete", type:"tax_document",    tables:["documents"],                    records:0  },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────
 const statusConfig = (s) => ({
-  complete: { color:"#065F46", bg:T.greenLt, label:"Complete" },
-  partial:  { color:"#92400E", bg:T.amberLt, label:"Partial"  },
-  failed:   { color:"#991B1B", bg:T.redLt,   label:"Failed"   },
-  pending:  { color:"#1E40AF", bg:T.blueLt,  label:"Pending"  },
-  archive:  { color:T.slate500,bg:T.slate100,label:"Archived" },
+  // DB processing_status values map here. parsed/parse_skipped/parsed_duplicate/filed
+  // are the real lifecycle states emitted by the parser recipes; complete/partial/failed
+  // are legacy mock values kept for backward compatibility.
+  complete:         { color:"#065F46", bg:T.greenLt, label:"Complete" },
+  parsed:           { color:"#065F46", bg:T.greenLt, label:"Parsed"   },
+  filed:            { color:"#065F46", bg:T.greenLt, label:"Filed"    },
+  parsed_duplicate: { color:"#92400E", bg:T.amberLt, label:"Duplicate" },
+  partial:          { color:"#92400E", bg:T.amberLt, label:"Partial"  },
+  parse_skipped:    { color:T.slate500,bg:T.slate100,label:"Skipped — self-email" },
+  failed:           { color:"#991B1B", bg:T.redLt,   label:"Failed"   },
+  pending:          { color:"#1E40AF", bg:T.blueLt,  label:"Pending"  },
+  archive:          { color:T.slate500,bg:T.slate100,label:"Archived" },
 }[s] || { color:T.slate500, bg:T.slate100, label:s });
 
 const sourceConfig = (s) => ({
@@ -125,7 +279,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
       <button
         onClick={open ? () => { setOpen(false); setTimeout(() => { setCopied(false); setOpened(false); }, 200); } : ask}
         style={{ display: "flex", alignItems: "center", gap: 5, background: open ? T.slate100 : T.blue, color: open ? T.blue : T.white, border: open ? `1px solid ${T.blue}` : "1px solid transparent", borderRadius: 7, padding: small ? "5px 10px" : "7px 13px", fontSize: small ? 10 : 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-      >\u26a1 Ask Claude</button>
+      >⚡ Ask Claude</button>
       {open && (
         <div role="dialog" aria-label="Ask Claude" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60, width: 300, background: T.white, border: `1px solid ${T.slate100}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(15,23,42,0.16)", padding: 14, textAlign: "left" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#16A34A", marginBottom: 4 }}>
@@ -137,7 +291,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
           <div style={{ fontSize: 11, lineHeight: 1.55, color: T.slate500, background: T.slate100, borderRadius: 8, padding: 9, maxHeight: 92, overflow: "hidden", whiteSpace: "pre-wrap" }}>{preview}</div>
           <div style={{ marginTop: 10 }}>
             {!opened ? (
-              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.white, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.textOnColor, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Open Claude.ai &amp; paste
               </button>
             ) : demoMode ? (
@@ -173,7 +327,7 @@ const DocCard = ({ doc, onNavigate }) => {
   const [expanded, setExpanded] = useState(false);
   const sc  = statusConfig(doc.processing_type === "archive" ? "archive" : doc.processing_status);
   const src = sourceConfig(doc.upload_source);
-  const dt  = DOC_TYPES[doc.document_type] || DOC_TYPES.other;
+  const dt  = DOC_TYPES[doc.doc_type] || DOC_TYPES.other;
 
   return (
     <div style={{
@@ -193,9 +347,9 @@ const DocCard = ({ doc, onNavigate }) => {
             {doc.file_name}
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-            <DocTypeBadge type={doc.document_type} />
+            <DocTypeBadge type={doc.doc_type} />
             <span style={{ fontSize:9, fontWeight:600, padding:"2px 6px", borderRadius:20, background:src.color+"20", color:src.color }}>{src.icon} {src.label}</span>
-            <span style={{ fontSize:10, color:T.slate400 }}>{doc.uploaded_at} · {doc.file_type || ""}</span>
+            <span style={{ fontSize:10, color:T.slate400 }}>{doc.uploaded_at} · {doc.size}</span>
           </div>
         </div>
 
@@ -213,12 +367,12 @@ const DocCard = ({ doc, onNavigate }) => {
           {/* Details Grid */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:8, marginTop:10, marginBottom:12 }}>
             {[
-              { label:"File Type",     value:doc.file_type.toUpperCase() },
+              { label:"File Type",     value:(doc.file_type || "—").toUpperCase() },
               { label:"Source",        value:src.label },
               { label:"Uploaded",      value:doc.uploaded_at },
               { label:"Processed",     value:doc.processed_at },
               { label:"Import Type",   value:doc.processing_type === "database_import" ? "Database Import" : doc.processing_type === "archive" ? "Archived" : "Claude Context" },
-              { label:"Records Created",value:doc.records_created.toString() },
+              { label:"Records Created",value:String(doc.records_created ?? 0) },
             ].map((d,i) => (
               <div key={i} style={{ background:T.slate50, borderRadius:8, padding:"7px 10px" }}>
                 <div style={{ fontSize:9, color:T.slate400, marginBottom:2 }}>{d.label}</div>
@@ -260,10 +414,10 @@ const DocCard = ({ doc, onNavigate }) => {
 
           {/* Actions */}
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            {(doc.drive_url || doc.drive_file_id) && (
+            {(doc.drive_url || doc.google_drive_file_id) && (
               <button 
                 onClick={() => {
-                  const url = doc.drive_url || (doc.drive_file_id ? `https://drive.google.com/file/d/${doc.drive_file_id}/view` : null);
+                  const url = doc.drive_url || (doc.google_drive_file_id ? `https://drive.google.com/file/d/${doc.google_drive_file_id}/view` : null);
                   if (url) window.open(url, "_blank");
                   else alert("No Google Drive link available for this document.");
                 }}
@@ -271,7 +425,7 @@ const DocCard = ({ doc, onNavigate }) => {
                 📁 Open in Drive
               </button>
             )}
-            <AskBtn size="small" context={`Document in my BCC:\nFile: ${doc.file_name}\nType: ${DOC_TYPES[doc.document_type]?.label||doc.document_type}\nSource: ${doc.upload_source}\nStatus: ${doc.processing_status}\nProcessed: ${doc.processed_at}\nTables updated: ${doc.tables_updated?.join(", ")||"None"}\nRecords created: ${doc.records_created}\nNotes: ${doc.notes}\n\nHelp me understand this document and verify the data was imported correctly. Are there any follow-up actions needed?`} />
+            <AskBtn size="small" context={`Document in my BCC:\nFile: ${doc.file_name}\nType: ${DOC_TYPES[doc.doc_type]?.label||doc.doc_type}\nSource: ${doc.upload_source}\nStatus: ${doc.processing_status}\nProcessed: ${doc.processed_at}\nTables updated: ${doc.tables_updated?.join(", ")||"None"}\nRecords created: ${doc.records_created}\nNotes: ${doc.notes}\n\nHelp me understand this document and verify the data was imported correctly. Are there any follow-up actions needed?`} />
           </div>
         </div>
       )}
@@ -281,13 +435,19 @@ const DocCard = ({ doc, onNavigate }) => {
 
 // ─── Section: Overview ────────────────────────────────────────
 const DocumentsOverview = ({ documents, onNavigate }) => {
-  const complete = documents.filter(d => d.processing_status === "complete").length;
-  const partial  = documents.filter(d => d.processing_status === "partial").length;
-  const failed   = documents.filter(d => d.processing_status === "failed").length;
+  // Count using real lifecycle values; treat "parsed" and "filed" as complete.
+  const parsedOk  = (d) => ["complete","parsed","filed"].includes(d.processing_status);
+  const isPartial = (d) => ["partial","parsed_duplicate"].includes(d.processing_status);
+  const isFailed  = (d) => d.processing_status === "failed";
+  const isSkipped = (d) => d.processing_status === "parse_skipped";
+  const complete = documents.filter(parsedOk).length;
+  const partial  = documents.filter(isPartial).length;
+  const failed   = documents.filter(isFailed).length;
+  const skipped  = documents.filter(isSkipped).length;
   const total    = documents.length;
 
   const byType = Object.keys(DOC_TYPES).map(type => ({
-    type, count:documents.filter(d => d.document_type === type).length,
+    type, count:documents.filter(d => d.doc_type === type).length,
   })).filter(t => t.count > 0);
 
   const recent = documents.slice(0, 5);
@@ -326,14 +486,14 @@ const DocumentsOverview = ({ documents, onNavigate }) => {
             <AskBtn size="small" context="Review my recent document imports. Are there any documents that need follow-up? Any data that should be verified against the GL?" />
           </div>
           {recent.map((doc,i) => {
-            const dt = DOC_TYPES[doc.document_type] || DOC_TYPES.other;
+            const dt = DOC_TYPES[doc.doc_type] || DOC_TYPES.other;
             const sc = statusConfig(doc.processing_type === "archive" ? "archive" : doc.processing_status);
             return (
               <div key={doc.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:i<recent.length-1?`1px solid ${T.slate100}`:"none" }}>
                 <span style={{ fontSize:20, flexShrink:0 }}>{dt.icon}</span>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:12, fontWeight:500, color:T.slate800, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{doc.file_name}</div>
-                  <div style={{ fontSize:10, color:T.slate400 }}>{doc.uploaded_at} · {doc.file_type || ""}</div>
+                  <div style={{ fontSize:10, color:T.slate400 }}>{doc.uploaded_at} · {doc.size}</div>
                 </div>
                 <span style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:20, background:sc.bg, color:sc.color, flexShrink:0 }}>{sc.label}</span>
               </div>
@@ -374,16 +534,25 @@ const DocumentLibrary = ({ documents }) => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [search,       setSearch]       = useState("");
 
-  const filtered = useMemo(() => documents.filter(d => {
-    if (typeFilter   !== "all" && d.document_type       !== typeFilter)   return false;
-    if (sourceFilter !== "all" && d.upload_source  !== sourceFilter) return false;
-    if (statusFilter !== "all" && d.processing_status !== statusFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return d.file_name.toLowerCase().includes(q) || (d.notes||"").toLowerCase().includes(q);
-    }
-    return true;
-  }), [documents, typeFilter, sourceFilter, statusFilter, search]);
+  const filtered = useMemo(() => {
+    const matched = documents.filter(d => {
+      if (typeFilter   !== "all" && d.doc_type       !== typeFilter)   return false;
+      if (sourceFilter !== "all" && d.upload_source  !== sourceFilter) return false;
+      if (statusFilter !== "all" && d.processing_status !== statusFilter) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return (d.file_name||"").toLowerCase().includes(q) || (d.notes||"").toLowerCase().includes(q);
+      }
+      return true;
+    });
+    // Push parse_skipped (self-emails, gmail noise) to the bottom — real
+    // source documents (parsed, filed, parsed_duplicate) come first.
+    const isNoise = (d) => d.processing_status === "parse_skipped";
+    return [
+      ...matched.filter(d => !isNoise(d)),
+      ...matched.filter(d =>  isNoise(d)),
+    ];
+  }, [documents, typeFilter, sourceFilter, statusFilter, search]);
 
   return (
     <div>
@@ -665,7 +834,33 @@ const UploadSection = () => {
 export default function Documents() {
   const [section, setSection] = useState("overview");
   const { data: liveDocs, loading: docsLoading } = useSupabaseTable("documents", AGENCY_ID, { orderBy: "uploaded_at", ascending: false });
-  const documents = Array.isArray(liveDocs) ? liveDocs : [];
+  const useMockData = import.meta.env.VITE_USE_MOCK_DATA !== "false";
+  // Derive doc_type from groq_classification so live rows render in Overview/Library.
+  // (DB column is groq_classification; Overview/Library/Card all read d.doc_type.)
+  const documents = (liveDocs && liveDocs.length > 0)
+    ? liveDocs.map(d => ({ ...d, doc_type: d.doc_type || d.groq_classification || "other" }))
+    : useMockData ? MOCK_DOCUMENTS : [];
+
+  // Live intake log: map recent documents → IntakeLog row shape.
+  // Falls back to MOCK_INTAKE_LOG only when no live docs AND mock mode is on.
+  const liveIntakeLog = (liveDocs && liveDocs.length > 0)
+    ? liveDocs.slice(0, 50).map((d) => {
+        const ts = d.uploaded_at || d.created_at;
+        const dt = ts ? new Date(ts) : null;
+        const srcMap = { email_auto: "Auto — Email", direct_upload: "Manual Upload", drive: "Google Drive" };
+        return {
+          id:      d.id,
+          date:    dt ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—",
+          time:    dt ? dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }) : "",
+          file:    d.file_name || "—",
+          source:  srcMap[d.upload_source] || d.upload_source || "—",
+          type:    d.groq_classification || d.processing_type || null,
+          tables:  Array.isArray(d.tables_updated) ? d.tables_updated : [],
+          records: d.records_created || 0,
+          status:  d.processing_status || "pending",
+        };
+      })
+    : (useMockData ? MOCK_INTAKE_LOG : []);
 
   const sections = [
     { id:"overview", label:"Overview"   },
@@ -702,20 +897,7 @@ export default function Documents() {
       {/* Section Content */}
       {section === "overview" && <DocumentsOverview documents={documents} />}
       {section === "library"  && <DocumentLibrary  documents={documents} />}
-      {section === "intake"   && <IntakeLog         log={documents.map(d => {
-        const ts = d.uploaded_at ? new Date(d.uploaded_at) : null;
-        return {
-          id:      d.id,
-          date:    ts ? ts.toLocaleDateString() : "—",
-          time:    ts ? ts.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "",
-          file:    d.file_name,
-          source:  d.upload_source,
-          type:    d.document_type,
-          tables:  Array.isArray(d.tables_updated) ? d.tables_updated : [],
-          records: d.records_created,
-          status:  d.processing_status,
-        };
-      })} />}
+      {section === "intake"   && <IntakeLog         log={liveIntakeLog} />}
       {section === "upload"   && <UploadSection />}
     </div>
   );

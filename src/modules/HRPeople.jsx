@@ -24,7 +24,6 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 //   • Staff must be licensed before performing licensed activities
 //   • Family employees require year-end W-2 review with CPA
 //   • New hires must be notified to SF within required timeframe
-//   • Agent is liable for all staff activities (AA05 Section I.P)
 //
 // DATA: Reads applicants, staff, onboarding_checklists,
 //       staff_performance, commission_structures tables
@@ -33,30 +32,54 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 
 // ─── Design Tokens ────────────────────────────────────────────
 const T = {
-  navy:    "#1B2B4B",
-  blue:    "#2D7DD2",
-  blueLt:  "#EFF6FF",
-  green:   "#10B981",
-  greenLt: "#D1FAE5",
-  amber:   "#F59E0B",
-  amberLt: "#FEF3C7",
-  red:     "#EF4444",
-  redLt:   "#FEE2E2",
-  purple:  "#7C3AED",
-  purpleLt:"#EDE9FE",
+  navy:    "var(--accent-navy)",
+  blue:    "var(--accent-blue)",
+  blueLt:  "var(--accent-navy-bg)",
+  green:   "var(--success)",
+  greenLt: "var(--success-bg)",
+  amber:   "var(--warning)",
+  amberLt: "var(--warning-bg)",
+  red:     "var(--danger)",
+  redLt:   "var(--danger-bg)",
+  purple:  "var(--accent-purple)",
+  purpleLt:"var(--accent-purple-bg)",
   teal:    "#0D9488",
   tealLt:  "#CCFBF1",
-  slate50: "#F8FAFC",
-  slate100:"#F1F5F9",
-  slate200:"#E2E8F0",
-  slate400:"#94A3B8",
-  slate500:"#64748B",
-  slate600:"#475569",
-  slate700:"#334155",
-  slate800:"#1E293B",
-  slate900:"#0F172A",
-  white:   "#FFFFFF",
+  slate50: "var(--bg-panel-subtle)",
+  slate100:"var(--bg-panel)",
+  slate200:"var(--border-subtle)",
+  slate400:"var(--text-quaternary)",
+  slate500:"var(--text-tertiary)",
+  slate600:"var(--text-secondary)",
+  slate700:"var(--text-secondary)",
+  slate800:"var(--text-primary)",
+  slate900:"var(--text-primary)",
+  white:   "var(--bg-card)",
+  textOnColor: "#FFFFFF",
 };
+
+// ─── Workflow Banner — top-of-tab context strip ───────────────
+// Small blue-tinted banner explaining what a tab is for and where its
+// records flow next in the employee lifecycle. Renders as the first child
+// inside every tab surface so the agent always sees the "why" alongside the "what".
+const WorkflowBanner = ({ title, body, next }) => (
+  <div style={{
+    background: T.blueLt,
+    borderLeft: `4px solid ${T.blue}`,
+    borderRadius: 10,
+    padding: "12px 16px",
+    marginBottom: 14
+  }}>
+    <div style={{ fontSize: 12, fontWeight: 700, color: T.blue, marginBottom: 4 }}>{title}</div>
+    <div style={{ fontSize: 11, color: T.slate700, lineHeight: 1.55 }}>{body}</div>
+    {next && (
+      <div style={{ fontSize: 11, color: T.slate500, marginTop: 6, fontStyle: "italic" }}>
+        → {next}
+      </div>
+    )}
+  </div>
+);
+
 
 // ─── Pipeline Stage Config ────────────────────────────────────
 const STAGES = {
@@ -68,10 +91,197 @@ const STAGES = {
   rejected:  { label:"Rejected",   color:T.red,      bg:T.redLt,   order:5 },
 };
 
+// ─── Mock Data ────────────────────────────────────────────────
+const MOCK_APPLICANTS = [
+  {
+    id:"ap1", first_name:"Jamie",  last_name:"Chen",
+    email:"jamie.chen@email.com", phone:"(312) 555-0142",
+    position:"Licensed Sales Agent",
+    status:"interview", source:"email_auto",
+    claude_score:8,
+    claude_summary:"Strong candidate with 3 years P&C experience at Allstate. Currently licensed in IL. Demonstrated production record of 85 new policies/month. Clean background. Minor concern: reason for leaving current role unclear.",
+    interview_focus:`ONE PAGE INTERVIEW FOCUS — Jamie Chen
 
+STRENGTHS TO EXPLORE:
+1. P&C production record at Allstate — ask for specific monthly new business numbers and what drove them
+2. IL license status — verify current, in good standing, ask about plans to add WI/IN
+3. Customer retention approach — 3 years at same agency suggests loyalty; understand philosophy
 
+CONCERNS TO PROBE:
+1. Reason for leaving Allstate — current role ended abruptly per resume gap; ask directly and assess answer
+2. Experience with life insurance — P&C heavy background; assess openness to cross-selling
+3. Salary expectations vs. commission structure — candidate may expect base salary
 
+SUGGESTED QUESTIONS:
+1. Walk me through your average month at Allstate — how many new policies, what product mix?
+2. What made you decide to leave your last agency, and what are you looking for in your next role?
+3. How do you approach customers who have coverage gaps they haven't asked about?
+4. Have you sold life insurance before? What's your comfort level with that conversation?
+5. Where do you see yourself in 2 years — still in sales, or are you interested in eventually running your own agency?
 
+RED FLAGS: Resume gap Apr-Aug 2025 unexplained. Probe during interview.
+LICENSING: IL P&C license verified active. Life license — confirm status.`,
+    intake_received_at:"Apr 26, 2026",
+    interview_date:"Apr 29, 2026",
+    interview_notes:"Phone screen completed Apr 27. Strong communication skills. Scheduled in-person for Apr 29.",
+    rating:null,
+  },
+  {
+    id:"ap2", first_name:"Derek",  last_name:"Washington",
+    email:"derek.w@email.com", phone:"(630) 555-0188",
+    position:"Office Manager",
+    status:"screening", source:"email_auto",
+    claude_score:7,
+    claude_summary:"Experienced office manager, 5 years in financial services operations. Not licensed — applying for unlicensed role. Strong organizational and systems background. Good cultural fit indicators.",
+    interview_focus:`ONE PAGE INTERVIEW FOCUS — Derek Washington
+
+STRENGTHS TO EXPLORE:
+1. Financial services operations background — directly relevant to agency management
+2. Systems experience — ask about CRM, scheduling, and workflow tools used
+3. 5 years tenure at prior employer — signals loyalty and stability
+
+CONCERNS TO PROBE:
+1. No insurance industry experience specifically — assess learning curve appetite
+2. Salary expectations — office manager roles have a wide range; align early
+3. Comfort with high-volume customer interaction — financial services may be less client-facing
+
+SUGGESTED QUESTIONS:
+1. Describe a typical day managing operations at your last firm — what were your top 3 responsibilities?
+2. What systems and tools do you use to stay organized across multiple priorities?
+3. Have you ever supported a licensed professional team? How did you handle questions you couldn't answer?
+4. What's your ideal work environment — autonomous or highly collaborative?
+5. What attracted you specifically to an insurance agency vs. other financial services roles?`,
+    intake_received_at:"Apr 24, 2026",
+    interview_date:null,
+    interview_notes:null,
+    rating:null,
+  },
+  {
+    id:"ap3", first_name:"Maria",  last_name:"Santos",
+    email:"m.santos@email.com", phone:"(773) 555-0211",
+    position:"Licensed Sales Agent",
+    status:"new", source:"email_auto",
+    claude_score:6,
+    claude_summary:"Recent licensing school graduate, no prior sales experience. IL P&C license new. Enthusiastic cover letter. Will require significant training investment. Score reflects potential over experience.",
+    interview_focus:null,
+    intake_received_at:"Today, Apr 27",
+    interview_date:null,
+    interview_notes:null,
+    rating:null,
+  },
+  {
+    id:"ap4", first_name:"Kevin",  last_name:"Park",
+    email:"k.park@email.com", phone:"(847) 555-0094",
+    position:"Licensed Sales Agent",
+    status:"offer", source:"referral",
+    claude_score:9,
+    claude_summary:"Exceptional candidate. 7 years State Farm experience at another agency, relocated to Chicago area. All lines licensed IL, WI, IN. Strong AIPP production history. Reference from prior agent provided.",
+    interview_focus:null,
+    intake_received_at:"Apr 18, 2026",
+    interview_date:"Apr 22, 2026",
+    interview_notes:"Excellent interview. Knows SF systems cold. Start date flexible. Salary ask is $58K base + commission. Offer being prepared.",
+    rating:5,
+  },
+  {
+    id:"ap5", first_name:"Tanya",  last_name:"Brooks",
+    email:"t.brooks@email.com", phone:"(312) 555-0317",
+    position:"Licensed Sales Agent",
+    status:"rejected", source:"email_auto",
+    claude_score:4,
+    claude_summary:"Limited insurance experience. License lapsed 2 years ago — would require retesting. Cover letter indicated interest in office admin, not sales. Mismatch with role requirements.",
+    interview_focus:null,
+    intake_received_at:"Apr 19, 2026",
+    interview_date:null,
+    interview_notes:"Reviewed profile — not a fit for current opening. License lapsed.",
+    rating:null,
+  },
+];
+
+const MOCK_STAFF = [
+  {
+    id:"s1", first_name:"Marcus", last_name:"Thompson",
+    role:"Licensed Sales Agent", employment_type:"w2",
+    start_date:"Jan 15, 2022", is_active:true,
+    email:"marcus@smithagency.com", phone:"(312) 555-0182",
+    pay_type:"salary_plus_commission", pay_rate:52000,
+    licensed:true, license_states:["IL","WI"],
+    notes:"Top producer. Life license pending — scheduled exam May 2026.",
+    ytd_production:{ new_policies:68, retention_rate:91 },
+  },
+  {
+    id:"s2", first_name:"Priya", last_name:"Patel",
+    role:"Office Manager", employment_type:"w2",
+    start_date:"Mar 1, 2020", is_active:true,
+    email:"priya@smithagency.com", phone:"(312) 555-0183",
+    pay_type:"salary", pay_rate:42000,
+    licensed:false, license_states:[],
+    notes:"Handles all operations, billing, client service. Cannot perform licensed activities.",
+    ytd_production:null,
+  },
+  {
+    id:"s3", first_name:"Tyler", last_name:"Smith",
+    role:"Administrative Support", employment_type:"family",
+    start_date:"Jun 1, 2024", is_active:true,
+    email:"tyler@smithagency.com", phone:null,
+    pay_type:"hourly", pay_rate:18,
+    licensed:false, license_states:[],
+    notes:"Jane's son. Part-time 20hrs/wk. Below standard deduction — no FIT withheld. Flag for CPA at year-end W-2. Cannot perform licensed activities.",
+    ytd_production:null,
+    compliance_flag:"Family employee — review W-2 treatment with CPA annually",
+  },
+];
+
+const MOCK_ONBOARDING = [
+  {
+    staff_id:"s1", staff_name:"Marcus Thompson", start_date:"Jan 15, 2022",
+    template:"licensed", days_employed:834,
+    items:[
+      { category:"licensing",   item:"IL Producer License verified active",           completed:true,  due:"Day 1"   },
+      { category:"licensing",   item:"WI non-resident license verified active",        completed:true,  due:"Day 7"   },
+      { category:"documents",   item:"W-4 completed and filed",                        completed:true,  due:"Day 1"   },
+      { category:"documents",   item:"Direct deposit authorization on file",           completed:true,  due:"Day 1"   },
+      { category:"documents",   item:"I-9 employment eligibility verified",            completed:true,  due:"Day 3"   },
+      { category:"compliance",  item:"SF compliance and ethics training completed",    completed:true,  due:"Day 30"  },
+      { category:"compliance",  item:"Social media compliance training acknowledged",  completed:true,  due:"Day 14"  },
+      { category:"systems",     item:"Agency management system access granted",        completed:true,  due:"Day 1"   },
+      { category:"systems",     item:"SF systems training completed",                  completed:true,  due:"Day 30"  },
+      { category:"training",    item:"Product training — P&C lines",                  completed:true,  due:"Day 30"  },
+      { category:"training",    item:"Product training — Life insurance",              completed:false, due:"Day 60"  },
+      { category:"licensing",   item:"Life insurance license — exam scheduled",        completed:false, due:"May 2026"},
+    ],
+  },
+];
+
+const MOCK_PERFORMANCE = [
+  {
+    staff_id:"s1", staff_name:"Marcus Thompson", period:"April 2026",
+    metrics:[
+      { metric:"New Policies Written",    target:20, actual:18, unit:"count"      },
+      { metric:"Life Apps Submitted",     target:3,  actual:1,  unit:"count"      },
+      { metric:"Retention Rate",          target:88, actual:91, unit:"percentage" },
+      { metric:"Customer Satisfaction",   target:95, actual:94, unit:"percentage" },
+      { metric:"Revenue Contribution",    target:12000, actual:10800, unit:"dollars" },
+    ],
+  },
+];
+
+const MOCK_COMMISSIONS = [
+  {
+    id:"c1", staff_name:"Marcus Thompson", staff_id:"s1",
+    structure_name:"Standard Licensed Agent Commission",
+    effective_date:"Jan 2022",
+    commission_type:"tiered",
+    tiers:[
+      { min:0,    max:10000, rate:8   },
+      { min:10001,max:20000, rate:10  },
+      { min:20001,max:null,  rate:12  },
+    ],
+    qualifying_products:["auto","home","life","health"],
+    notes:"Commission paid monthly on new business production attributed to Marcus. Paid with regular payroll.",
+    ytd_earned:4200,
+    this_month:1080,
+  },
+];
 
 
 // ─── Producer ROI Hook ───────────────────────────────────────
@@ -85,13 +295,14 @@ function useProducerROI() {
         const currentYear  = new Date().getFullYear();
         const currentMonth = new Date().getMonth() + 1;
 
-        const [agencyRes, staffRes, prodRes, payrollDetailRes, payrollRunsRes, compRes] = await Promise.all([
+        const [agencyRes, staffRes, prodRes, payrollDetailRes, payrollRunsRes, compRes, perfRes] = await Promise.all([
           supabase.from("agency").select("id, name, smvc_rate_pc, blended_rate_other, lapse_rate_annual").eq("id", AGENCY_ID).single(),
           supabase.from("staff").select("id, first_name, last_name, role, start_date, pay_rate, employment_type, is_active").eq("agency_id", AGENCY_ID),
           supabase.from("producer_production").select("staff_id, period_year, period_month, line_of_business, policies_issued, premium_issued").eq("agency_id", AGENCY_ID).order("period_year",{ascending:false}).order("period_month",{ascending:false}),
           supabase.from("payroll_detail").select("staff_id, gross_pay, payroll_run_id"),
           supabase.from("payroll_runs").select("id, pay_date, pay_period_start, pay_period_end").eq("agency_id", AGENCY_ID).order("pay_date",{ascending:false}).limit(24),
           supabase.from("comp_recap").select("period_year, period_month, comp_type, comp_category, amount").eq("agency_id", AGENCY_ID),
+          supabase.from("staff_performance").select("staff_id, period_year, period_month, metric_name, actual").eq("agency_id", AGENCY_ID).in("metric_name", ["gross_pay_monthly", "fully_loaded_cost_monthly"]),
         ]);
 
         const agency = agencyRes.data || {};
@@ -100,6 +311,36 @@ function useProducerROI() {
         const payrollDetail = payrollDetailRes.data || [];
         const payrollRuns = payrollRunsRes.data || [];
         const compRecaps = compRes.data || [];
+        const perfRows = perfRes.data || [];
+
+        // staff_performance snapshots (migration 027): precomputed monthly cost per staff-month.
+        // Keyed by `${staff_id}|${year}|${month}` → { monthlyGross, monthlyLoaded }
+        const perfByKey = {};
+        for (const r of perfRows) {
+          const k = `${r.staff_id}|${r.period_year}|${r.period_month}`;
+          if (!perfByKey[k]) perfByKey[k] = {};
+          if (r.metric_name === "gross_pay_monthly") perfByKey[k].monthlyGross = parseFloat(r.actual || 0);
+          if (r.metric_name === "fully_loaded_cost_monthly") perfByKey[k].monthlyLoaded = parseFloat(r.actual || 0);
+        }
+        // Latest snapshot per staff (most recent year+month with a non-null monthlyLoaded)
+        const latestPerfByStaff = {};
+        for (const r of perfRows) {
+          if (r.metric_name !== "fully_loaded_cost_monthly") continue;
+          const cur = latestPerfByStaff[r.staff_id];
+          const rank = r.period_year * 12 + r.period_month;
+          if (!cur || rank > cur.rank) {
+            latestPerfByStaff[r.staff_id] = { rank, monthlyLoaded: parseFloat(r.actual || 0) };
+          }
+        }
+        const latestGrossByStaff = {};
+        for (const r of perfRows) {
+          if (r.metric_name !== "gross_pay_monthly") continue;
+          const cur = latestGrossByStaff[r.staff_id];
+          const rank = r.period_year * 12 + r.period_month;
+          if (!cur || rank > cur.rank) {
+            latestGrossByStaff[r.staff_id] = { rank, monthlyGross: parseFloat(r.actual || 0) };
+          }
+        }
 
         // Lapse rate from comp_recap: prior-year vs current-year auto+fire YTD renewals
         const isPC = (cat) => {
@@ -150,10 +391,20 @@ function useProducerROI() {
           prodByKey[k].policies += parseInt(p.policies_issued || 0, 10);
         }
 
-        // Producers only (LSPs, Producers, FSS)
+        // Producers — anyone whose role suggests they write new business.
+        // Includes the SF nomenclature (LSP, Producer, FSS = Financial Services
+        // Specialist) plus the looser titles this agency actually uses
+        // (Sales/Account Rep, Sales Rep). Excludes pure service titles
+        // (Customer Care Rep, Service Admin, Executive Assistant) and roles
+        // explicitly marked TBC awaiting the agent's confirmation.
         const producers = staff.filter(s => {
           const r = (s.role || "").toLowerCase();
-          return r.includes("lsp") || r.includes("producer") || r.includes("financial services");
+          if (r.includes("tbc")) return false;
+          return r.includes("lsp")
+              || r.includes("producer")
+              || r.includes("financial services")
+              || r.includes("sales")
+              || r.includes("account rep");
         });
 
         const producerRows = producers.map(s => {
@@ -176,14 +427,43 @@ function useProducerROI() {
           }
           history.reverse();
 
+          // Cost history aligned with the 24-month timeline above (oldest → current).
+          // For each history slot, look up the precomputed staff_performance snapshot.
+          // Carry-forward only AFTER we've seen the first real snapshot for this staff —
+          // months before the producer existed stay null so the polyline starts at hire,
+          // not retroactively backfilled. Mid-window gaps (e.g. the agent's May 2026 NULL row)
+          // still carry the prior month's value so the line stays continuous.
+          const costHistory = [];
+          let firstSeen = false;
+          let lastKnownGross = null;
+          let lastKnownLoaded = null;
+          for (const h of history) {
+            const k = `${s.id}|${h.year}|${h.month}`;
+            const snap = perfByKey[k] || {};
+            if (Number.isFinite(snap.monthlyGross))  { lastKnownGross  = snap.monthlyGross;  firstSeen = true; }
+            if (Number.isFinite(snap.monthlyLoaded)) { lastKnownLoaded = snap.monthlyLoaded; firstSeen = true; }
+            costHistory.push({
+              year: h.year,
+              month: h.month,
+              monthlyGross:  firstSeen ? lastKnownGross  : null,
+              monthlyLoaded: firstSeen ? lastKnownLoaded : null,
+            });
+          }
+
           const current = history[history.length - 1] || { pcPremium: 0, otherPremium: 0, policies: 0, newCommission: 0 };
           const recent6 = history.slice(-6);
           const avgPC = recent6.reduce((s,h) => s + h.pcPremium, 0) / Math.max(1, recent6.length);
           const avgOther = recent6.reduce((s,h) => s + h.otherPremium, 0) / Math.max(1, recent6.length);
           const avgNewCommission = (avgPC * smvc / 100) + (avgOther * blended / 100);
 
-          const monthlyGross = monthlyGrossByStaff[s.id] || (parseFloat(s.pay_rate || 0) / 12) || 0;
-          const monthlyLoaded = monthlyGross * 1.15;
+          // Prefer the most recent staff_performance snapshot (precomputed, accurate).
+          // Falls back to the noisy "last 3 payroll runs × 2" approximation, then to annual pay_rate / 12.
+          const monthlyGross = (latestGrossByStaff[s.id]?.monthlyGross)
+                            ?? monthlyGrossByStaff[s.id]
+                            ?? (parseFloat(s.pay_rate || 0) / 12)
+                            ?? 0;
+          const monthlyLoaded = (latestPerfByStaff[s.id]?.monthlyLoaded)
+                             ?? (monthlyGross * 1.15);
 
           const startDate = s.start_date ? new Date(s.start_date) : new Date();
           const tenureMonths = Math.max(0, Math.round((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30.42)));
@@ -199,6 +479,7 @@ function useProducerROI() {
             monthlyLoaded,
             currentMonth: current,
             history,
+            costHistory,
             avgPC,
             avgOther,
             avgNewCommission,
@@ -265,7 +546,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
       <button
         onClick={open ? () => { setOpen(false); setTimeout(() => { setCopied(false); setOpened(false); }, 200); } : ask}
         style={{ display: "flex", alignItems: "center", gap: 5, background: open ? T.slate100 : T.blue, color: open ? T.blue : T.white, border: open ? `1px solid ${T.blue}` : "1px solid transparent", borderRadius: 7, padding: small ? "5px 10px" : "7px 13px", fontSize: small ? 10 : 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-      >\u26a1 Ask Claude</button>
+      >⚡ Ask Claude</button>
       {open && (
         <div role="dialog" aria-label="Ask Claude" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60, width: 300, background: T.white, border: `1px solid ${T.slate100}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(15,23,42,0.16)", padding: 14, textAlign: "left" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#16A34A", marginBottom: 4 }}>
@@ -277,7 +558,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
           <div style={{ fontSize: 11, lineHeight: 1.55, color: T.slate500, background: T.slate100, borderRadius: 8, padding: 9, maxHeight: 92, overflow: "hidden", whiteSpace: "pre-wrap" }}>{preview}</div>
           <div style={{ marginTop: 10 }}>
             {!opened ? (
-              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.white, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.textOnColor, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Open Claude.ai &amp; paste
               </button>
             ) : demoMode ? (
@@ -311,86 +592,29 @@ const StageBadge = ({ status }) => {
 };
 
 // ─── Section: Overview ────────────────────────────────────────
-const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = () => {} }) => {
+const HROverview = ({ applicants, staff, onboarding }) => {
   const [showAddEmployee, setShowAddEmployee] = useState(false);
-  const [editingStaff, setEditingStaff] = useState(null);  // null = adding, non-null = editing that row
-  const [saving, setSaving] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2", licensed:null, license_states:"", compliance_flag:""});
-
-  // Helper: reset form + close panel + clear edit target
-  const closeForm = () => {
-    setShowAddEmployee(false);
-    setEditingStaff(null);
-    setNewEmployee({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2", licensed:null, license_states:"", compliance_flag:""});
-  };
-
-  // Helper: open the Add/Edit form pre-populated from an existing staff row
-  const startEdit = (member) => {
-    setEditingStaff(member);
-    setNewEmployee({
-      first_name:      member.first_name || "",
-      last_name:       member.last_name  || "",
-      role:            member.role || "",
-      email:           member.email || "",
-      phone:           member.phone || "",
-      start_date:      member.start_date || "",
-      employment_type: member.employment_type || "w2",
-      licensed:        member.licensed == null ? null : Boolean(member.licensed),
-      license_states:  Array.isArray(member.license_states) ? member.license_states.join(", ") : "",
-      compliance_flag: member.compliance_flag || "",
-    });
-    setShowAddEmployee(true);
-  };
+  const [newEmployee, setNewEmployee] = useState({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2"});
+  const [editingStaff, setEditingStaff] = useState(null);
+  const [showFormerTeam, setShowFormerTeam] = useState(false);
 
   const saveEmployee = async () => {
-    if (!newEmployee.first_name || !newEmployee.last_name || saving) return;
-    setSaving(true);
-    try {
-      // Coerce empty/optional strings to appropriate types for the DB:
-      //   - start_date empty → drop (date column can't accept "")
-      //   - license_states CSV → text[] array (empty string → null)
-      //   - compliance_flag "" → null
-      //   - licensed can be true / false / null (unknown)
-      const stateArr = String(newEmployee.license_states || "")
-        .split(",").map(s => s.trim()).filter(Boolean);
-      const basePayload = {
-        ...newEmployee,
-        agency_id: AGENCY_ID,
-        license_states:  stateArr.length ? stateArr : null,
-        compliance_flag: (newEmployee.compliance_flag || "").trim() || null,
-      };
-      if (!basePayload.start_date) delete basePayload.start_date;
-
-      let data, error;
-      if (editingStaff?.id) {
-        // Edit branch — UPDATE that row by id. Do not touch is_active on
-        // edit (an already-inactive staff being edited stays inactive).
-        ({ data, error } = await supabase
-          .from("staff")
-          .update(basePayload)
-          .eq("id", editingStaff.id)
-          .eq("agency_id", AGENCY_ID)
-          .select()
-          .single());
-      } else {
-        // Add branch — INSERT + default to active.
-        ({ data, error } = await supabase
-          .from("staff")
-          .insert({ ...basePayload, is_active: true })
-          .select()
-          .single());
-      }
-      if (error) throw error;
-      // Notify parent of the change so its `staff` state can reflect it.
-      // The parent's onAdd handler replaces-or-prepends by id.
-      onAdd(data);
-      closeForm();
-    } catch (e) {
-      console.error("staff " + (editingStaff ? "update" : "insert") + " error:", e);
-      alert("Could not save employee: " + (e?.message || "unknown error"));
-    } finally {
-      setSaving(false);
+    if (!newEmployee.first_name || !newEmployee.last_name) return;
+    if (supabase) {
+      await supabase.from("staff").insert({ ...newEmployee, agency_id: AGENCY_ID, is_active: true });
     }
+    setShowAddEmployee(false);
+    setNewEmployee({first_name:"", last_name:"", role:"", email:"", phone:"", start_date:"", employment_type:"w2"});
+  };
+
+  const saveEditedStaff = async () => {
+    if (!editingStaff?.first_name || !editingStaff?.last_name) return;
+    if (supabase) {
+      // Strip read-only/server-side fields before update
+      const { id, agency_id, created_at, updated_at, ...editable } = editingStaff;
+      await supabase.from("staff").update({ ...editable, updated_at: new Date().toISOString() }).eq("id", id);
+    }
+    setEditingStaff(null);
   };
 
   const active      = applicants.filter(a => !["hired","rejected"].includes(a.status));
@@ -398,14 +622,15 @@ const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = 
   const inInterview = applicants.filter(a => a.status === "interview").length;
   const inOffer     = applicants.filter(a => a.status === "offer").length;
   const activeStaff = staff.filter(s => s.is_active).length;
-  // Real licensing/compliance signals from the staff table.
-  const unlicensedActive     = staff.filter(s => s.is_active && s.licensed === false).length;
-  const complianceFlagsActive = staff.filter(s => s.is_active && s.compliance_flag).length;
-  // Data-hygiene metric: active staff missing email or phone (still useful).
-  const missingContact = staff.filter(s => s.is_active && (!s.email || !s.phone)).length;
+  const flagged     = staff.filter(s => s.compliance_flag).length;
 
   return (
     <div>
+      <WorkflowBanner
+        title="Team snapshot — start here every morning"
+        body={<>Your active pipeline, current team, and where new hires are in onboarding, all at a glance. Use this as the daily check-in before drilling into a specific tab.</>}
+      />
+
       {/* KPI Row */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10, marginBottom:16 }}>
         {[
@@ -414,8 +639,7 @@ const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = 
           { label:"In Interviews",     value:inInterview,     color:T.purple,border:T.purple },
           { label:"Offers Pending",    value:inOffer,         color:T.green, border:T.green },
           { label:"Active Staff",      value:activeStaff,     color:T.navy,  border:T.navy  },
-          { label:"Compliance Flags",  value:complianceFlagsActive + unlicensedActive, color:(complianceFlagsActive+unlicensedActive)>0?T.red:T.green, border:(complianceFlagsActive+unlicensedActive)>0?T.red:T.green },
-          { label:"Missing Contact",   value:missingContact,  color:missingContact>0?T.amber:T.green, border:missingContact>0?T.amber:T.green },
+          { label:"Compliance Flags",  value:flagged,         color:flagged>0?T.red:T.green, border:flagged>0?T.red:T.green },
         ].map((k,i) => (
           <div key={i} style={{ background:T.white, border:`1px solid ${T.slate200}`, borderTop:`3px solid ${k.border}`, borderRadius:12, padding:"14px 16px" }}>
             <div style={{ fontSize:11, color:T.slate500, fontWeight:500, marginBottom:6 }}>{k.label}</div>
@@ -424,46 +648,16 @@ const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = 
         ))}
       </div>
 
-      {/* Compliance reminder — banner text is composed from live data:
-          family employees pulled from `staff.employment_type === "family"`,
-          CPA contact pulled from persistent_memory key_contacts. */}
-      {(() => {
-        const familyNames = staff
-          .filter(s => s.is_active && s.employment_type === "family")
-          .map(s => [s.first_name, s.last_name].filter(Boolean).join(" ").trim())
-          .filter(Boolean);
-        const cpaFragment = cpaContact ? ` — review with ${cpaContact}` : " — review with your CPA";
-        return (
-          <div style={{ background:T.amberLt, border:`1px solid #FCD34D`, borderLeft:`4px solid ${T.amber}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
-            <div style={{ fontSize:12, fontWeight:700, color:"#92400E", marginBottom:4 }}>⚠ AA05 Section I.P — Agent is liable for all staff activities</div>
-            <div style={{ fontSize:11, color:"#92400E", lineHeight:1.6 }}>
-              You are contractually responsible for every action your staff takes on behalf of the agency. All staff performing licensed activities must hold active licenses. Unlicensed staff may not quote, bind, or solicit.
-              {familyNames.length > 0 && (
-                <>
-                  {" "}
-                  {familyNames.length === 1
-                    ? `${familyNames[0]} (family employee) requires`
-                    : `${familyNames.join(", ")} (family employees) require`}
-                  {" "}W-2 at year-end{cpaFragment}.
-                </>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
       <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:12 }}>
         {/* Active Pipeline */}
         
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
-        <button onClick={() => showAddEmployee ? closeForm() : setShowAddEmployee(true)} style={{padding:"8px 16px",fontSize:12,fontWeight:600,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>➕ Add Employee</button>
+        <button onClick={()=>setShowAddEmployee(s=>!s)} style={{padding:"8px 16px",fontSize:12,fontWeight:600,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>➕ Add Employee</button>
       </div>
 
       {showAddEmployee && (
         <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:10,padding:16,marginBottom:16}}>
-          <div style={{fontSize:13,fontWeight:700,color:"#1E3A5F",marginBottom:12}}>
-            {editingStaff ? `Edit ${editingStaff.first_name} ${editingStaff.last_name}` : "Add New Employee"}
-          </div>
+          <div style={{fontSize:13,fontWeight:700,color:"#1E3A5F",marginBottom:12}}>Add New Employee</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
             <input placeholder="First name *" value={newEmployee.first_name} onChange={e=>setNewEmployee({...newEmployee,first_name:e.target.value})} style={{padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:12}} />
             <input placeholder="Last name *" value={newEmployee.last_name} onChange={e=>setNewEmployee({...newEmployee,last_name:e.target.value})} style={{padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:12}} />
@@ -476,23 +670,10 @@ const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = 
               <option value="1099">1099 Contractor</option>
               <option value="family">Family Employee (W-2)</option>
             </select>
-            {/* Licensing */}
-            <select value={newEmployee.licensed === null ? "" : String(newEmployee.licensed)} onChange={e=>setNewEmployee({...newEmployee, licensed: e.target.value === "" ? null : e.target.value === "true"})} style={{padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:12,background:"#fff"}}>
-              <option value="">License status — not tracked</option>
-              <option value="true">Licensed — active</option>
-              <option value="false">Unlicensed — cannot quote / bind / solicit</option>
-            </select>
-            <input placeholder="Licensed states (comma-separated, e.g. FL, GA)" value={newEmployee.license_states} onChange={e=>setNewEmployee({...newEmployee,license_states:e.target.value})} style={{padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:12}} />
-          </div>
-          <div style={{marginBottom:10}}>
-            <label style={{fontSize:10, fontWeight:700, color:"#475569", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:0.4}}>Compliance flag (optional)</label>
-            <input placeholder='e.g. "License renewal due Sep 2026", "E&O gap"' value={newEmployee.compliance_flag} onChange={e=>setNewEmployee({...newEmployee,compliance_flag:e.target.value})} style={{width:"100%", padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:12,boxSizing:"border-box"}} />
           </div>
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-            <button onClick={closeForm} disabled={saving} style={{padding:"6px 14px",fontSize:12,background:"#F1F5F9",color:"#334155",border:"none",borderRadius:6,cursor:saving?"not-allowed":"pointer"}}>Cancel</button>
-            <button onClick={saveEmployee} disabled={saving} style={{padding:"6px 14px",fontSize:12,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:6,cursor:saving?"not-allowed":"pointer",fontWeight:600,opacity:saving?0.6:1}}>
-              {saving ? "Saving…" : editingStaff ? "Save Changes" : "Save Employee"}
-            </button>
+            <button onClick={()=>setShowAddEmployee(false)} style={{padding:"6px 14px",fontSize:12,background:"#F1F5F9",color:"#334155",border:"none",borderRadius:6,cursor:"pointer"}}>Cancel</button>
+            <button onClick={saveEmployee} style={{padding:"6px 14px",fontSize:12,background:"#1E3A5F",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontWeight:600}}>Save Employee</button>
           </div>
         </div>
       )}
@@ -516,33 +697,105 @@ const HROverview = ({ applicants, staff, onboarding, cpaContact = null, onAdd = 
 
         {/* Team Snapshot */}
         <Card>
-          <div style={{ fontSize:13, fontWeight:600, color:T.slate800, marginBottom:12 }}>Current team</div>
-          {staff.filter(s => s.is_active).map((member,i) => (
-            <div key={member.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderBottom:i<staff.length-1?`1px solid ${T.slate100}`:"none" }}>
+          <div style={{ fontSize:13, fontWeight:600, color:T.slate800, marginBottom:12 }}>Active team ({(staff||[]).filter(s => s.is_active).length})</div>
+          {(staff||[]).filter(s => s.is_active).map((member,i,arr) => (
+            <div key={member.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderBottom:i<arr.length-1?`1px solid ${T.slate100}`:"none" }}>
               <div style={{ width:32, height:32, borderRadius:8, background:member.licensed?T.greenLt:T.slate100, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:11, fontWeight:700, color:member.licensed?T.green:T.slate500 }}>
-                {member.first_name[0]}{member.last_name[0]}
+                {(member.first_name||"?")[0]}{(member.last_name||"?")[0]}
               </div>
-              <div style={{ flex:1 }}>
+              <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:12, fontWeight:600, color:T.slate800 }}>{member.first_name} {member.last_name}</div>
-                <div style={{ fontSize:10, color:T.slate500 }}>{member.role || "Producer"} · {(member.employment_type || "").toUpperCase() || "—"}</div>
+                <div style={{ fontSize:10, color:T.slate500 }}>{member.role || "(no role set)"} · {(member.employment_type||"").toUpperCase()}</div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3 }}>
                 {member.licensed
                   ? <span style={{ fontSize:9, fontWeight:600, padding:"2px 6px", borderRadius:20, background:T.greenLt, color:"#065F46" }}>Licensed</span>
-                  : <span style={{ fontSize:9, fontWeight:600, padding:"2px 6px", borderRadius:20, background:T.slate100, color:T.slate500 }}>Unlicensed</span>
+                  : null
                 }
                 {member.compliance_flag && (
                   <span style={{ fontSize:9, fontWeight:600, padding:"2px 6px", borderRadius:20, background:T.amberLt, color:"#92400E" }}>⚠ CPA Flag</span>
                 )}
               </div>
-              <button
-                onClick={() => startEdit(member)}
-                title="Edit this staff member"
-                style={{ padding:"3px 10px", fontSize:10, fontWeight:600, background:"#DBEAFE", color:"#2563EB", border:"none", borderRadius:5, cursor:"pointer", flexShrink:0 }}>
-                ✏️
-              </button>
+              <button onClick={()=>setEditingStaff({...member})} title="Edit team member" style={{ padding:"4px 8px", fontSize:10, fontWeight:600, background:T.slate100, color:T.slate800, border:`1px solid ${T.slate200}`, borderRadius:6, cursor:"pointer", marginLeft:4 }}>Edit</button>
             </div>
           ))}
+
+          {/* Former team toggle */}
+          {(staff||[]).filter(s => !s.is_active).length > 0 && (
+            <>
+              <div style={{ marginTop:14, paddingTop:10, borderTop:`1px solid ${T.slate100}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ fontSize:12, fontWeight:600, color:T.slate500 }}>
+                  Former team ({(staff||[]).filter(s => !s.is_active).length})
+                </div>
+                <button onClick={()=>setShowFormerTeam(v=>!v)} style={{ padding:"3px 10px", fontSize:10, fontWeight:600, background:T.white, color:T.slate500, border:`1px solid ${T.slate200}`, borderRadius:6, cursor:"pointer" }}>
+                  {showFormerTeam ? "Hide" : "Show"}
+                </button>
+              </div>
+              {showFormerTeam && (staff||[]).filter(s => !s.is_active).map((member,i,arr) => (
+                <div key={member.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:i<arr.length-1?`1px solid ${T.slate100}`:"none", opacity:0.7 }}>
+                  <div style={{ width:32, height:32, borderRadius:8, background:T.slate100, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:11, fontWeight:700, color:T.slate400 }}>
+                    {(member.first_name||"?")[0]}{(member.last_name||"?")[0]}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:T.slate500 }}>{member.first_name} {member.last_name}</div>
+                    <div style={{ fontSize:10, color:T.slate400 }}>
+                      {member.role || "(no role)"} · {(member.employment_type||"").toUpperCase()}
+                      {member.end_date && ` · ended ${member.end_date}`}
+                    </div>
+                  </div>
+                  <button onClick={()=>setEditingStaff({...member})} title="Edit former team member" style={{ padding:"4px 8px", fontSize:10, fontWeight:600, background:T.slate100, color:T.slate500, border:`1px solid ${T.slate200}`, borderRadius:6, cursor:"pointer" }}>Edit</button>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* Edit Staff inline modal */}
+          {editingStaff && (
+            <div style={{ marginTop:14, background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:10, padding:14 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#92400E", marginBottom:10 }}>
+                Edit {editingStaff.first_name} {editingStaff.last_name}
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                <input placeholder="First name *" value={editingStaff.first_name || ""} onChange={e=>setEditingStaff({...editingStaff, first_name:e.target.value})} style={{ padding:"7px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:12 }} />
+                <input placeholder="Last name *" value={editingStaff.last_name || ""} onChange={e=>setEditingStaff({...editingStaff, last_name:e.target.value})} style={{ padding:"7px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:12 }} />
+                <input placeholder="Role / Title (e.g. Licensed Sales Producer)" value={editingStaff.role || ""} onChange={e=>setEditingStaff({...editingStaff, role:e.target.value})} style={{ padding:"7px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:12, gridColumn:"1 / span 2" }} />
+                <input placeholder="Email" value={editingStaff.email || ""} onChange={e=>setEditingStaff({...editingStaff, email:e.target.value})} style={{ padding:"7px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:12 }} />
+                <input placeholder="Phone" value={editingStaff.phone || ""} onChange={e=>setEditingStaff({...editingStaff, phone:e.target.value})} style={{ padding:"7px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:12 }} />
+                <div>
+                  <div style={{ fontSize:10, color:T.slate500, marginBottom:2 }}>Start date</div>
+                  <input type="date" value={editingStaff.start_date || ""} onChange={e=>setEditingStaff({...editingStaff, start_date:e.target.value||null})} style={{ padding:"7px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:12, width:"100%" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:10, color:T.slate500, marginBottom:2 }}>End date (if departed)</div>
+                  <input type="date" value={editingStaff.end_date || ""} onChange={e=>setEditingStaff({...editingStaff, end_date:e.target.value||null})} style={{ padding:"7px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:12, width:"100%" }} />
+                </div>
+                <select value={editingStaff.employment_type || ""} onChange={e=>setEditingStaff({...editingStaff, employment_type:e.target.value})} style={{ padding:"7px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:12 }}>
+                  <option value="">— Employment type —</option>
+                  <option value="full_time">Full-time W-2</option>
+                  <option value="part_time">Part-time W-2</option>
+                  <option value="contractor">1099 Contractor</option>
+                  <option value="family">Family Employee (W-2)</option>
+                  <option value="owner">Owner</option>
+                </select>
+                <select value={editingStaff.pay_type || ""} onChange={e=>setEditingStaff({...editingStaff, pay_type:e.target.value})} style={{ padding:"7px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:12 }}>
+                  <option value="">— Pay type —</option>
+                  <option value="hourly">Hourly</option>
+                  <option value="salary">Salary</option>
+                  <option value="commission">Commission</option>
+                </select>
+                <input type="number" step="0.01" placeholder="Pay rate ($/hr or $/yr)" value={editingStaff.pay_rate ?? ""} onChange={e=>setEditingStaff({...editingStaff, pay_rate:e.target.value===""?null:parseFloat(e.target.value)})} style={{ padding:"7px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:12 }} />
+                <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:T.slate800 }}>
+                  <input type="checkbox" checked={!!editingStaff.is_active} onChange={e=>setEditingStaff({...editingStaff, is_active:e.target.checked})} />
+                  Active team member
+                </label>
+              </div>
+              <textarea placeholder="Notes (CPA flags, licensing notes, etc.)" value={editingStaff.notes || ""} onChange={e=>setEditingStaff({...editingStaff, notes:e.target.value})} style={{ width:"100%", minHeight:50, padding:"7px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:12, marginBottom:8, fontFamily:"inherit", resize:"vertical" }} />
+              <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                <button onClick={()=>setEditingStaff(null)} style={{ padding:"6px 14px", fontSize:12, background:T.slate100, color:T.slate800, border:"none", borderRadius:6, cursor:"pointer" }}>Cancel</button>
+                <button onClick={saveEditedStaff} style={{ padding:"6px 14px", fontSize:12, fontWeight:600, background:"#1E3A5F", color:"#fff", border:"none", borderRadius:6, cursor:"pointer" }}>Save changes</button>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
     </div>
@@ -559,6 +812,12 @@ const RecruitingPipeline = ({ applicants, onUpdate }) => {
 
   return (
     <div>
+      <WorkflowBanner
+        title="Applicant pipeline"
+        body={<>Resumes flow in from your Groq-scored auto-import (Gmail recipe) or manual add. Move candidates through <strong>Screening</strong> → <strong>Interview</strong> → <strong>Offer</strong>. When you upload an offer letter to a candidate's personnel file, the system flips their staff status to <em>active</em> and auto-creates their 15-item onboarding checklist.</>}
+        next="Next stop: Onboarding"
+      />
+
       {/* Pipeline Kanban */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(6,minmax(0,1fr))", gap:8, marginBottom:16 }}>
         {stages.map(stage => {
@@ -657,63 +916,48 @@ const RecruitingPipeline = ({ applicants, onUpdate }) => {
 };
 
 // ─── Section: Staff Directory ─────────────────────────────────
-const StaffDirectory = ({ staff, loading = false }) => {
+const StaffDirectory = ({ staff }) => {
   const [expanded, setExpanded] = useState(null);
-  const activeStaff = (staff || []).filter(s => s.is_active);
-
-  if (loading) {
-    return (
-      <Card>
-        <div style={{ fontSize:13, color:T.slate500, textAlign:"center", padding:"24px 0" }}>Loading staff…</div>
-      </Card>
-    );
-  }
-  if (activeStaff.length === 0) {
-    return (
-      <Card>
-        <div style={{ fontSize:13, fontWeight:600, color:T.slate700, marginBottom:6 }}>No active staff loaded</div>
-        <div style={{ fontSize:11, color:T.slate500, lineHeight:1.6 }}>
-          Staff records will populate as payroll history is imported. Forward your ADP / payroll reports to populate this directory.
-        </div>
-      </Card>
-    );
-  }
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-      {activeStaff.map(member => {
+      <WorkflowBanner
+        title="Active roster"
+        body={<>Everyone currently on the team. From here you can jump to <strong>Performance</strong> for coaching notes and KPIs on any producer, or to <strong>Commissions</strong> to see how their pay plan is structured.</>}
+        next="Manage → Performance · Pay → Commissions"
+      />
+
+      {staff.filter(s => s.is_active).map(member => {
         const isExpanded = expanded === member.id;
         return (
           <Card key={member.id} style={{ border:`1px solid ${isExpanded?T.blue:T.slate200}` }}>
             <div style={{ display:"flex", alignItems:"center", gap:14, cursor:"pointer" }} onClick={() => setExpanded(isExpanded?null:member.id)}>
               {/* Avatar */}
-              <div style={{ width:48, height:48, borderRadius:12, background:member.licensed===true?T.navy:T.slate200, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:member.licensed===true?T.white:T.slate500, flexShrink:0 }}>
-                {(member.first_name || "?")[0]}{(member.last_name || "?")[0]}
+              <div style={{ width:48, height:48, borderRadius:12, background:member.licensed?T.navy:T.slate200, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:member.licensed?T.white:T.slate500, flexShrink:0 }}>
+                {member.first_name[0]}{member.last_name[0]}
               </div>
 
               <div style={{ flex:1 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
                   <span style={{ fontSize:14, fontWeight:700, color:T.slate900 }}>{member.first_name} {member.last_name}</span>
-                  {member.licensed === true
+                  {member.licensed
                     ? <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:T.greenLt, color:"#065F46" }}>Licensed</span>
-                    : member.licensed === false
-                      ? <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:T.slate100, color:T.slate500 }}>Unlicensed — cannot perform licensed activities</span>
-                      : <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:T.slate100, color:T.slate500 }}>License status not tracked</span>
+                    : <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:T.slate100, color:T.slate500 }}>Unlicensed — cannot perform licensed activities</span>
                   }
                   {member.compliance_flag && (
                     <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20, background:T.amberLt, color:"#92400E" }}>⚠ CPA Flag</span>
                   )}
                 </div>
                 <div style={{ fontSize:12, color:T.slate500 }}>
-                  {member.role || "Producer"} · {member.employment_type === "w2" ? "W-2 Employee" : member.employment_type === "family" ? "Family Employee (W-2)" : member.employment_type === "1099" ? "1099 Contractor" : "Employment TBD"} · Since {member.start_date || "—"}
+                  {member.role} · {member.employment_type === "w2" ? "W-2 Employee" : member.employment_type === "family" ? "Family Employee (W-2)" : "1099 Contractor"} · Since {member.start_date}
                 </div>
               </div>
 
               <div style={{ textAlign:"right", flexShrink:0 }}>
                 <div style={{ fontSize:13, fontWeight:700, color:T.slate900 }}>
-                  {member.pay_rate == null ? "—" : member.pay_type === "hourly" ? `$${member.pay_rate}/hr` : `$${member.pay_rate.toLocaleString()}/yr`}
+                  {member.pay_type === "hourly" ? `$${member.pay_rate}/hr` : `$${member.pay_rate.toLocaleString()}/yr`}
                 </div>
-                <div style={{ fontSize:10, color:T.slate400 }}>{(member.pay_type || "").replace(/_/g," ") || "—"}</div>
+                <div style={{ fontSize:10, color:T.slate400 }}>{member.pay_type.replace(/_/g," ")}</div>
               </div>
 
               <span style={{ color:T.slate400, fontSize:12 }}>{isExpanded?"▲":"▼"}</span>
@@ -725,7 +969,7 @@ const StaffDirectory = ({ staff, loading = false }) => {
                   {[
                     { label:"Email",      value:member.email },
                     { label:"Phone",      value:member.phone||"—" },
-                    { label:"Licensed States", value:Array.isArray(member.license_states) && member.license_states.length ? member.license_states.join(", ") : "Not tracked" },
+                    { label:"Licensed States", value:member.license_states.length>0?member.license_states.join(", "):"None" },
                     { label:"Start Date", value:member.start_date },
                   ].map((d,i) => (
                     <div key={i} style={{ background:T.slate50, borderRadius:8, padding:"7px 10px" }}>
@@ -744,7 +988,13 @@ const StaffDirectory = ({ staff, loading = false }) => {
                     ⚠ {member.compliance_flag}
                   </div>
                 )}
-                <AskBtn size="small" context={`Staff member profile:\nName: ${member.first_name} ${member.last_name}\nRole: ${member.role || "—"}\nEmployment: ${member.employment_type || "—"}\nPay: ${member.pay_type || "—"} — ${member.pay_rate == null ? "—" : member.pay_type === "hourly" ? "$" + member.pay_rate + "/hr" : "$" + Number(member.pay_rate).toLocaleString() + "/yr"}\nLicensed: ${member.licensed === true ? "Yes — " + (member.license_states || []).join(", ") : member.licensed === false ? "No" : "Not tracked"}\nStart: ${member.start_date || "—"}\nNotes: ${member.notes || "—"}\n${member.compliance_flag ? "Compliance flag: " + member.compliance_flag : ""}\n\nHelp me review this team member's profile. Are there any compliance concerns or HR items I should address?`} />
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <button onClick={()=>setEditingStaff({...member})} title="Edit team member"
+                    style={{ padding:"6px 14px", fontSize:11, fontWeight:600, background:T.navy, color:T.white, border:"none", borderRadius:6, cursor:"pointer" }}>
+                    ✏️ Edit
+                  </button>
+                  <AskBtn size="small" context={`Staff member profile:\nName: ${member.first_name} ${member.last_name}\nRole: ${member.role}\nEmployment: ${member.employment_type}\nPay: ${member.pay_type} — ${member.pay_type==="hourly"?"$"+member.pay_rate+"/hr":"$"+member.pay_rate.toLocaleString()+"/yr"}\nLicensed: ${member.licensed?"Yes — "+member.license_states.join(", "):"No"}\nStart: ${member.start_date}\nNotes: ${member.notes}\n${member.compliance_flag?"Compliance flag: "+member.compliance_flag:""}\n\nHelp me review this team member's profile. Are there any compliance concerns or HR items I should address?`} />
+                </div>
               </div>
             )}
           </Card>
@@ -756,16 +1006,6 @@ const StaffDirectory = ({ staff, loading = false }) => {
 
 // ─── Section: Onboarding ─────────────────────────────────────
 const OnboardingSection = ({ onboarding }) => {
-  if (!onboarding || onboarding.length === 0) {
-    return (
-      <Card>
-        <div style={{ fontSize:13, fontWeight:600, color:T.slate700, marginBottom:6 }}>Onboarding tracking pending</div>
-        <div style={{ fontSize:11, color:T.slate500, lineHeight:1.6 }}>
-          Onboarding records will appear here once the onboarding tracker schema is built. Configure templates per role (licensed agent, office manager, family employee) to track Day 1, Day 7, Day 30, and Day 60 milestones.
-        </div>
-      </Card>
-    );
-  }
   const categoryColors = {
     licensing:  { color:T.green,  bg:T.greenLt  },
     documents:  { color:T.blue,   bg:T.blueLt   },
@@ -776,6 +1016,12 @@ const OnboardingSection = ({ onboarding }) => {
 
   return (
     <div>
+      <WorkflowBanner
+        title="New hire onboarding"
+        body={<>Every new hire gets a 15-item checklist (I-9, W-4, direct deposit, handbook ack, compliance acks, etc.). Uploading a matching document to their personnel file auto-checks off that item. When every required item is done, an <em>onboarding complete</em> alert fires and they roll into Staff.</>}
+        next="Next stop: Staff"
+      />
+
       {onboarding.map(record => {
         const completed = record.items.filter(i => i.completed).length;
         const total = record.items.length;
@@ -827,9 +1073,10 @@ const OnboardingSection = ({ onboarding }) => {
   );
 };
 
-// ─── Section: Performance — Producer ROI ──────────────────────────────────
-// ─── Section: Performance — Producer ROI ──────────────────────
-const PerformanceSection = ({ roi }) => {
+// ─── Section: Producer P&L (moved from Performance tab 2026-07-16) ─────────
+// The ROI math: SMVC × premium projections vs fully-loaded payroll cost per
+// producer. Now embedded inside the Commissions tab where it belongs.
+const ProducerPnLSection = ({ roi }) => {
   if (!roi) {
     return (
       <Card>
@@ -842,6 +1089,44 @@ const PerformanceSection = ({ roi }) => {
 
   const { smvcRate, blendedRate, lapseRate, lapseRateComputed, lapseRateOverride,
           priorRenewals, currentRenewals, producerRows } = roi;
+
+  // Data-freshness gate: if NO producer has any issued production, we can't
+  // meaningfully compute ROI. Show a helpful banner instead of alarming red
+  // "behind pace" cards on every producer.
+  const totalPremiumAcrossProducers = producerRows.reduce(
+    (sum, p) => sum + Number(p.totalPremiumIssuedYTD || p.premium_ytd || 0), 0
+  );
+  if (producerRows.length > 0 && totalPremiumAcrossProducers === 0) {
+    return (
+      <Card style={{ borderLeft: `4px solid ${T.amber}` }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.slate900, marginBottom: 6 }}>
+          Producer P&L — no production data yet
+        </div>
+        <div style={{ fontSize: 12, color: T.slate600, lineHeight: 1.6, marginBottom: 10 }}>
+          Producer P&L projections need monthly premium data per producer. The
+          <code style={{ fontFamily: "monospace", fontSize: 11, padding: "1px 5px", background: T.slate100, borderRadius: 4, margin: "0 4px" }}>
+            producer_production
+          </code>
+          table is empty right now.
+        </div>
+        <div style={{ fontSize: 12, color: T.slate600, lineHeight: 1.6, marginBottom: 10 }}>
+          <strong>Next step:</strong> forward your monthly SF producer production
+          report to
+          <code style={{ fontFamily: "monospace", fontSize: 11, padding: "1px 5px", background: T.slate100, borderRadius: 4, margin: "0 4px" }}>
+            [AGENCY_CLAUDE_EMAIL]
+          </code>
+          — the Producer Production Report Processor recipe will parse it and
+          populate this section within the hour.
+        </div>
+        <div style={{ fontSize: 11, color: T.slate500, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.slate200}` }}>
+          Once loaded, this section will show per-producer profitability using
+          your SMVC rate ({smvcRate ? (smvcRate * 100).toFixed(1) : "10.0"}%),
+          blended rate ({blendedRate ? (blendedRate * 100).toFixed(1) : "9.0"}%),
+          and lapse rate ({lapseRate.toFixed(1)}%).
+        </div>
+      </Card>
+    );
+  }
 
   if (producerRows.length === 0) {
     return (
@@ -1030,9 +1315,31 @@ const ProducerROICard = ({ producer, smvcRate, blendedRate, lapseRate }) => {
 
   // Chart dimensions
   const chartH = 180;
+
+  // Build per-month cost series aligned to the projection timeline.
+  // History months: use the staff_performance snapshot for that month — null if
+  // the producer didn't exist yet (pre-hire), the cost line simply doesn't extend back.
+  // Forward months: carry the latest known cost as a flat baseline.
+  const costHistory = producer.costHistory || [];
+  // Latest non-null cost in history; falls back to producer.monthlyLoaded headline.
+  let lastKnownLoaded = monthlyLoaded;
+  for (let i = costHistory.length - 1; i >= 0; i--) {
+    if (Number.isFinite(costHistory[i].monthlyLoaded)) { lastKnownLoaded = costHistory[i].monthlyLoaded; break; }
+  }
+  const costSeries = [];
+  for (let i = 0; i < projectionMonths.length; i++) {
+    if (i < forwardStartIdx) {
+      const cell = costHistory[i];
+      costSeries.push(Number.isFinite(cell?.monthlyLoaded) ? cell.monthlyLoaded : null);
+    } else {
+      costSeries.push(lastKnownLoaded);
+    }
+  }
+
   const maxValue = Math.max(
-    monthlyLoaded * 1.3,
-    ...projectionMonths.map(p => p.totalCommission)
+    lastKnownLoaded * 1.3,
+    ...projectionMonths.map(p => p.totalCommission),
+    ...costSeries.filter(Number.isFinite)
   ) || 1;
 
   return (
@@ -1097,23 +1404,35 @@ const ProducerROICard = ({ producer, smvcRate, blendedRate, lapseRate }) => {
         </div>
 
         <div style={{ position: "relative", height: chartH + 30, background: T.slate50, borderRadius: 8, padding: "10px 8px 4px 8px" }}>
-          {/* Cost line */}
-          <div style={{
-            position: "absolute",
-            left: 8, right: 8,
-            top: 10 + chartH - (monthlyLoaded / maxValue * chartH),
-            height: 2, background: T.red,
-            borderTop: `2px dashed ${T.red}`,
-            zIndex: 2,
-          }} />
+          {/* Cost trend — polyline of actual per-month fully-loaded cost (from staff_performance, migration 027).
+              Historical months show the real cost the agency carried that month; forward months carry the
+              latest known cost as a flat baseline. Replaces the prior flat horizontal red line. */}
+          <svg
+            style={{ position: "absolute", left: 8, top: 10, width: "calc(100% - 16px)", height: chartH, zIndex: 2, pointerEvents: "none" }}
+            viewBox={`0 0 ${projectionMonths.length} ${chartH}`}
+            preserveAspectRatio="none"
+          >
+            <polyline
+              points={costSeries
+                .map((c, i) => Number.isFinite(c) ? `${i + 0.5},${chartH - (c / maxValue) * chartH}` : null)
+                .filter(Boolean)
+                .join(" ")}
+              fill="none"
+              stroke={T.red}
+              strokeWidth="2"
+              strokeDasharray="4 3"
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+          {/* Latest cost label positioned at the right edge using the last-known cost */}
           <div style={{
             position: "absolute",
             right: 12,
-            top: 10 + chartH - (monthlyLoaded / maxValue * chartH) - 16,
+            top: 10 + chartH - (lastKnownLoaded / maxValue * chartH) - 16,
             fontSize: 9, fontWeight: 700, color: T.red,
             background: T.white, padding: "1px 5px", borderRadius: 4,
             zIndex: 3,
-          }}>${Math.round(monthlyLoaded).toLocaleString()}/mo cost</div>
+          }}>${Math.round(lastKnownLoaded).toLocaleString()}/mo cost</div>
 
           {/* Bars */}
           <div style={{ display: "flex", alignItems: "flex-end", gap: 1, height: chartH, position: "relative" }}>
@@ -1174,143 +1493,636 @@ const ProducerROICard = ({ producer, smvcRate, blendedRate, lapseRate }) => {
 };
 
 
-// ─── Section: Commissions ─────────────────────────────────────
-const CommissionsSection = ({ commissions }) => {
-  if (!commissions || commissions.length === 0) {
+
+// ─── Section: Performance — HR workspace (NEW 2026-07-16) ─────
+// Team management surface: KPI grid, coaching notes, goal progress per producer.
+// the agent's private coaching log lives here (coaching_notes table, RLS-gated).
+const PerformanceSection = ({ staff, coachingNotes, staffPerformance,
+                              timeMonthly, activityMonthly, scoreboardGoals,
+                              currentUserStaffId, onNoteAdded }) => {
+
+  // Coaching roster: every active team member. Coaching applies to everyone,
+  // not just producer-roles — Service Admins, Customer Care Reps, Executive
+  // Assistants all belong here too. (Producer P&L still filters by producer
+  // role separately, since renewal-adjusted profitability math only makes sense
+  // for producers who write new business.)
+  const producers = (staff || []).filter(s => s.is_active);
+
+  const [selectedId, setSelectedId] = useState(() => producers[0]?.id || null);
+  const [noteText, setNoteText] = useState("");
+  const [noteCategory, setNoteCategory] = useState("coaching");
+  const [noteFollowUp, setNoteFollowUp] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
+  useEffect(() => {
+    if (!selectedId && producers.length > 0) setSelectedId(producers[0].id);
+  }, [producers, selectedId]);
+
+  if (producers.length === 0) {
     return (
       <Card>
-        <div style={{ fontSize:13, fontWeight:600, color:T.slate700, marginBottom:6 }}>Commission structures pending</div>
-        <div style={{ fontSize:11, color:T.slate500, lineHeight:1.6 }}>
-          Per-producer commission tiers will appear here once defined. Provide your A005 SMVC and blended rates plus any producer-specific structures to populate this section.
+        <div style={{ padding: "20px 0", textAlign: "center", fontSize: 13, color: T.slate500 }}>
+          No active team members found. Add staff via the Staff tab to populate this workspace.
         </div>
       </Card>
     );
   }
+
+  const selected = producers.find(p => p.id === selectedId) || producers[0];
+  const selectedName = `${selected.first_name || ""} ${selected.last_name || ""}`.trim() || "Producer";
+
+  // Notes for this producer
+  const producerNotes = (coachingNotes || [])
+    .filter(n => n.staff_id === selected.id)
+    .sort((a, b) => (b.note_date || "").localeCompare(a.note_date || ""));
+
+  // Most recent 1:1 across all categories, and next open follow-up
+  const lastOneOnOne = producerNotes.find(n => n.category === "1_1");
+  const openFollowUp = producerNotes.find(n => n.follow_up_date && !n.resolved_at);
+
+  // Time + activity this month vs last month
+  const now = new Date();
+  const thisYm = { y: now.getFullYear(), m: now.getMonth() + 1 };
+  const lastYm = thisYm.m === 1 ? { y: thisYm.y - 1, m: 12 } : { y: thisYm.y, m: thisYm.m - 1 };
+  const monthKey = (r) => `${r.period_year}-${String(r.period_month).padStart(2,"0")}`;
+  const thisKey = `${thisYm.y}-${String(thisYm.m).padStart(2,"0")}`;
+  const lastKey = `${lastYm.y}-${String(lastYm.m).padStart(2,"0")}`;
+
+  const timeThis = (timeMonthly || []).find(r => r.staff_id === selected.id && monthKey(r) === thisKey);
+  const timeLast = (timeMonthly || []).find(r => r.staff_id === selected.id && monthKey(r) === lastKey);
+  const activityThis = (activityMonthly || []).find(r => r.staff_id === selected.id && monthKey(r) === thisKey);
+  const activityLast = (activityMonthly || []).find(r => r.staff_id === selected.id && monthKey(r) === lastKey);
+
+  const hoursThis = timeThis?.total_hours || 0;
+  const hoursLast = timeLast?.total_hours || 0;
+  const activitiesThis = activityThis?.total_activities || 0;
+  const activitiesLast = activityLast?.total_activities || 0;
+  const boundThis = activityThis?.bound_count || 0;
+  const boundLast = activityLast?.bound_count || 0;
+
+  // Fully-loaded cost from staff_performance snapshots (writer recipe populates monthly)
+  const perfThis = (staffPerformance || []).find(r => r.staff_id === selected.id &&
+    r.period_year === thisYm.y && r.period_month === thisYm.m && r.metric_name === "fully_loaded_cost_monthly");
+  const monthlyCost = perfThis?.actual || (selected.pay_rate ? Number(selected.pay_rate) * 1.15 : 0);
+
+  // Tenure in months
+  const hireDate = selected.hire_date || selected.start_date;
+  let tenureMonths = null;
+  if (hireDate) {
+    const hd = new Date(hireDate);
+    tenureMonths = Math.floor((now - hd) / (1000*60*60*24*30.44));
+  }
+
+  async function saveNote() {
+    if (!noteText.trim() || savingNote) return;
+    setSavingNote(true);
+    try {
+      const { error } = await supabase.from("coaching_notes").insert({
+        agency_id: AGENCY_ID,
+        staff_id: selected.id,
+        note_date: new Date().toISOString().slice(0, 10),
+        note_text: noteText.trim(),
+        category: noteCategory,
+        follow_up_date: noteFollowUp || null,
+        created_by_staff_id: currentUserStaffId,
+      });
+      if (error) { console.error("Coaching note save error:", error); return; }
+      setNoteText("");
+      setNoteFollowUp("");
+      if (onNoteAdded) await onNoteAdded();
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  const kpiCards = [
+    { label: "Hours this month",   value: hoursThis.toFixed(1),    prev: hoursLast.toFixed(1)      },
+    { label: "Activities logged",  value: activitiesThis,          prev: activitiesLast            },
+    { label: "Bound this month",   value: boundThis,               prev: boundLast                 },
+    { label: "Loaded cost / mo",   value: `$${Math.round(monthlyCost).toLocaleString()}`, prev: null },
+  ];
+
+  const categoryLabels = {
+    coaching:  { label: "Coaching",  color: T.blue    },
+    "1_1":     { label: "1:1",       color: T.blueLt  },
+    win:       { label: "Win",       color: T.green   },
+    concern:   { label: "Concern",   color: T.red     },
+    follow_up: { label: "Follow-up", color: T.amber   },
+    review:    { label: "Review",    color: T.purple || T.slate600 },
+  };
+
   return (
-  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-    {commissions.map(c => (
-      <Card key={c.id}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+      <WorkflowBanner
+        title="Coaching workspace — private to you"
+        body={<>Pick a producer to see their KPIs (hours, activities, bound this month), team goal progress, and coaching history. Log observations, wins, concerns, and follow-ups. Notes are visible only to owner &amp; managers — the producer never sees them.</>}
+        next="Data feeds: staff_performance · time tracking · sales activity · scoreboard_goals"
+      />
+
+      {/* Producer selector pill row */}
+      <Card>
+        <div style={{ fontSize: 11, fontWeight: 600, color: T.slate500, marginBottom: 8 }}>
+          Select team member
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {producers.map(p => {
+            const name = `${p.first_name || ""} ${p.last_name || ""}`.trim();
+            const isSelected = p.id === selected.id;
+            return (
+              <button key={p.id} onClick={() => setSelectedId(p.id)}
+                style={{ padding: "6px 12px", fontSize: 12, fontWeight: isSelected ? 600 : 400,
+                  color: isSelected ? T.white : T.slate700,
+                  background: isSelected ? T.blue : T.slate50,
+                  border: `1px solid ${isSelected ? T.blue : T.slate200}`,
+                  borderRadius: 20, cursor: "pointer", transition: "all 0.12s" }}>
+                {name}
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Selected producer header + KPI grid */}
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize:14, fontWeight:700, color:T.slate900 }}>{c.staff_name}</div>
-            <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>{c.structure_name} · Effective {c.effective_date}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: T.slate900 }}>
+              {selectedName}
+            </div>
+            <div style={{ fontSize: 11, color: T.slate500, marginTop: 3 }}>
+              {selected.role || "Producer"}
+              {hireDate ? ` · Started ${hireDate}` : ""}
+              {tenureMonths != null ? ` · Tenure ${tenureMonths} mo` : ""}
+            </div>
+            {lastOneOnOne && (
+              <div style={{ fontSize: 11, color: T.slate600, marginTop: 6 }}>
+                Last 1:1: <strong>{lastOneOnOne.note_date}</strong>
+                {openFollowUp && ` · Open follow-up due ${openFollowUp.follow_up_date}`}
+              </div>
+            )}
           </div>
-          <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:11, color:T.slate400, marginBottom:2 }}>This month</div>
-            <div style={{ fontSize:20, fontWeight:700, color:T.green }}>${c.this_month.toLocaleString()}</div>
-            <div style={{ fontSize:10, color:T.slate400 }}>YTD: ${c.ytd_earned.toLocaleString()}</div>
-          </div>
+          <AskBtn size="small" context={`Give me a coaching brief for ${selectedName}. Hours this month: ${hoursThis}, last month: ${hoursLast}. Activities: ${activitiesThis} (${boundThis} bound). Loaded cost: $${Math.round(monthlyCost)}/mo. Recent notes: ${producerNotes.slice(0,3).map(n=>`[${n.note_date}] ${n.note_text}`).join(" | ")}. What should I focus on in our next 1:1?`} />
         </div>
 
-        {/* Tier Structure */}
-        <div style={{ marginBottom:12 }}>
-          <div style={{ fontSize:11, fontWeight:600, color:T.slate600, marginBottom:8 }}>Commission Tiers</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-            {c.tiers.map((tier,i) => (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:T.slate50, borderRadius:8 }}>
-                <span style={{ fontSize:12, color:T.slate600, flex:1 }}>
-                  ${tier.min.toLocaleString()} {tier.max?`— $${tier.max.toLocaleString()}`:"and above"}
-                </span>
-                <span style={{ fontSize:14, fontWeight:700, color:T.blue }}>{tier.rate}%</span>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 8 }}>
+          {kpiCards.map((k, i) => (
+            <div key={i} style={{ padding: "10px 12px", background: T.slate50, borderRadius: 8 }}>
+              <div style={{ fontSize: 10, color: T.slate500, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                {k.label}
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: T.slate900 }}>
+                {k.value}
+              </div>
+              {k.prev != null && (
+                <div style={{ fontSize: 10, color: T.slate400, marginTop: 2 }}>
+                  Last month: {k.prev}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Team goal progress (agency-wide from scoreboard_goals) */}
+      {(scoreboardGoals || []).length > 0 && (
+        <Card>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.slate900, marginBottom: 4 }}>
+            Team goals — {selectedName}'s contribution
+          </div>
+          <div style={{ fontSize: 11, color: T.slate500, marginBottom: 10 }}>
+            Agency-wide 2026 targets (all producers contribute).
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {(scoreboardGoals || []).map(g => (
+              <div key={g.id} style={{ padding: "8px 12px", background: T.slate50, borderRadius: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: T.slate700 }}>
+                    {(g.goal_type || "").replace(/_/g, " ")}
+                  </span>
+                  <span style={{ fontSize: 11, color: T.slate500 }}>
+                    Target: {g.target_value?.toLocaleString?.() || g.target_value}
+                  </span>
+                </div>
+                <div style={{ height: 5, background: T.slate200, borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: "0%", background: T.blue, transition: "width 0.3s" }} />
+                </div>
+                <div style={{ fontSize: 10, color: T.slate400, marginTop: 3 }}>
+                  Progress will populate when producer_production data loads.
+                </div>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
+      )}
 
-        {/* Qualifying Products */}
-        <div style={{ marginBottom:12 }}>
-          <div style={{ fontSize:11, fontWeight:600, color:T.slate600, marginBottom:6 }}>Qualifying products</div>
-          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-            {c.qualifying_products.map(p => (
-              <span key={p} style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:20, background:T.blueLt, color:T.blue }}>{p}</span>
-            ))}
+      {/* Add coaching note form */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.slate900, marginBottom: 4 }}>
+          Add a coaching note
+        </div>
+        <div style={{ fontSize: 11, color: T.slate500, marginBottom: 10 }}>
+          Private to owner/managers · Not visible to {selectedName}.
+        </div>
+        <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
+          placeholder={`Observation about ${selectedName} — coaching moment, 1:1 recap, win, or concern...`}
+          rows={3}
+          style={{ width: "100%", padding: 10, fontSize: 12, border: `1px solid ${T.slate200}`,
+            borderRadius: 8, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+        />
+        <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <select value={noteCategory} onChange={e => setNoteCategory(e.target.value)}
+            style={{ padding: "6px 10px", fontSize: 12, border: `1px solid ${T.slate200}`, borderRadius: 6 }}>
+            <option value="coaching">Coaching</option>
+            <option value="1_1">1:1 recap</option>
+            <option value="win">Win</option>
+            <option value="concern">Concern</option>
+            <option value="follow_up">Follow-up item</option>
+            <option value="review">Formal review</option>
+          </select>
+          <label style={{ fontSize: 11, color: T.slate600, display: "flex", alignItems: "center", gap: 4 }}>
+            Follow up:
+            <input type="date" value={noteFollowUp} onChange={e => setNoteFollowUp(e.target.value)}
+              style={{ padding: "5px 8px", fontSize: 11, border: `1px solid ${T.slate200}`, borderRadius: 6 }} />
+          </label>
+          <button onClick={saveNote} disabled={!noteText.trim() || savingNote}
+            style={{ marginLeft: "auto", padding: "7px 14px", fontSize: 12, fontWeight: 600,
+              color: T.textOnColor, background: noteText.trim() && !savingNote ? T.blue : T.slate300,
+              border: "none", borderRadius: 6, cursor: noteText.trim() && !savingNote ? "pointer" : "not-allowed" }}>
+            {savingNote ? "Saving…" : "Save note"}
+          </button>
+        </div>
+      </Card>
+
+      {/* Recent coaching notes */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.slate900, marginBottom: 10 }}>
+          Recent notes — {selectedName}
+        </div>
+        {producerNotes.length === 0 ? (
+          <div style={{ fontSize: 12, color: T.slate500, textAlign: "center", padding: "20px 0" }}>
+            No coaching notes yet for {selectedName}. Add your first observation above.
           </div>
-        </div>
-
-        {c.notes && (
-          <div style={{ fontSize:11, color:T.slate600, lineHeight:1.6, padding:"8px 10px", background:T.slate50, borderRadius:8, marginBottom:10 }}>
-            {c.notes}
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {producerNotes.slice(0, 10).map(n => {
+              const cat = categoryLabels[n.category] || categoryLabels.coaching;
+              return (
+                <div key={n.id} style={{ padding: "10px 12px", background: T.slate50, borderRadius: 8 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20,
+                      background: cat.color + "20", color: cat.color }}>
+                      {cat.label}
+                    </span>
+                    <span style={{ fontSize: 11, color: T.slate500 }}>{n.note_date}</span>
+                    {n.follow_up_date && (
+                      <span style={{ fontSize: 10, color: n.resolved_at ? T.slate400 : T.amber, marginLeft: "auto" }}>
+                        {n.resolved_at ? `Resolved ${n.resolved_at.slice(0,10)}` : `Follow up ${n.follow_up_date}`}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: T.slate700, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                    {n.note_text}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
-
-        <AskBtn size="small" context={`Commission structure review:\nStaff: ${c.staff_name}\nStructure: ${c.structure_name}\nThis month earned: $${c.this_month}\nYTD earned: $${c.ytd_earned}\nTiers: ${c.tiers.map(t=>`$${t.min}-${t.max||"+"} at ${t.rate}%`).join(", ")}\n\nHelp me verify this commission calculation is correct and review if the structure still makes sense given current production levels.`} />
       </Card>
-    ))}
-  </div>
+    </div>
   );
 };
 
-// ─── Main HR Module ───────────────────────────────────────────
+// ─── Section: Commissions ─────────────────────────────────────
+// Producer commission tier structures AND Producer P&L projections
+// (relocated from the old Performance tab 2026-07-16 — the ROI math lives
+// where the "am I making money on this producer" question already lives).
+const CommissionsSection = ({ commissions, roi }) => {
+  const list = Array.isArray(commissions) ? commissions : [];
+  // Agency-wide bonus structures: staff_id is null (apply to ALL producers)
+  const agencyWide = list.filter(c => !c.staff_id);
+  // Per-producer plans: staff_id present, enrollment markers pointing at agency plan
+  const perProducer = list.filter(c => !!c.staff_id);
+
+  // Format the "rate" display for agency-wide cards — depends on commission_type
+  const displayRate = (c) => {
+    const t = c.commission_type || "";
+    const rate = c.tiers?.[0]?.rate;
+    if (rate == null) return { primary: "—", suffix: "" };
+    if (t === "tier_bonus_pc" || t === "extra_bonus_pc") {
+      return { primary: `${rate}%`, suffix: "of qualifying premium" };
+    }
+    if (t === "health_flat") {
+      return { primary: `$${rate}`, suffix: "flat per app" };
+    }
+    if (t === "life_commission") {
+      return { primary: "Pass-through", suffix: "100% of monthly premium" };
+    }
+    return { primary: `${rate}%`, suffix: "" };
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+
+      <WorkflowBanner
+        title="Pay & profitability"
+        body={<>Top: your 2026 agency-wide bonus structures (sourced from your Comp Plan 2026 doc). All producers earn against these tiers. Middle: per-producer enrollment records. Bottom: Producer P&L — renewal-adjusted profitability per producer against fully-loaded payroll cost.</>}
+      />
+
+      {/* ─── Agency-wide bonus structures ─────────────────────── */}
+      {agencyWide.length > 0 && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.slate900, marginTop: 4, marginBottom: -4 }}>
+            Agency-wide Bonus Structures — 2026 Comp Plan
+          </div>
+          <div style={{ fontSize: 11, color: T.slate500, marginBottom: 4 }}>
+            {agencyWide.length} structure{agencyWide.length === 1 ? "" : "s"} · All active producers earn against these
+          </div>
+          {agencyWide.map(c => {
+            const rateInfo = displayRate(c);
+            return (
+              <Card key={c.id}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14, gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:T.slate900 }}>{c.structure_name}</div>
+                    <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>
+                      <span style={{ fontWeight: 600, color: T.blue }}>Agency-wide</span> · All active producers eligible · Effective {c.effective_date}
+                    </div>
+                  </div>
+                  <div style={{ textAlign:"right", flexShrink: 0 }}>
+                    <div style={{ fontSize:11, color:T.slate400, marginBottom:2 }}>Rate</div>
+                    <div style={{ fontSize:20, fontWeight:700, color:T.blue }}>{rateInfo.primary}</div>
+                    {rateInfo.suffix && (
+                      <div style={{ fontSize:10, color:T.slate500 }}>{rateInfo.suffix}</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Qualifying Products */}
+                {c.qualifying_products?.length > 0 && (
+                  <div style={{ marginBottom:12 }}>
+                    <div style={{ fontSize:11, fontWeight:600, color:T.slate600, marginBottom:6 }}>Qualifying products</div>
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                      {c.qualifying_products.map(p => (
+                        <span key={p} style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:20, background:T.blueLt, color:T.blue }}>{p}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {c.notes && (
+                  <div style={{ fontSize:11, color:T.slate600, lineHeight:1.6, padding:"8px 10px", background:T.slate50, borderRadius:8, marginBottom:10 }}>
+                    {c.notes}
+                  </div>
+                )}
+
+                <AskBtn size="small" context={`Agency-wide bonus structure review:\nStructure: ${c.structure_name}\nType: ${c.commission_type}\nRate: ${rateInfo.primary} ${rateInfo.suffix}\nQualifying products: ${(c.qualifying_products || []).join(", ")}\nNotes: ${c.notes || "(none)"}\n\nHelp me think through whether this bonus structure is still competitive given current production levels and the wider agency comp plan.`} />
+              </Card>
+            );
+          })}
+        </>
+      )}
+
+      {/* ─── Per-producer enrollment records ──────────────────── */}
+      {perProducer.length > 0 && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.slate900, marginTop: 10, marginBottom: -4 }}>
+            Per-Producer Enrollment
+          </div>
+          <div style={{ fontSize: 11, color: T.slate500, marginBottom: 4 }}>
+            {perProducer.length} enrollment{perProducer.length === 1 ? "" : "s"} on the standard 2026 plan
+          </div>
+          {perProducer.map(c => {
+            const rate = c.tiers?.[0]?.rate;
+            const rateSet = rate != null;
+            return (
+              <Card key={c.id}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14, gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:T.slate900 }}>{c.staff_name}</div>
+                    <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>{c.structure_name} · Effective {c.effective_date}</div>
+                  </div>
+                  <div style={{ textAlign:"right", flexShrink: 0 }}>
+                    {rateSet ? (
+                      <>
+                        <div style={{ fontSize:11, color:T.slate400, marginBottom:2 }}>Rate</div>
+                        <div style={{ fontSize:20, fontWeight:700, color:T.blue }}>{rate}%</div>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 20, background: T.amberLt, color: "#92400E" }}>
+                        Pending confirmation
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {c.qualifying_products?.length > 0 && (
+                  <div style={{ marginBottom:12 }}>
+                    <div style={{ fontSize:11, fontWeight:600, color:T.slate600, marginBottom:6 }}>Qualifying products</div>
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                      {c.qualifying_products.map(p => (
+                        <span key={p} style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:20, background:T.slate100, color:T.slate600 }}>{p}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {c.notes && (
+                  <div style={{ fontSize:11, color:T.slate600, lineHeight:1.6, padding:"8px 10px", background:T.slate50, borderRadius:8, marginBottom:10 }}>
+                    {c.notes}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </>
+      )}
+
+      {/* ─── Producer P&L (from earlier move-off Performance tab) ─ */}
+      <div style={{ fontSize: 13, fontWeight: 700, color: T.slate900, marginTop: 10, marginBottom: -4 }}>
+        Producer P&L (renewal-adjusted profitability model)
+      </div>
+      <ProducerPnLSection roi={roi} />
+    </div>
+  );
+};
+
 export default function HRPeople() {
   const { data: roi } = useProducerROI();
+  const useMockData = import.meta.env.VITE_USE_MOCK_DATA !== "false";
   const [section,     setSection]     = useState("overview");
-
-  // ── Live data from Supabase ──────────────────────────────────────
-  const [staff,       setStaff]       = useState([]);
-  const [staffLoading, setStaffLoading] = useState(true);
-  // Applicants / Onboarding / Commissions tables don't exist yet — empty until built
-  const [applicants,  setApplicants]  = useState([]);
-  const onboarding  = [];
-  const commissions = [];
-
-  // CPA contact display string, sourced from persistent_memory. Rendered in the
-  // AA05 banner beside the family-employee W-2 reminder. null while unknown.
-  const [cpaContact, setCpaContact] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("staff")
-          .select("*")
-          .eq("agency_id", AGENCY_ID)
-          .order("last_name", { ascending: true });
-        if (cancelled) return;
-        if (error) console.error("staff load error:", error);
-        setStaff(data || []);
-      } catch (e) {
-        if (!cancelled) console.error("HR staff load error:", e);
-      } finally {
-        if (!cancelled) setStaffLoading(false);
-      }
-
-      // Look for a CPA / accountant entry in persistent_memory key_contacts.
-      // Title convention: "Firstname Lastname — Firm Name (CPA)" or similar.
-      try {
-        const { data: mem } = await supabase
-          .from("persistent_memory")
-          .select("title")
-          .eq("agency_id", AGENCY_ID)
-          .eq("category", "key_contacts")
-          .or("title.ilike.%CPA%,title.ilike.%accountant%,content.ilike.%CPA%,content.ilike.%accountant%")
-          .limit(1);
-        if (!cancelled && Array.isArray(mem) && mem.length > 0 && mem[0]?.title) {
-          setCpaContact(mem[0].title);
-        }
-      } catch (e) {
-        // Non-fatal; banner falls back to generic "your CPA".
-        if (!cancelled) console.debug("CPA contact lookup skipped:", e?.message);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const [applicants,  setApplicants]  = useState(useMockData ? MOCK_APPLICANTS : []);
+  const [staff,       setStaff]       = useState(useMockData ? MOCK_STAFF : []);
+  const [onboarding,  setOnboarding]  = useState(useMockData ? MOCK_ONBOARDING : []);
+  const [commissions, setCommissions] = useState(useMockData ? MOCK_COMMISSIONS : []);
+  const [coachingNotes, setCoachingNotes] = useState([]);
+  const [staffPerformance, setStaffPerformance] = useState([]);
+  const [timeMonthly, setTimeMonthly] = useState([]);
+  const [activityMonthly, setActivityMonthly] = useState([]);
+  const [scoreboardGoals, setScoreboardGoals] = useState([]);
+  const [currentUserStaffId, setCurrentUserStaffId] = useState(null);
 
   const updateApplicantStage = (id, newStatus) => {
     setApplicants(prev => prev.map(a => a.id === id ? {...a, status:newStatus} : a));
   };
 
+  // Load HR data live from Supabase. Shape transformations handle DB schema differences
+  // (license_states, tiers, etc. don't exist in DB) so sub-components don't crash.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!supabase || !AGENCY_ID) return;
+      try {
+        const [staffRes, applicantsRes, onboardingRes, commissionsRes,
+                coachingRes, perfRes, timeRes, activityRes, goalsRes] = await Promise.all([
+          supabase.from("staff")
+            .select("id, first_name, last_name, role, employment_type, start_date, end_date, hire_date, is_active, email, phone, pay_type, pay_rate, auth_user_id, notes")
+            .eq("agency_id", AGENCY_ID),
+          supabase.from("applicants")
+            .select("id, first_name, last_name, email, phone, claude_score, claude_summary, interview_focus_doc, source, status, created_at")
+            .eq("agency_id", AGENCY_ID)
+            .order("created_at", { ascending: false }),
+          supabase.from("onboarding_checklists")
+            .select("id, staff_id, template_type, item_name, category, due_date, completed_at, is_required")
+            .eq("agency_id", AGENCY_ID),
+          supabase.from("commission_structures")
+            .select("id, staff_id, structure_name, effective_date, commission_type, rate, cap, qualifying_products, notes, is_active")
+            .eq("agency_id", AGENCY_ID).eq("is_active", true),
+          supabase.from("coaching_notes")
+            .select("id, staff_id, note_date, note_text, category, follow_up_date, resolved_at, created_by_staff_id")
+            .eq("agency_id", AGENCY_ID)
+            .order("note_date", { ascending: false }),
+          supabase.from("staff_performance")
+            .select("staff_id, period_year, period_month, metric_name, actual")
+            .eq("agency_id", AGENCY_ID),
+          supabase.from("v_time_tracking_monthly_by_producer")
+            .select("*")
+            .eq("agency_id", AGENCY_ID),
+          supabase.from("v_sales_activity_monthly_by_producer")
+            .select("*")
+            .eq("agency_id", AGENCY_ID),
+          supabase.from("scoreboard_goals")
+            .select("id, goal_type, goal_period, period_start, period_end, target_value, producer_id")
+            .eq("agency_id", AGENCY_ID)
+            .is("producer_id", null),
+        ]);
+        if (cancelled) return;
+
+        // Staff: enrich with display-only fields the sub-component expects
+        if (Array.isArray(staffRes.data) && staffRes.data.length > 0) {
+          const enriched = staffRes.data.map(s => {
+            const roleStr = (s.role || "").toLowerCase();
+            const isLicensed = roleStr.includes("producer") || roleStr.includes("agent") || roleStr.includes("licensed");
+            return {
+              ...s,
+              licensed: isLicensed,
+              license_states: isLicensed ? ["GA"] : [],
+              compliance_flag: null,
+              pay_rate: s.pay_rate != null ? Number(s.pay_rate) : 0,
+              pay_type: s.pay_type || "salary",
+            };
+          });
+          setStaff(enriched);
+        }
+
+        // Applicants: map interview_focus_doc -> interview_focus, position fallback
+        if (Array.isArray(applicantsRes.data) && applicantsRes.data.length > 0) {
+          const mapped = applicantsRes.data.map(a => ({
+            ...a,
+            position: a.position || "Open Position",
+            interview_focus: a.interview_focus_doc || "",
+          }));
+          setApplicants(mapped);
+        }
+
+        // Onboarding: group flat rows by staff_id to match nested mock shape
+        if (Array.isArray(onboardingRes.data) && onboardingRes.data.length > 0 && Array.isArray(staffRes.data)) {
+          const staffById = Object.fromEntries((staffRes.data || []).map(s => [s.id, s]));
+          const grouped = {};
+          for (const row of onboardingRes.data) {
+            const sid = row.staff_id;
+            if (!grouped[sid]) {
+              const s = staffById[sid] || {};
+              grouped[sid] = {
+                staff_id: sid,
+                staff_name: s.first_name ? `${s.first_name} ${s.last_name}` : "Unknown",
+                start_date: s.start_date || "",
+                template: row.template_type || "standard",
+                days_employed: s.start_date
+                  ? Math.floor((Date.now() - new Date(s.start_date)) / (1000*60*60*24))
+                  : 0,
+                items: [],
+              };
+            }
+            grouped[sid].items.push({
+              category: row.category || "general",
+              item: row.item_name || "",
+              completed: row.completed_at != null,
+              due: row.due_date || "",
+            });
+          }
+          setOnboarding(Object.values(grouped));
+        }
+
+        // Commissions: transform DB row -> mock-compatible shape (single-tier wrapper, staff_name lookup)
+        if (Array.isArray(commissionsRes.data) && commissionsRes.data.length > 0) {
+          const staffById = Object.fromEntries((staffRes.data || []).map(s => [s.id, s]));
+          const mapped = commissionsRes.data.map(c => {
+            const s = staffById[c.staff_id] || {};
+            const rate = c.rate != null ? Number(c.rate) : null;
+            // Wrap single rate as single-element tiers array. Empty when rate is unset.
+            const tiers = rate != null
+              ? [{ min: 0, max: c.cap != null ? Number(c.cap) : null, rate }]
+              : [];
+            return {
+              id: c.id,
+              staff_id: c.staff_id,
+              staff_name: s.first_name ? `${s.first_name} ${s.last_name}` : "Unassigned",
+              structure_name: c.structure_name || "Commission Structure",
+              effective_date: c.effective_date || "",
+              commission_type: c.commission_type || "flat",
+              tiers,
+              qualifying_products: Array.isArray(c.qualifying_products) ? c.qualifying_products : [],
+              notes: c.notes || (rate == null ? "Rate pending — the agent to set in next CPA review." : ""),
+              ytd_earned: 0,
+              this_month: 0,
+            };
+          });
+          setCommissions(mapped);
+        }
+
+        // Performance-tab data sources
+        if (Array.isArray(coachingRes?.data)) setCoachingNotes(coachingRes.data);
+        if (Array.isArray(perfRes?.data))     setStaffPerformance(perfRes.data);
+        if (Array.isArray(timeRes?.data))     setTimeMonthly(timeRes.data);
+        if (Array.isArray(activityRes?.data)) setActivityMonthly(activityRes.data);
+        if (Array.isArray(goalsRes?.data))    setScoreboardGoals(goalsRes.data);
+
+        // Resolve current user's staff.id (for coaching_notes.created_by_staff_id)
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user && Array.isArray(staffRes.data)) {
+            const me = staffRes.data.find(s => s.auth_user_id === session.user.id);
+            if (me) setCurrentUserStaffId(me.id);
+          }
+        } catch { /* ignore auth resolution failures */ }
+      } catch (e) {
+        console.error("HRPeople load error:", e);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
   const sections = [
     { id:"overview",    label:"Overview"    },
     { id:"recruiting",  label:"Recruiting"  },
-    { id:"staff",       label:"Staff"       },
     { id:"onboarding",  label:"Onboarding"  },
+    { id:"staff",       label:"Staff"       },
     { id:"performance", label:"Performance" },
     { id:"commissions", label:"Commissions" },
   ];
-
-  const activeStaffCount = staff.filter(s => s.is_active).length;
-  const activeApplicants = applicants.filter(a => !["hired","rejected"].includes(a.status)).length;
 
   return (
     <div>
@@ -1319,7 +2131,7 @@ export default function HRPeople() {
         <div>
           <div style={{ fontSize:20, fontWeight:700, color:T.slate900, letterSpacing:"-0.02em" }}>HR & People</div>
           <div style={{ fontSize:12, color:T.slate500, marginTop:3 }}>
-            {staffLoading ? "Loading staff…" : `${activeStaffCount} active staff`} · {activeApplicants} applicants in pipeline
+            {staff.filter(s=>s.is_active).length} active staff · {applicants.filter(a=>!["hired","rejected"].includes(a.status)).length} applicants in pipeline · Resume scanner active
           </div>
         </div>
         <AskBtn context="Give me a complete HR review. How is my recruiting pipeline looking? Any compliance concerns with my current team? What HR actions should I take this week?" />
@@ -1335,15 +2147,27 @@ export default function HRPeople() {
       </div>
 
       {/* Section Content */}
-      {section === "overview"    && <HROverview        applicants={applicants} staff={staff} onboarding={onboarding} cpaContact={cpaContact} onAdd={(row) => setStaff(prev => {
-        const rest = prev.filter(s => s.id !== row.id);
-        return [row, ...rest].sort((a,b) => (a.last_name||"").localeCompare(b.last_name||""));
-      })} />}
+      {section === "overview"    && <HROverview        applicants={applicants} staff={staff} onboarding={onboarding} />}
       {section === "recruiting"  && <RecruitingPipeline applicants={applicants} onUpdate={updateApplicantStage} />}
-      {section === "staff"       && <StaffDirectory     staff={staff} loading={staffLoading} />}
+      {section === "staff"       && <StaffDirectory     staff={staff} />}
       {section === "onboarding"  && <OnboardingSection  onboarding={onboarding} />}
-      {section === "performance" && <PerformanceSection  roi={roi} />}
-      {section === "commissions" && <CommissionsSection  commissions={commissions} />}
+      {section === "performance" && <PerformanceSection
+        staff={staff}
+        coachingNotes={coachingNotes}
+        staffPerformance={staffPerformance}
+        timeMonthly={timeMonthly}
+        activityMonthly={activityMonthly}
+        scoreboardGoals={scoreboardGoals}
+        currentUserStaffId={currentUserStaffId}
+        onNoteAdded={async () => {
+          const { data } = await supabase.from("coaching_notes")
+            .select("id, staff_id, note_date, note_text, category, follow_up_date, resolved_at, created_by_staff_id")
+            .eq("agency_id", AGENCY_ID)
+            .order("note_date", { ascending: false });
+          if (Array.isArray(data)) setCoachingNotes(data);
+        }}
+      />}
+      {section === "commissions" && <CommissionsSection  commissions={commissions} roi={roi} />}
     </div>
   );
 }

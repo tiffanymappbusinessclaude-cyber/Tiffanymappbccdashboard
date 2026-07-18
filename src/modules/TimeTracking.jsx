@@ -413,8 +413,6 @@ export default function TimeTracking() {
         }
       />
 
-      <PIIWarningBanner />
-
       {loading && !profile.data ? (
         <LoadingState message="Loading time tracking…" rows={4} />
       ) : profile.data ? (
@@ -551,6 +549,277 @@ function ProducerSurface({ profile, weekly, monthly, missingDays, recent, produc
         currentUserId={profile.id}
         isPrivileged={false}
       />
+    </div>
+  );
+}
+
+
+// =============================================================================
+// TimeClockCard — live in/out punch clock for the currently signed-in user.
+// Compact card at the top of the owner surface. Shows current time in Eastern
+// (the agent's TZ). Clock In snapshots the moment + selected category. Clock Out
+// computes elapsed decimal hours and INSERTs/UPSERTs into time_tracking,
+// same shape LogHoursModal uses so the summary/leaderboard/leaderboard math
+// stays consistent. Session survives page refresh via localStorage keyed to
+// the profile id — if the agent clocks in on desktop and comes back an hour later,
+// the clock keeps counting.
+// =============================================================================
+function TimeClockCard({ profile, onSaved }) {
+  const [now, setNow] = useState(new Date());
+  const [category, setCategory] = useState("sales_activity");
+  const [clockedIn, setClockedIn] = useState(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [flash, setFlash] = useState(null);
+
+  // Storage key scoped to the signed-in profile so multi-account browsers don't collide
+  const storageKey = profile?.id ? `bcc_time_clock_${profile.id}` : null;
+
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.startedAt === "number") {
+          setClockedIn(parsed);
+          if (parsed.category) setCategory(parsed.category);
+        }
+      }
+    } catch { /* localStorage disabled or corrupt — ignore */ }
+    setHydrated(true);
+  }, [storageKey]);
+
+  // Persist changes
+  useEffect(() => {
+    if (!hydrated || !storageKey) return;
+    try {
+      if (clockedIn) {
+        window.localStorage.setItem(storageKey, JSON.stringify(clockedIn));
+      } else {
+        window.localStorage.removeItem(storageKey);
+      }
+    } catch { /* noop */ }
+  }, [clockedIn, hydrated, storageKey]);
+
+  // Tick every second
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Formatters — Eastern Time for the agent in Tucker, GA
+  const ET_TIME = useMemo(
+    () => new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
+    }),
+    []
+  );
+  const ET_DAY = useMemo(
+    () => new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      weekday: "long", month: "long", day: "numeric",
+    }),
+    []
+  );
+  // en-CA yields YYYY-MM-DD which matches Postgres DATE
+  const ET_ISO_DATE = useMemo(
+    () => new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+      year: "numeric", month: "2-digit", day: "2-digit",
+    }),
+    []
+  );
+
+  const nowDisplay = ET_TIME.format(now);
+  const dayDisplay = ET_DAY.format(now);
+  const startedAtDisplay = clockedIn
+    ? ET_TIME.format(new Date(clockedIn.startedAt))
+    : null;
+
+  const elapsedSec = clockedIn ? Math.max(0, (now.getTime() - clockedIn.startedAt) / 1000) : 0;
+  const elapsedH = Math.floor(elapsedSec / 3600);
+  const elapsedM = Math.floor((elapsedSec % 3600) / 60);
+  const elapsedS = Math.floor(elapsedSec % 60);
+  const elapsedLabel = elapsedH > 0
+    ? `${elapsedH}h ${String(elapsedM).padStart(2, "0")}m ${String(elapsedS).padStart(2, "0")}s`
+    : `${elapsedM}m ${String(elapsedS).padStart(2, "0")}s`;
+  const decimalHours = Math.round((elapsedSec / 3600) * 100) / 100;
+
+  const canClock = !!profile?.id && !!profile?.agency_id;
+
+  function handleClockIn() {
+    if (!canClock || clockedIn) return;
+    setError(null);
+    setFlash(null);
+    setClockedIn({
+      startedAt: Date.now(),
+      category,
+    });
+  }
+
+  async function handleClockOut() {
+    if (!clockedIn) return;
+    if (decimalHours < 0.02) {
+      // Less than ~1 minute — nothing meaningful to log. Reset the clock silently.
+      setClockedIn(null);
+      setFlash("Cleared — less than a minute elapsed.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const entryDate = ET_ISO_DATE.format(now);
+      const finishDisplay = ET_TIME.format(now);
+      const startedDisplay = ET_TIME.format(new Date(clockedIn.startedAt));
+      const noteSuffix = `Clock \u23F1 ${startedDisplay} \u2192 ${finishDisplay}`;
+
+      // Read-then-upsert to match LogHoursModal semantics (sum on collision)
+      const { data: existing, error: readErr } = await supabase
+        .from("time_tracking")
+        .select("id, hours, notes")
+        .eq("agency_id", profile.agency_id)
+        .eq("producer_id", profile.id)
+        .eq("entry_date", entryDate)
+        .eq("activity_category", clockedIn.category)
+        .maybeSingle();
+      if (readErr) throw readErr;
+
+      if (existing) {
+        const mergedHours = Number(existing.hours || 0) + decimalHours;
+        const mergedNotes = [existing.notes, noteSuffix].filter(Boolean).join(" \u00B7 ");
+        const { error: updErr } = await supabase
+          .from("time_tracking")
+          .update({ hours: mergedHours, notes: mergedNotes || null })
+          .eq("id", existing.id);
+        if (updErr) throw updErr;
+      } else {
+        const { error: insErr } = await supabase
+          .from("time_tracking")
+          .insert({
+            agency_id: profile.agency_id,
+            producer_id: profile.id,
+            entry_date: entryDate,
+            activity_category: clockedIn.category,
+            hours: decimalHours,
+            notes: noteSuffix,
+          });
+        if (insErr) throw insErr;
+      }
+
+      const savedHours = decimalHours;
+      setClockedIn(null);
+      setFlash(`Saved ${savedHours.toFixed(2)} h to ${entryDate}.`);
+      if (onSaved) onSaved();
+    } catch (err) {
+      setError(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCancel() {
+    setClockedIn(null);
+    setError(null);
+    setFlash("Session cancelled — nothing saved.");
+  }
+
+  const activeCategoryLabel = ACTIVITY_CATEGORIES.find(
+    (c) => c.value === (clockedIn?.category || category)
+  )?.label || category;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 flex flex-wrap items-center justify-between gap-4">
+      {/* Live clock (left) */}
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-700 flex-shrink-0">
+          <Clock size={22} />
+        </div>
+        <div className="min-w-0">
+          <div className="text-2xl font-semibold text-slate-900 tabular-nums leading-tight">
+            {nowDisplay}
+          </div>
+          <div className="text-xs text-slate-500">{dayDisplay} · Eastern Time</div>
+        </div>
+      </div>
+
+      {/* Controls (right) */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {clockedIn ? (
+          <>
+            <div className="text-right">
+              <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
+                On the clock
+              </div>
+              <div className="text-sm text-slate-800">
+                Started {startedAtDisplay} · {activeCategoryLabel}
+              </div>
+              <div className="text-xs text-slate-500 tabular-nums">
+                {elapsedLabel} · {decimalHours.toFixed(2)} h
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleClockOut}
+              disabled={saving}
+              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Clock out & save"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={saving}
+              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <label className="text-xs text-slate-600">
+              Category
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="ml-2 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+              >
+                {ACTIVITY_CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={handleClockIn}
+              disabled={!canClock}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              title={canClock ? "Start the clock" : "Waiting for your profile…"}
+            >
+              Clock in
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Flash / error row (full width, only when present) */}
+      {(flash || error) && (
+        <div className="w-full">
+          {flash && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+              {flash}
+            </div>
+          )}
+          {error && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">
+              {error}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -695,6 +964,8 @@ function OwnerManagerSurface({ profile, weekly, monthly, missingDays, recent, sa
 
   return (
     <div className="space-y-6">
+      <TimeClockCard profile={profile} onSaved={onChanged} />
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard
           label="Team hours this week"
@@ -1503,9 +1774,7 @@ function LogHoursModal({ profile, staffList, onClose, onSaved, canPickProducer, 
         </div>
 
         <div className="p-5 space-y-4">
-          <PIIWarningBanner />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block">
               <span className="text-xs uppercase tracking-wide text-if-muted block mb-1">
                 Date

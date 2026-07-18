@@ -73,3 +73,19 @@ export function safeNum(val) {
   const n = parseFloat(val);
   return isNaN(n) ? 0 : n;
 }
+
+/**
+ * cn — classnames concatenator (clsx-style).
+ * Takes any number of arguments; joins truthy strings with a space,
+ * silently drops falsy values (false, null, undefined, 0, "").
+ *
+ * Enables the pattern used by Rebecca's premium modules:
+ *   cn("py-2 pr-3 text-right", condition && "text-amber-700")
+ *
+ * NOTE: this repo does not currently ship Tailwind (see package.json),
+ * so many of these utility class strings render as no-ops. This function
+ * unblocks the build; adding Tailwind is a separate follow-up.
+ */
+export function cn(...args) {
+  return args.filter(Boolean).join(" ");
+}

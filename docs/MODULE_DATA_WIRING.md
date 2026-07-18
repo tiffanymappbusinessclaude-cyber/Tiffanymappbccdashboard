@@ -1,3 +1,51 @@
+<!--
+============================================================
+  REALITY UPDATE — 2026-07-02
+  This addendum reflects the live state of <AGENCY_NAME> Agency's BCC.
+  It supersedes anything below in the pre-addendum content of this file.
+  The pre-addendum content is kept verbatim for historical / install-time reference.
+============================================================
+-->
+
+# 🔄 Reality Update — 2026-07-02
+
+The install-time doc below covers the original 11 modules. **Three more have been added** (2026-07-01 to 2026-07-02) and need wiring notes.
+
+## Additional modules
+
+### System Map — `src/modules/SystemMap.jsx`
+- **Tables read:** `system_map` (14 seed rows), `system_map_revisions`
+- **Empty state:** "No matching pages — create one with the New page button"
+- **Populate from scratch:** Ask Claude to seed pages. 14 seeded 2026-07-02 (see `select category, count(*) from system_map group by category`).
+- **Common failure:** "Failed to load system_map" means the tables don't exist yet — apply migration `031_system_map_tables`.
+- **Write model:** Full anon INSERT/UPDATE/DELETE policies. Users can edit pages directly through the UI.
+- **Revisions:** BEFORE UPDATE trigger captures pre-update snapshots to `system_map_revisions` on any change to title/category/body_md.
+
+### Playbook & Guide — `src/modules/PlaybookGuide.jsx`
+- **Tables read:** none (fully static content)
+- **Empty state:** doesn't apply — content is baked in
+- **Populate:** not applicable
+- **Common failure:** if the module errors on render, it's a missing helper component in `src/components/` (AskClaudeButton in particular)
+
+### Report Package — `src/modules/ReportPackage.jsx`
+- **Tables read:** `v_income_statement`, `v_balance_sheet`, `journal_entries`, `qbo_snapshots`, `comp_recap`
+- **Empty state:** each of the 10 report pages renders empty tables with "no data for selected period" notes
+- **Populate from scratch:** The reports pull from the same views as the Financials tab. If Financials shows numbers, Report Package will too.
+- **Common failure:** if a report page is blank while Financials has data, check the period selector — the report defaults to the previous complete month, which may be empty if you haven't posted for that month yet.
+- **Wired 2026-07-02:** BCCApp.jsx imports it, sidebar entry between HR & People and Claude Chat, roles owner/manager/accountant.
+
+## Client-side write RLS
+
+The client-side app uses the anon key. As of 2026-07-02, `anon` write policies exist on:
+- `system_map` (full CRUD)
+- `persistent_memory` (INSERT + UPDATE)
+
+Every other table is `anon` SELECT-only. That's fine because the current operational model is "Claude does the writes." Automations write via service_role (bypasses RLS). If click-through UI writes are needed later (add-task-button etc.), add INSERT/UPDATE/DELETE policies to the target tables.
+
+---
+
+<!-- Original MODULE_DATA_WIRING.md content follows below. -->
+
 # Module Data Wiring Guide
 
 > Per-module reference: which Supabase tables each BCC web app module reads, in what order, what columns, and how to debug when something doesn't render.
@@ -27,7 +75,7 @@ The pattern is consistent:
 | Module | Primary tables | Secondary tables / views |
 |---|---|---|
 | Dashboard | `agency`, `tasks`, `alerts`, `compliance_rules`, `compliance_log`, `monthly_close_checklist`, `aipp_tracking` | `v_income_statement` (derived view) |
-| Financials | `comp_recap`, `journal_entries`, `journal_lines`, `chart_of_accounts`, `payroll_runs`, `payroll_detail`, `bank_accounts`, `credit_accounts`, `credit_transactions`, `aipp_tracking`, `scoreboard_tracking` | `v_income_statement`, `v_balance_sheet` |
+| Financials | `comp_recap`, `journal_entries`, `journal_lines`, `chart_of_accounts`, `payroll_runs`, `payroll_detail`, `bank_accounts`, `credit_accounts`, `credit_transactions`, `aipp_tracking`, `scoreboard_tracking` | `v_income_statement`, `v_balance_sheet`, `v_unified_general_ledger`, QBO mirror (`qbo_accounts`, `qbo_journal_entries`, `qbo_journal_lines`, `qbo_snapshots`) |
 | ComplianceCenter | `compliance_rules`, `compliance_log`, `compliance_calendar` | — |
 | Documents | `documents` | (mock fallback if empty) |
 | HRPeople | `staff`, `applicants`, `producer_production`, `payroll_detail`, `payroll_runs`, `comp_recap`, `commission_structures`, `staff_performance` | `agency.smvc_rate_pc`, `agency.blended_rate_other`, `agency.lapse_rate_annual` |
@@ -83,16 +131,19 @@ Each section below answers four questions Project Claude needs during debugging:
 
 **Reads (in this order during render):**
 - `agency` — for header
-- `v_income_statement` (derived view from migration 006) — P&L tab
-- `v_balance_sheet` (derived view from migration 006) — Balance Sheet tab
+- `v_income_statement` (rebuilt in migration 019 — UNIONs BCC `journal_lines` with QBO mirror) — P&L tab
+- `v_balance_sheet` (rebuilt in migration 020 — sourced from `qbo_snapshots`) — Balance Sheet tab
 - `comp_recap` — SF Compensation tab (the most important table for this module)
-- `journal_entries` + `journal_lines` (joined via `entry_id`) — General Ledger tab
+- `journal_entries` + `journal_lines` (joined via `entry_id`) — General Ledger tab (BCC-native entries)
+- `v_unified_general_ledger` (migration 017/017b) — General Ledger tab when showing pre-cutover history
 - `chart_of_accounts` — needed by GL for account names
 - `payroll_runs` + `payroll_detail` — Payroll tab
 - `bank_accounts` + (computed monthly totals from `journal_entries`) — Bank tab
 - `credit_accounts` + `credit_transactions` — Credit tab
 - `aipp_tracking` — AIPP / ScoreBoard tab
 - `scoreboard_tracking` — ScoreBoard sub-section
+
+**QBO mirror layer (migrations 017–020):** Historical accounting data from QuickBooks Online is replicated into the `qbo_*` tables via the Composio QBO connector. `v_income_statement` and `v_balance_sheet` UNION the BCC-native data with the QBO mirror so pre-cutover history (anything before `settings.gl_cutover_date`) reads from QBO and anything after reads from the BCC GL. `v_unified_general_ledger` is the line-level UNION view for the GL tab. This is why P&L can show full history immediately even when `comp_recap` and BCC `journal_lines` are empty.
 
 **If everything is empty:** Financials renders all tabs with EmptyState. Agent sees "$0 revenue, $0 expenses, no journal entries yet." Correct pre-data state.
 
@@ -104,14 +155,20 @@ Each section below answers four questions Project Claude needs during debugging:
 - Bank tab shows accounts but $0 balances → balances are computed from `journal_entries` joined to `bank_accounts`; if no journal entries exist for the bank account, balance shows $0.
 
 **To populate from scratch:**
-The document importer (12 canonical recipes) is what populates these tables. See `docs/DOCUMENT_IMPORTER_GUIDE.md`.
-1. Recipes 1-2 (SF Daily Comp Processor, Deduction Statement Processor) populate `comp_recap`
-2. Recipe 3 (Bank Statement Processor) populates `journal_entries`
-3. Recipe 4 (Credit Card Statement Processor) populates `credit_transactions`
-4. Recipe 5 (Payroll Processor) populates `payroll_runs` + `payroll_detail`
-5. Recipe 8 (GL Entry Writer) reconciles all of the above into `journal_lines`, which feeds `v_income_statement` and `v_balance_sheet`
 
-If the agent has historical data they want loaded before the recipes start running, manual SQL INSERT is fine — recipes will deduplicate via their `unique_on` configs.
+The document importer is the consolidated-dispatch architecture (migrations 015/015c/015d + 016/016b + 022). One recipe — **Document Processor** — fetches Gmail attachments, runs them through the parser framework, and dispatches the parsed payload to a specialized handler:
+
+1. **Document Processor** (`dispatch_document_processor`) — pulls unread email + attachments from Gmail via Composio, calls `parse_documents` (the v2 parser framework). Detects document type (SF Daily Comp, Deduction, Bank, Credit Card, Payroll, Producer Production).
+2. **Document Parser** (`parse_documents`) — extracts structured records into `comp_recap`, `producer_production`, `bank_transactions`, `credit_transactions`, `payroll_runs` + `payroll_detail` depending on doc type.
+3. **GL Writers** (migration 022) — three SECURITY DEFINER handlers gated by `settings.gl_cutover_date`:
+   - `bank_gl_writer` — turns `bank_transactions` into `journal_lines`
+   - `cc_gl_writer` — turns `credit_transactions` into `journal_lines`
+   - `payroll_gl_writer` — turns `payroll_runs` + `payroll_detail` into `journal_lines`
+4. **GL Entry Writer** (`gl_entry_writer`, migration 012) — turns `comp_recap` rows into `journal_entries` + `journal_lines`. This is the final write that feeds `v_income_statement`.
+
+**Pre-cutover (anything dated before `gl_cutover_date`):** P&L and Balance Sheet read from the QBO mirror — no BCC writes happen. The four GL writers above no-op on pre-cutover dates to prevent double-posting against QBO history.
+
+If the agent has historical data they want loaded before the recipes start running, manual SQL INSERT is fine — handlers deduplicate via `(agency_id, document_id)` or similar unique constraints.
 
 ---
 
@@ -218,20 +275,37 @@ For installations where the agent wants their historical archives indexed, manua
 - `automation_recipes` (all rows for `agency_id`, ordered by recipe_name) — Recipes tab
 - `automation_run_log` (last 30 days, ordered by run_at DESC) — Run Log tab
 
-**If empty:** Module shows "No recipes configured yet." This means the canonical 12 recipes weren't seeded during install. Refer to `docs/AUTOMATIONS_INSTALL.md`.
+**If empty:** Module shows "No recipes configured yet." This means the consolidated-dispatch recipe set wasn't seeded during install. Refer to `docs/AUTOMATIONS_INSTALL.md`.
+
+**Current consolidated-dispatch recipe inventory (11 active):**
+1. Document Processor (`dispatch_document_processor`) — fetches Gmail, parses, dispatches to handlers
+2. Document Parser (`parse_documents`) — v2 parser framework called by Document Processor
+3. Email Archiver (`dispatch_email_archiver`) — labels/archives processed mail
+4. GL Entry Writer (`gl_entry_writer`) — comp_recap → journal_lines
+5. Bank GL Writer (`bank_gl_writer`) — bank_transactions → journal_lines
+6. Credit Card GL Writer (`cc_gl_writer`) — credit_transactions → journal_lines
+7. Payroll GL Writer (`payroll_gl_writer`) — payroll_runs/payroll_detail → journal_lines
+8. Monthly Close Monitor (`monthly_close_monitor`) — alerts on overdue close items
+9. Monthly Close Checklist Generator (`monthly_close_generator`) — creates new monthly_close_checklist rows
+10. Producer Underperformance Watcher (`producer_underperformance_watcher`) — alerts on producers below 70% of rolling pace
+11. Daily Briefing Email (`daily_briefing_composer` + `GMAIL_SEND_EMAIL`) — hybrid INTERNAL+Composio recipe
+
+This replaces the earlier 12-Composio-driven-parser layout. The six individual statement processors (SF Daily Comp, Deduction, Bank, CC, Payroll, Producer Production) were consolidated into the single Document Processor + dispatched handlers pattern.
 
 **If something's wrong:**
 - Recipes show but `last_run_status` is always NULL → migration 011 not applied OR Edge Function not deployed OR pg_cron not scheduled. Walk the runner setup steps in `docs/AUTOMATIONS_INSTALL.md` Step 5a-5d.
 - Recipes show with `last_run_status = 'failed'` → check `automation_run_log` for the error message. Use the troubleshooting table in `docs/AUTOMATIONS_INSTALL.md` Step 6.
 - Run Log empty even though recipes claim to be running → recipes are firing but `automation_run_log` writes are failing. Check RLS policies on the run log table.
+- GL Writers run successfully but no `journal_lines` rows appear → check `settings.gl_cutover_date`. The three GL Writers are no-op pre-cutover by design (to prevent double-posting against the QBO mirror).
 
 **To populate from scratch:**
 This is the install flow described in `docs/AUTOMATIONS_INSTALL.md`. Summary:
 1. Apply migration 011 (runner SQL functions, pg_net extension)
-2. Deploy `automation-runner` Edge Function
-3. Insert credentials into `settings`
-4. Insert the 12 canonical recipes into `automation_recipes`
-5. Schedule pg_cron tick
+2. Apply migrations 012, 014, 015c, 016, 018, 021, 022 (internal handlers)
+3. Deploy `automation-runner` Edge Function (v4 source at `supabase/functions/automation-runner/index.ts`)
+4. Insert credentials into `settings` (including `gl_cutover_date`)
+5. Insert the 11 consolidated-dispatch recipes into `automation_recipes`
+6. Schedule pg_cron tick (`enable_pg_cron_and_schedule_runner_tick.sql`)
 
 ---
 
@@ -309,4 +383,4 @@ Path A installs run this in Step 2 of the handoff prompt. Path B installs should
 
 ---
 
-*Last updated: 2026-05-10 — initial doc shipped to close the "Project Claude doesn't know which table feeds which module" gap.*
+*Last updated: 2026-06-17 — added QBO mirror layer (migrations 017–020), consolidated-dispatch recipe inventory, and `gl_cutover_date` guard documentation.*

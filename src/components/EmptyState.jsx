@@ -2,8 +2,13 @@ import { useState } from "react";
 
 /**
  * EmptyState — shown when a table has 0 rows
- * Tells Dominique exactly what's missing and how to add it
+ * Tells Sunshine State exactly what's missing and how to add it
  * Never shows fake/mock data
+ *
+ * `icon` accepts either an emoji string ("📋") OR a React component
+ * (e.g. a lucide-react icon like FileText). The component variant lets
+ * newer modules (SystemMap, etc.) pass icons the same way they do to
+ * SectionHeader without triggering React error #31.
  */
 export default function EmptyState({
   icon = "📋",
@@ -35,6 +40,12 @@ export default function EmptyState({
   const displayTitle = title || defaults.title || "No data yet";
   const displayDesc = description || defaults.desc || "This section will populate as you use your BCC.";
 
+  // Detect whether displayIcon is a React component (function or forwardRef object)
+  // vs an emoji string. Rendering a component as a child triggers React error #31.
+  const isComponent =
+    typeof displayIcon === "function" ||
+    (typeof displayIcon === "object" && displayIcon !== null && displayIcon.$$typeof !== undefined);
+
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
@@ -44,7 +55,7 @@ export default function EmptyState({
       {awaiting && (
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 6,
-          background: "#FEF3C7", color: "#92400E", borderRadius: 20,
+          background: "var(--warning-bg)", color: "#92400E", borderRadius: 20,
           padding: "4px 12px", fontSize: 11, fontWeight: 600,
           marginBottom: 16, border: "1px solid #FDE68A"
         }}>
@@ -52,16 +63,28 @@ export default function EmptyState({
         </div>
       )}
 
-      <div style={{ fontSize: 36, marginBottom: 12 }}>{displayIcon}</div>
+      <div style={{
+        marginBottom: 12,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "var(--text-tertiary)",
+      }}>
+        {isComponent
+          ? (() => {
+              const IconComp = displayIcon;
+              return <IconComp size={36} />;
+            })()
+          : <span style={{ fontSize: 36 }}>{displayIcon}</span>
+        }
+      </div>
 
       <div style={{
-        fontSize: 15, fontWeight: 600, color: "#1E293B", marginBottom: 8
+        fontSize: 15, fontWeight: 600, color: "var(--text-primary)", marginBottom: 8
       }}>
         {displayTitle}
       </div>
 
       <div style={{
-        fontSize: 12, color: "#64748B", maxWidth: 320, lineHeight: 1.6, marginBottom: 20
+        fontSize: 12, color: "var(--text-tertiary)", maxWidth: 320, lineHeight: 1.6, marginBottom: 20
       }}>
         {displayDesc}
       </div>
@@ -71,7 +94,7 @@ export default function EmptyState({
           onClick={onCtaClick}
           style={{
             padding: "8px 20px", fontSize: 12, fontWeight: 600,
-            background: "#1E3A5F", color: "white", border: "none",
+            background: "var(--accent-navy)", color: "white", border: "none",
             borderRadius: 6, cursor: "pointer"
           }}
         >

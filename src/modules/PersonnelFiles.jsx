@@ -148,7 +148,7 @@ const ROLES = {
 // realistic headroom while blocking pathological cases early. Adjust
 // alongside supabase/functions/personnel-upload/index.ts if the Edge
 // tier is upgraded.
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;  // 5 MB — matches Composio Drive upload cap
 
 // Employee-visible-by-default doc types (mirrors the DB trigger
 // set_personnel_documents_visibility_default). Kept here for UI hinting
@@ -497,6 +497,11 @@ function OwnerView({ profile }) {
           suffix="%"
           hint="Of all uploaded docs"
         />
+      </div>
+
+      {/* Workflow hint — how to actually upload documents */}
+      <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+        <strong>How to upload documents:</strong> Click any employee card below to open their file drawer. From there you can upload documents, verify existing ones, review their form checklist, and see their access log. Your own card works the same way — click <em>Sunshine State Insurance</em> to upload to your own folder. Everything is stored in your Google Drive under <code>/BCC/HR/Personnel Records/</code> and mirrored to this dashboard.
       </div>
 
       {/* Search */}
@@ -1151,7 +1156,7 @@ function FormChecklistRow({ template, matchedDocs, onUpload }) {
           <button
             type="button"
             onClick={onUpload}
-            className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
+            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
           >
             {hasUpload ? "Upload again" : "Upload completed"}
           </button>
@@ -1289,7 +1294,7 @@ function EmployeeDrawer({
               <button
                 type="button"
                 onClick={() => setUploadForOwner(true)}
-                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
               >
                 Upload document
               </button>
@@ -1869,7 +1874,7 @@ function ManageFormTemplatesModal({ open, onClose, agencyId, profile, onChange }
             <button
               type="button"
               onClick={startNew}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
             >
               + Add form template
             </button>
@@ -2359,7 +2364,7 @@ function UploadDocumentModal({
             type="file"
             onChange={onFilePicked}
             disabled={uploading}
-            className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100"
+            className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700 file:cursor-pointer"
           />
           {file && (
             <p className="mt-1 text-xs text-slate-600">

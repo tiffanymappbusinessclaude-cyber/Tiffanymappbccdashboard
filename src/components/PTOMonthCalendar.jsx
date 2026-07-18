@@ -142,7 +142,7 @@ export default function PTOMonthCalendar({
           <div key={h} style={{
             padding: "6px 8px",
             fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
-            color: "#64748B", textTransform: "uppercase",
+            color: "var(--text-tertiary)", textTransform: "uppercase",
             textAlign: "center",
           }}>{h}</div>
         ))}
@@ -172,7 +172,7 @@ export default function PTOMonthCalendar({
                 borderRight: (i % 7 !== 6) ? "1px solid var(--if-line, #E8E0D5)" : "none",
                 borderBottom: (i < 35) ? "1px solid var(--if-line, #E8E0D5)" : "none",
                 background: inMonth
-                  ? (conflict ? "#FEF3C7" : "#ffffff")
+                  ? (conflict ? "var(--warning-bg)" : "var(--bg-card)")
                   : "#FAFAFA",
                 opacity: inMonth ? 1 : 0.55,
                 outline: isToday ? "2px solid #2D7DD2" : "none",
@@ -183,7 +183,7 @@ export default function PTOMonthCalendar({
               <div style={{
                 fontSize: 11,
                 fontWeight: isToday ? 700 : 500,
-                color: isToday ? "#2D7DD2" : (inMonth ? "#1A2744" : "#94A3B8"),
+                color: isToday ? "var(--accent-blue)" : (inMonth ? "#1A2744" : "var(--text-quaternary)"),
                 marginBottom: 4,
               }}>
                 {cellDate.getDate()}
@@ -195,7 +195,7 @@ export default function PTOMonthCalendar({
                   <PTOChip key={r.id + "|" + idx} req={r} currentUserId={currentUserId} />
                 ))}
                 {dayRequests.length > 3 && (
-                  <div style={{ fontSize: 9, color: "#64748B", padding: "1px 4px" }}>
+                  <div style={{ fontSize: 9, color: "var(--text-tertiary)", padding: "1px 4px" }}>
                     +{dayRequests.length - 3} more
                   </div>
                 )}
@@ -214,11 +214,11 @@ export default function PTOMonthCalendar({
         gap: 14,
         flexWrap: "wrap",
         fontSize: 10,
-        color: "#64748B",
+        color: "var(--text-tertiary)",
       }}>
         <LegendSwatch color="#0E7C7B" label="Approved" />
-        <LegendSwatch color="#F59E0B" label="Pending" style={{ borderStyle: "dashed" }} />
-        {showCoverageFlags && <LegendSwatch color="#FEF3C7" borderColor="#F59E0B" label="Coverage conflict" />}
+        <LegendSwatch color="var(--warning)" label="Pending" style={{ borderStyle: "dashed" }} />
+        {showCoverageFlags && <LegendSwatch color="var(--warning-bg)" borderColor="var(--warning)" label="Coverage conflict" />}
       </div>
     </div>
   );
@@ -230,7 +230,7 @@ const btnStyle = {
   display: "inline-flex", alignItems: "center", justifyContent: "center",
   borderRadius: 6,
   border: "1px solid var(--if-line, #E8E0D5)",
-  background: "#ffffff",
+  background: "var(--bg-card)",
   color: "#1A2744",
   fontSize: 14, lineHeight: 1,
   cursor: "pointer",
@@ -241,10 +241,10 @@ function PTOChip({ req, currentUserId }) {
   const approved = req.status === "approved";
   const bg = approved
     ? (isMine ? "#0E7C7B" : "#0E7C7B22")
-    : (isMine ? "#F59E0B" : "#F59E0B22");
+    : (isMine ? "var(--warning)" : "#F59E0B22");
   const color = approved
-    ? (isMine ? "#ffffff" : "#0E7C7B")
-    : (isMine ? "#ffffff" : "#92400E");
+    ? (isMine ? "var(--bg-card)" : "#0E7C7B")
+    : (isMine ? "var(--bg-card)" : "#92400E");
   const borderStyle = approved ? "solid" : "dashed";
 
   const label = req.is_half_day
@@ -259,7 +259,7 @@ function PTOChip({ req, currentUserId }) {
         fontWeight: 600,
         color,
         background: bg,
-        border: `1px ${borderStyle} ${approved ? "#0E7C7B" : "#F59E0B"}`,
+        border: `1px ${borderStyle} ${approved ? "#0E7C7B" : "var(--warning)"}`,
         borderRadius: 4,
         padding: "1px 5px",
         whiteSpace: "nowrap",

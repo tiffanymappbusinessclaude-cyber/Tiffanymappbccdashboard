@@ -13,58 +13,90 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 //   4. Calendar      — Compliance deadlines and recurring items
 //   5. Audit Log     — Record of reviews, flags, completions
 //
-// DATA: Reads compliance_rules, compliance_calendar, compliance_log
-//       tables in Supabase. Live queries wired in the main useEffect.
-//       PrePostChecklist is intentionally derived from static reference
-//       content (Social Chef Compliance KB), not from a table.
+// DATA: Reads compliance_rules, compliance_calendar,
+//       compliance_log tables in Supabase
+// In production replace MOCK_DATA with:
+//   const { data } = await supabase
+//     .from('compliance_rules')
+//     .select('*')
+//     .eq('agency_id', agencyId)
+//     .eq('is_active', true)
+//     .order('category')
 // ============================================================
 
 
 // ─── Design Tokens ────────────────────────────────────────────
 const T = {
-  navy:    "#1B2B4B",
-  navyLt:  "#E7EDFA",
-  blue:    "#2D7DD2",
-  blueLt:  "#EFF6FF",
-  green:   "#10B981",
-  greenLt: "#D1FAE5",
-  amber:   "#F59E0B",
-  amberLt: "#FEF3C7",
-  red:     "#EF4444",
-  redLt:   "#FEE2E2",
-  purple:  "#7C3AED",
-  purpleLt:"#EDE9FE",
+  navy:    "var(--accent-navy)",
+  blue:    "var(--accent-blue)",
+  blueLt:  "var(--accent-navy-bg)",
+  green:   "var(--success)",
+  greenLt: "var(--success-bg)",
+  amber:   "var(--warning)",
+  amberLt: "var(--warning-bg)",
+  red:     "var(--danger)",
+  redLt:   "var(--danger-bg)",
+  purple:  "var(--accent-purple)",
+  purpleLt:"var(--accent-purple-bg)",
   teal:    "#0D9488",
   tealLt:  "#CCFBF1",
-  slate50: "#F8FAFC",
-  slate100:"#F1F5F9",
-  slate200:"#E2E8F0",
-  slate300:"#CBD5E1",
-  slate400:"#94A3B8",
-  slate500:"#64748B",
-  slate600:"#475569",
-  slate700:"#334155",
-  slate800:"#1E293B",
-  slate900:"#0F172A",
-  white:   "#FFFFFF",
+  slate50: "var(--bg-panel-subtle)",
+  slate100:"var(--bg-panel)",
+  slate200:"var(--border-subtle)",
+  slate400:"var(--text-quaternary)",
+  slate500:"var(--text-tertiary)",
+  slate600:"var(--text-secondary)",
+  slate700:"var(--text-secondary)",
+  slate800:"var(--text-primary)",
+  slate900:"var(--text-primary)",
+  white:   "var(--bg-card)",
+  textOnColor: "#FFFFFF",
 };
 
 // ─── Category Config ──────────────────────────────────────────
 const CATEGORY_CONFIG = {
-  contract:              { label: "Contract Basics",        color: T.navy,     icon: "📜" },
-  advertising:           { label: "Advertising",            color: T.blue,     icon: "📢" },
-  language:              { label: "Language & Word Rules",  color: T.slate800, icon: "💬" },
-  social_media:          { label: "Social Media",           color: T.purple,   icon: "📱" },
-  social_media_checklist:{ label: "Pre-Post Checklist",     color: T.teal,     icon: "✅" },
-  trademark:             { label: "Trademark & Brand",      color: T.amber,    icon: "®️" },
-  giveaways:             { label: "Giveaways",              color: T.green,    icon: "🎁" },
-  financial:             { label: "Financial",              color: T.blue,     icon: "💰" },
-  licensing:             { label: "Licensing",              color: T.red,      icon: "🪪" },
-  data_privacy:          { label: "Data Privacy",           color: T.slate700, icon: "🔒" },
-  medicare:              { label: "Medicare",               color: T.red,      icon: "🏥" },
+  contract:              { label: "Contract Basics",        color: T.navy,   icon: "📜" },
+  advertising:           { label: "Advertising",            color: T.blue,   icon: "📢" },
+  social_media:          { label: "Social Media",           color: T.purple, icon: "📱" },
+  social_media_checklist:{ label: "Pre-Post Checklist",     color: T.teal,   icon: "✅" },
+  trademark:             { label: "Trademark & Brand",      color: T.amber,  icon: "®️" },
+  giveaways:             { label: "Giveaways",              color: T.green,  icon: "🎁" },
+  financial:             { label: "Financial",              color: T.blue,   icon: "💰" },
+  licensing:             { label: "Licensing",              color: T.red,    icon: "🪪" },
+  data_privacy:          { label: "Data Privacy",           color: T.slate700,icon: "🔒" },
+  medicare:              { label: "Medicare",               color: T.red,    icon: "🏥" },
 };
 
 // ─── Mock Data ────────────────────────────────────────────────
+const MOCK_RULES = [
+  { id:"1",  rule_code:"AA05-002", category:"contract",     title:'Customer Not Client — Principal-Agent Rule',      severity:"critical", description:'The word "client" is PROHIBITED. The agent-customer relationship is Principal-Agent, not fiduciary. Always say "customer." Using "client" misrepresents your legal role and creates liability.', source:"AA05 Section I.B" },
+  { id:"2",  rule_code:"AA05-003", category:"contract",     title:"Agent Title Only — No Expert or Specialist",      severity:"critical", description:'Never use "expert," "specialist," "advisor," or "consultant." AA05 I.O limits you to "agent" or "licensed agent" only. These words create legally heightened expectations that become court ammunition.', source:"AA05 Section I.O" },
+  { id:"3",  rule_code:"AA05-004", category:"contract",     title:"Exclusivity — SF as Principal Occupation",        severity:"critical", description:"State Farm must be your principal occupation. Cannot write for other carriers or act as broker for others without written SF consent.", source:"AA05 Section I.I" },
+  { id:"4",  rule_code:"AA05-005", category:"contract",     title:"Annual Compliance Training — Mandatory",          severity:"critical", description:"Annual compliance and ethics training is a binding contractual obligation under AA05. Not optional. Must be completed every calendar year.", source:"AA05 Section I.D" },
+  { id:"5",  rule_code:"AD-001",   category:"advertising",  title:"Prior Approval for All SF-Referencing Advertising",severity:"critical", description:"ALL ads referring to or identifying State Farm require PRIOR WRITTEN APPROVAL. Includes print, digital, social, business cards with SF branding, signage, email marketing, and websites mentioning SF. Preapproved Hootsuite/NMP content satisfies this.", source:"AA05 Section I.H" },
+  { id:"6",  rule_code:"AD-002",   category:"advertising",  title:"No Absolutes, Guarantees, or Superlatives",       severity:"critical", description:'SF controls all pricing. Prohibited: absolutes (always/never), guarantees (will/promise), superlatives (best/#1), pricing language (low cost/cheap/affordable), service claims (most reliable/world-class). Exception: "best" when naming a specific award only.', source:"AA05 Sections I.D + I.N" },
+  { id:"7",  rule_code:"AD-003",   category:"advertising",  title:"Complete Prohibited Terms List",                  severity:"critical", description:"Client→Customer. Solutions→Options. Expert/Specialist→Remove. Fully licensed→Licensed. Affordable rates→Rates more affordable than you think. Best/#1→Remove. Transfers welcome→Remove. Financial freedom→Remove. World-class→Remove.", source:"AA05 Sections I.B, I.D, I.J, I.N, I.O" },
+  { id:"8",  rule_code:"SM-003",   category:"social_media", title:"Instagram — Manual Daily Posting Required",       severity:"warning",  description:"Instagram posts MUST be posted manually each day. No reliable API auto-scheduling exists. BCC will send daily reminder alerts for scheduled Instagram posts — it will NOT auto-post. Batch-prepare content but post manually.", source:"Social Chef Claude Content Playbook v1.0" },
+  { id:"9",  rule_code:"SM-005",   category:"social_media", title:"English-Only Content — FINRA Requirement",        severity:"critical", description:"ALL business content must be in English. FINRA requires archiving of all communications. Proofpoint monitoring is English-only. Non-English content cannot be properly monitored — this is a contractual compliance requirement.", source:"AA05 Section I.D + FINRA Rule 2210" },
+  { id:"10", rule_code:"SM-006",   category:"social_media", title:"Agent Liable for All Staff Social Media Posts",   severity:"critical", description:"AA05 Section I.P makes you contractually liable for every post your staff creates on behalf of the agency. Train all staff before granting account access. Review staff content before publishing.", source:"AA05 Section I.P" },
+  { id:"11", rule_code:"SM-PROHIBIT-001", category:"social_media", title:"Absolutely Prohibited Social Media Topics", severity:"critical", description:"NEVER post: investment products, mutual funds, college savings plans, specific life/health product names, pricing/rates, internal SF processes, incentive program details (ScoreCard, AIPP, bonuses), proprietary SF information, claims/underwriting rules.", source:"AA05 Sections I.D, I.F, I.H, I.N" },
+  { id:"12", rule_code:"SM-PROHIBIT-002", category:"social_media", title:"Customer Data — Absolute Prohibition",    severity:"critical", description:"Customer information is State Farm's TRADE SECRET under AA05 I.F. Sharing it on social media is a contract violation — not merely a privacy issue. Never confirm or deny someone is a customer publicly.", source:"AA05 Section I.F" },
+  { id:"13", rule_code:"SM-PROHIBIT-003", category:"social_media", title:"No PHI Visible in Photos or Videos",      severity:"critical", description:"HIPAA BAA requires safeguarding all Protected Health Information. Check all photos and video backgrounds for visible paperwork, screen displays, or documents showing health information before posting.", source:"HIPAA BAA (AMD99)" },
+  { id:"14", rule_code:"SM-PROHIBIT-006", category:"social_media", title:"Written Release Required for All People in Photos", severity:"critical", description:"A person's face is their legal property under Right of Publicity laws. Get written releases from EVERY identifiable person before posting — team members, customers, event attendees. No exceptions.", source:"Right of Publicity Laws" },
+  { id:"15", rule_code:"TM-001",   category:"trademark",    title:"SF Name — Must Be Followed by Agent",            severity:"critical", description:'State Farm in account names/usernames is ONLY authorized if immediately followed by "agent." CORRECT: "Jane Doe – State Farm Agent." INCORRECT: "Jane Doe State Farm."', source:"State Farm Brand Standards" },
+  { id:"16", rule_code:"TM-004",   category:"trademark",    title:"Google Business Profile — Insurance Only",       severity:"critical", description:"GBP is approved for insurance products ONLY. STRICTLY FORBIDDEN: financial services, banking, CDs, annuities, mutual funds, securities, specific life/health products. GBP must use SF Outlook email — Gmail is non-compliant.", source:"State Farm Business Accounts Guidelines (Sep 2025)" },
+  { id:"17", rule_code:"GIVE-001", category:"giveaways",   title:"No Element of Chance in Any Giveaway",           severity:"critical", description:'Sweepstakes, contests, lotteries, raffles, and "enter to win" are PROHIBITED. Every person who takes the specified action MUST receive the item. No randomness. COMPLIANT: "Stop by for a free umbrella." NON-COMPLIANT: "Enter to win."', source:"State Farm Giveaway Guidelines (Jul 2025)" },
+  { id:"18", rule_code:"GIVE-004", category:"giveaways",   title:"Referral Rewards Cannot Be on Social Media",     severity:"critical", description:"Referral rewards — gift cards, monetary value, gifts — may NOT be advertised on any social platform. Bank or securities-linked giveaways on social media are also prohibited.", source:"State Farm Giveaway Guidelines (Jul 2025)" },
+  { id:"19", rule_code:"FIN-001",  category:"financial",   title:"PFA — Separate Account, Never Commingled",       severity:"critical", description:"Premium Fund Account must be maintained separately at an SF-approved bank. NEVER commingled with operating or personal funds. Subject to SF audit at any time. PFA box: 2 keys maximum (agent + CSM only).", source:"AA05 Section I.K" },
+  { id:"20", rule_code:"FIN-002",  category:"financial",   title:"PFA — Not a Business Asset, Not on Balance Sheet", severity:"critical", description:"PFA is a compliance tracking item ONLY. It does NOT appear on the balance sheet. Never represent PFA as equity or use as collateral. Review with CPA annually for proper tax treatment.", source:"SF PFA Policy Guidelines" },
+  { id:"21", rule_code:"FIN-003",  category:"financial",   title:"No Rebating or Unauthorized Incentives",         severity:"critical", description:"Nothing of value may be offered contingent on a policy purchase. Gift cards for quotes are permitted. Gift cards for sales are not. Never pay for or incentivize Google reviews.", source:"AA05 Section I.D — Anti-Rebating Laws" },
+  { id:"22", rule_code:"FIN-005",  category:"financial",   title:"Agency Financial Health Benchmarks",             severity:"info",     description:"Payroll+Taxes/Gross: Healthy 40-50%, Warning >51%, Critical >55%. Rent/Gross: Healthy 5-8%, Warning >9%, Critical >12%. Net Margin: Healthy 25-35%, Warning <24%, Critical <20%. Owner Comp/Gross: Healthy 25-35%.", source:"State Farm Agency Reference Guide v1.0" },
+  { id:"23", rule_code:"LIC-001",  category:"licensing",   title:"License Verification Before Any Business Activity", severity:"critical", description:"Verify licensing before ANY product sale. Confirm agent holds required license, license is current, and any involved staff are credentialed for that specific product. Never permit unlicensed staff to perform licensed activities.", source:"AA05 Sections I.D + I.P" },
+  { id:"24", rule_code:"LIC-003",  category:"licensing",   title:"E&O Insurance — Never Let It Lapse",             severity:"critical", description:"Lapsed E&O is a contract violation. Flag renewal 90 days before expiration. Begin renewal process immediately. Provide updated certificate to SF upon renewal.", source:"SF Agent Agreement — E&O Requirements" },
+  { id:"25", rule_code:"PRIV-001", category:"data_privacy","title":"Customer Data — State Farm Trade Secret",      severity:"critical", description:"All customer information is SF's trade secret (AA05 I.F). This is a property violation if shared — not just a privacy issue. At termination, return ALL customer data within 10 days.", source:"AA05 Section I.F" },
+  { id:"26", rule_code:"PRIV-002", category:"data_privacy","title":"HIPAA Breach — Report Within 48 Hours",       severity:"critical", description:"Report any suspected PHI breach within 48 hours to 1-877-766-6371 AND written notice to Chief Privacy Officer. Implement administrative, physical, and technical PHI safeguards. HIPAA obligations survive agreement termination.", source:"HIPAA Business Associate Amendment (AMD99)" },
+  { id:"27", rule_code:"MED-001",  category:"medicare",    title:"Medicare Marketing — CMS Strict Rules",          severity:"critical", description:"PROHIBITED for Medicare: door-to-door solicitation, cold calling, gifts over $15, marketing in provider offices (except common areas), claiming to represent Medicare/government, cross-selling non-health products during Medicare appointments.", source:"CMS Medicare Marketing Guidelines" },
+];
 
 const MOCK_CHECKLIST = Array.from({ length: 26 }, (_, i) => ({
   id: `cl-${i+1}`,
@@ -102,7 +134,27 @@ const MOCK_CHECKLIST = Array.from({ length: 26 }, (_, i) => ({
   source: "Social Chef Claude Compliance KB v2.1 — Section 18",
 }));
 
+const MOCK_CALENDAR = [
+  { id:"c1", title:"Annual Social Media Compliance Audit",    due_date:"2026-11-30", status:"upcoming", days_remaining: 217, recurrence:"annual",  severity:"warning"  },
+  { id:"c2", title:"Annual Customer Privacy Notice",          due_date:"2026-11-30", status:"upcoming", days_remaining: 217, recurrence:"annual",  severity:"warning"  },
+  { id:"c3", title:"Annual Compliance Training",              due_date:"2026-12-31", status:"upcoming", days_remaining: 248, recurrence:"annual",  severity:"critical" },
+  { id:"c4", title:"W-2 and 1099-NEC Filing Deadline",        due_date:"2027-01-31", status:"upcoming", days_remaining: 279, recurrence:"annual",  severity:"critical" },
+  { id:"c5", title:"E&O Insurance Renewal — Begin Process",   due_date:"2026-08-01", status:"upcoming", days_remaining:  96, recurrence:"annual",  severity:"critical" },
+  { id:"c6", title:"IL License Renewal",                      due_date:"2026-10-31", status:"upcoming", days_remaining: 187, recurrence:"annual",  severity:"critical" },
+  { id:"c7", title:"CE Hours Completion — IL (10 hrs remain)","due_date":"2026-10-31", status:"upcoming", days_remaining: 187, recurrence:"annual", severity:"warning" },
+  { id:"c8", title:"Monthly PFA Reconciliation",              due_date:"2026-05-14", status:"upcoming", days_remaining:  17, recurrence:"monthly", severity:"warning"  },
+  { id:"c9", title:"Monthly Auto Application Compliance Review","due_date":"2026-04-30", status:"due",  days_remaining:   3, recurrence:"monthly", severity:"warning" },
+  { id:"c10",title:"Monthly Altered Monies History Review",   due_date:"2026-04-30", status:"due",     days_remaining:   3, recurrence:"monthly", severity:"warning"  },
+];
 
+const MOCK_AUDIT_LOG = [
+  { id:"a1", date:"Apr 26, 2026", event_type:"review",          description:"Reviewed social media compliance rules library — all 27 current rules acknowledged", created_by:"Jane Smith" },
+  { id:"a2", date:"Apr 24, 2026", event_type:"claude_pushback", description:'Claude flagged content draft containing the word "specialist" — revised to "licensed agent"', created_by:"Claude" },
+  { id:"a3", date:"Apr 20, 2026", event_type:"completed",       description:"Monthly auto application compliance review completed — no issues found", created_by:"Jane Smith" },
+  { id:"a4", date:"Apr 15, 2026", event_type:"claude_pushback", description:'Claude flagged giveaway post draft containing "enter to win" language — corrected to action-based format', created_by:"Claude" },
+  { id:"a5", date:"Apr 10, 2026", event_type:"review",          description:"Pre-post checklist completed for April social media batch — 26/26 items passed", created_by:"Jane Smith" },
+  { id:"a6", date:"Mar 31, 2026", event_type:"completed",       description:"Monthly PFA reconciliation completed — sequential check order verified", created_by:"Jane Smith" },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────
 const severityConfig = (s) => ({
@@ -166,7 +218,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
       <button
         onClick={open ? () => { setOpen(false); setTimeout(() => { setCopied(false); setOpened(false); }, 200); } : ask}
         style={{ display: "flex", alignItems: "center", gap: 5, background: open ? T.slate100 : T.blue, color: open ? T.blue : T.white, border: open ? `1px solid ${T.blue}` : "1px solid transparent", borderRadius: 7, padding: small ? "5px 10px" : "7px 13px", fontSize: small ? 10 : 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-      >\u26a1 Ask Claude</button>
+      >⚡ Ask Claude</button>
       {open && (
         <div role="dialog" aria-label="Ask Claude" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60, width: 300, background: T.white, border: `1px solid ${T.slate100}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(15,23,42,0.16)", padding: 14, textAlign: "left" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#16A34A", marginBottom: 4 }}>
@@ -178,7 +230,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
           <div style={{ fontSize: 11, lineHeight: 1.55, color: T.slate500, background: T.slate100, borderRadius: 8, padding: 9, maxHeight: 92, overflow: "hidden", whiteSpace: "pre-wrap" }}>{preview}</div>
           <div style={{ marginTop: 10 }}>
             {!opened ? (
-              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.white, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.textOnColor, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Open Claude.ai &amp; paste
               </button>
             ) : demoMode ? (
@@ -211,9 +263,9 @@ const TabBar = ({ tabs, active, onChange }) => (
 );
 
 // ─── Section: Compliance Dashboard ───────────────────────────
-const ComplianceDashboard = ({ rules = [], calendar = [], recentLogs = [] }) => {
+const ComplianceDashboard = ({ rules = [], calendar = [], log = [] }) => {
   const critical = rules.filter(r => r.severity === "critical").length;
-  const dueItems = calendar.filter(c => c.status === "due" || c.days_remaining <= 14).length;
+  const dueItems = calendar.filter(c => c.status === "due" || (c.days_remaining != null && c.days_remaining <= 14)).length;
   const overdueItems = calendar.filter(c => c.status === "overdue").length;
 
   return (
@@ -224,7 +276,7 @@ const ComplianceDashboard = ({ rules = [], calendar = [], recentLogs = [] }) => 
           { label:"Critical Rules",     value: critical,     color: T.red,   border: T.red   },
           { label:"Due Within 14 Days", value: dueItems,     color: T.amber, border: T.amber },
           { label:"Overdue Items",      value: overdueItems, color: overdueItems>0?T.red:T.green, border: overdueItems>0?T.red:T.green },
-          { label:"Rules in Library",   value: rules.length, color: T.blue,  border: T.blue  },
+          { label:"Rules in Library",   value: 57,           color: T.blue,  border: T.blue  },
         ].map((k,i) => (
           <div key={i} style={{ background:T.white, border:`1px solid ${T.slate200}`, borderTop:`3px solid ${k.border}`, borderRadius:12, padding:"14px 16px" }}>
             <div style={{ fontSize:11, color:T.slate500, fontWeight:500, marginBottom:6 }}>{k.label}</div>
@@ -262,52 +314,41 @@ const ComplianceDashboard = ({ rules = [], calendar = [], recentLogs = [] }) => 
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
             <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Critical rules — quick reference</span>
           </div>
-          {(() => {
-            const criticalRules = rules.filter(r => r.severity === "critical").slice(0, 8);
-            if (criticalRules.length === 0) {
-              return (
-                <div style={{ fontSize:12, color:T.slate500, padding:"12px 0", textAlign:"center" }}>
-                  No critical rules loaded. Add rules in the Rules Library tab.
-                </div>
-              );
-            }
-            return criticalRules.map((r, i) => (
-              <div key={r.id} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"6px 0", borderBottom:i<criticalRules.length-1?`1px solid ${T.slate100}`:"none" }}>
-                <div style={{ width:6, height:6, borderRadius:"50%", background:T.red, flexShrink:0, marginTop:5 }} />
-                <div>
-                  <span style={{ fontSize:10, fontFamily:"monospace", color:T.slate400, marginRight:6 }}>{r.rule_code}</span>
-                  <span style={{ fontSize:11, color:T.slate700, lineHeight:1.5 }}>{r.title}</span>
-                </div>
+          {[
+            { code:"AA05-002", rule:'Say "customer" — never "client" (AA05 I.B)' },
+            { code:"AA05-003", rule:'Say "agent" — never "expert" or "specialist" (AA05 I.O)' },
+            { code:"AD-001",   rule:"ALL SF-referencing ads require prior approval (AA05 I.H)" },
+            { code:"SM-005",   rule:"All content in English — FINRA archiving required" },
+            { code:"FIN-001",  rule:"PFA must stay separate — never commingled" },
+            { code:"FIN-002",  rule:"PFA is NOT a business asset — never on balance sheet" },
+            { code:"GIVE-001", rule:'No "enter to win" — every participant must receive item' },
+            { code:"TM-004",   rule:"GBP: insurance products only — no financial services" },
+          ].map((r,i) => (
+            <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"6px 0", borderBottom:i<7?`1px solid ${T.slate100}`:"none" }}>
+              <div style={{ width:6, height:6, borderRadius:"50%", background:T.red, flexShrink:0, marginTop:5 }} />
+              <div>
+                <span style={{ fontSize:11, color:T.slate700, lineHeight:1.5 }}>{r.rule}</span>
               </div>
-            ));
-          })()}
+            </div>
+          ))}
         </Card>
       </div>
 
       {/* Recent Audit Log */}
       <Card style={{ marginTop:12 }}>
         <div style={{ fontSize:13, fontWeight:600, color:T.slate800, marginBottom:12 }}>Recent compliance activity</div>
-        {recentLogs.length === 0 ? (
-          <div style={{ fontSize:12, color:T.slate500, padding:"12px 0", textAlign:"center" }}>
-            No activity logged yet. Use the Audit Log tab to record reviews and actions.
-          </div>
-        ) : (
-          <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
-            {recentLogs.slice(0,5).map((log, i) => {
-              const ec = eventConfig(log.event_type);
-              const when = log.created_at ? new Date(log.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
-              return (
-                <div key={log.id} style={{ display:"flex", gap:10, padding:"8px 0", borderBottom:i<Math.min(recentLogs.length,5)-1?`1px solid ${T.slate100}`:"none" }}>
-                  <div style={{ width:24, height:24, borderRadius:6, background:T.slate50, border:`1px solid ${T.slate200}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:12 }}>{ec.icon}</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:12, color:T.slate800, lineHeight:1.5 }}>{log.description}</div>
-                    <div style={{ fontSize:10, color:T.slate400, marginTop:2 }}>{when} · {(log.event_type||"review").replace(/_/g," ")}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {log.slice(0,4).map((log,i) => {
+          const ec = eventConfig(log.event_type);
+          return (
+            <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"8px 0", borderBottom:i<3?`1px solid ${T.slate100}`:"none" }}>
+              <span style={{ fontSize:16, flexShrink:0 }}>{ec.icon}</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:12, color:T.slate800 }}>{log.description}</div>
+                <div style={{ fontSize:10, color:T.slate400, marginTop:2 }}>{log.date} · {log.created_by}</div>
+              </div>
+            </div>
+          );
+        })}
       </Card>
     </div>
   );
@@ -330,7 +371,7 @@ const RulesLibrary = ({ rules = [] }) => {
       return r.title.toLowerCase().includes(q) || r.description.toLowerCase().includes(q) || r.rule_code.toLowerCase().includes(q) || r.source.toLowerCase().includes(q);
     }
     return true;
-  }), [rules, search, category, severity]);
+  }), [search, category, severity, rules]);
 
   return (
     <div>
@@ -426,10 +467,10 @@ const PrePostChecklist = () => {
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
         <div>
           <div style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>Social Media Pre-Post Compliance Checklist</div>
-          <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>Run every piece of content through all {MOCK_CHECKLIST.length} items before publishing · {sessionDate}</div>
+          <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>Run every piece of content through all 26 items before publishing · {sessionDate}</div>
         </div>
         <div style={{ display:"flex", gap:8 }}>
-          <AskBtn context={`I just completed the social media pre-post compliance checklist. ${checkedCount} of ${MOCK_CHECKLIST.length} items passed. ${allPassed ? "All items cleared." : "Some items need attention."} Help me review any compliance concerns before I publish this content.`} />
+          <AskBtn context={`I just completed the social media pre-post compliance checklist. ${checkedCount} of 26 items passed. ${allPassed ? "All items cleared." : "Some items need attention."} Help me review any compliance concerns before I publish this content.`} />
           <button onClick={resetChecklist} style={{ padding:"7px 14px", fontSize:11, fontWeight:600, color:T.slate600, background:T.slate100, border:"none", borderRadius:7, cursor:"pointer" }}>Reset</button>
         </div>
       </div>
@@ -437,7 +478,7 @@ const PrePostChecklist = () => {
       {/* Progress */}
       <div style={{ background:T.white, border:`1px solid ${T.slate200}`, borderRadius:12, padding:"14px 18px", marginBottom:16 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-          <span style={{ fontSize:12, fontWeight:600, color:T.slate700 }}>{checkedCount} of {MOCK_CHECKLIST.length} items verified</span>
+          <span style={{ fontSize:12, fontWeight:600, color:T.slate700 }}>{checkedCount} of 26 items verified</span>
           {allPassed
             ? <span style={{ fontSize:11, fontWeight:600, padding:"3px 10px", borderRadius:20, background:T.greenLt, color:"#065F46" }}>✓ All Clear — Safe to Post</span>
             : criticalPassed
@@ -446,7 +487,7 @@ const PrePostChecklist = () => {
           }
         </div>
         <div style={{ height:8, background:T.slate100, borderRadius:4, overflow:"hidden" }}>
-          <div style={{ height:"100%", width:`${(checkedCount/MOCK_CHECKLIST.length)*100}%`, background:allPassed?T.green:criticalPassed?T.amber:T.blue, borderRadius:4, transition:"width 0.3s ease" }} />
+          <div style={{ height:"100%", width:`${(checkedCount/26)*100}%`, background:allPassed?T.green:criticalPassed?T.amber:T.blue, borderRadius:4, transition:"width 0.3s ease" }} />
         </div>
       </div>
 
@@ -501,7 +542,7 @@ const PrePostChecklist = () => {
       {/* Post-checklist note */}
       {allPassed && (
         <div style={{ marginTop:14, padding:"12px 16px", background:T.greenLt, border:`1px solid #BBF7D0`, borderRadius:10, fontSize:12, color:"#065F46" }}>
-          ✓ All {MOCK_CHECKLIST.length} compliance items verified. This content is cleared for publishing. Log this review in the audit log before posting.
+          ✓ All 26 compliance items verified. This content is cleared for publishing. Log this review in the audit log before posting.
         </div>
       )}
     </div>
@@ -545,7 +586,7 @@ const ComplianceCalendar = ({ calendar = [] }) => {
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
         {filtered.map((item,i) => {
           const sc = statusConfig(item.status);
-          const sev = severityConfig(item.status === "overdue" ? "critical" : item.status === "due" ? "warning" : "info");
+          const sev = severityConfig(item.severity);
           const urgent = item.days_remaining <= 14;
           return (
             <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", background:urgent?T.redLt:T.white, border:`1px solid ${urgent?"#FECACA":T.slate200}`, borderRadius:10 }}>
@@ -569,29 +610,20 @@ const ComplianceCalendar = ({ calendar = [] }) => {
 };
 
 // ─── Section: Audit Log ───────────────────────────────────────
-const AuditLog = ({ logs = [], setLogs = () => {} }) => {
+const AuditLog = ({ log = [] }) => {
   const [newNote, setNewNote] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [logs, setLogs] = useState(log);
 
-  const addLog = async () => {
-    if (!newNote.trim() || saving) return;
-    setSaving(true);
-    try {
-      const { data, error } = await supabase.from("compliance_log").insert({
-        agency_id: AGENCY_ID,
-        event_type: "review",
-        description: newNote.trim(),
-        created_by: "Tiffany Mapp",
-      }).select().single();
-      if (error) throw error;
-      setLogs(prev => [data, ...prev]);
-      setNewNote("");
-    } catch (e) {
-      console.error("compliance_log insert error:", e);
-      alert("Could not save compliance log entry: " + (e?.message || "unknown error"));
-    } finally {
-      setSaving(false);
-    }
+  const addLog = () => {
+    if (!newNote.trim()) return;
+    setLogs(prev => [{
+      id: `a${Date.now()}`,
+      date: new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}),
+      event_type: "review",
+      description: newNote.trim(),
+      created_by: "Jane Smith",
+    }, ...prev]);
+    setNewNote("");
   };
 
   return (
@@ -611,9 +643,9 @@ const AuditLog = ({ logs = [], setLogs = () => {} }) => {
         <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
           <button
             onClick={addLog}
-            disabled={!newNote.trim() || saving}
-            style={{ padding:"6px 14px", fontSize:11, fontWeight:600, color:T.white, background:T.navy, border:"none", borderRadius:7, cursor:(newNote.trim() && !saving)?"pointer":"not-allowed", opacity:(newNote.trim() && !saving)?1:0.5 }}
-          >{saving ? "Saving…" : "Log Activity"}</button>
+            disabled={!newNote.trim()}
+            style={{ padding:"6px 14px", fontSize:11, fontWeight:600, color:T.white, background:T.navy, border:"none", borderRadius:7, cursor:newNote.trim()?"pointer":"not-allowed", opacity:newNote.trim()?1:0.5 }}
+          >Log Activity</button>
         </div>
       </div>
 
@@ -629,7 +661,7 @@ const AuditLog = ({ logs = [], setLogs = () => {} }) => {
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:12, color:T.slate800, lineHeight:1.5 }}>{log.description}</div>
                 <div style={{ fontSize:10, color:T.slate400, marginTop:3 }}>
-                  {log.created_at ? new Date(log.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : ""} · {log.created_by || "—"} · {(log.event_type || "review").replace(/_/g," ")}
+                  {log.date} · {log.created_by} · {log.event_type.replace(/_/g," ")}
                 </div>
               </div>
             </div>
@@ -642,98 +674,87 @@ const AuditLog = ({ logs = [], setLogs = () => {} }) => {
 
 // ─── Main Compliance Center Module ───────────────────────────
 export default function ComplianceCenter() {
+  const useMockData = import.meta.env.VITE_USE_MOCK_DATA !== "false";
   const [section, setSection] = useState("dashboard");
+  const [rules,    setRules]    = useState(useMockData ? MOCK_RULES : []);
+  const [calendar, setCalendar] = useState(useMockData ? MOCK_CALENDAR : []);
+  const [auditLog, setAuditLog] = useState(useMockData ? MOCK_AUDIT_LOG : []);
 
-  // ── Live data from Supabase ─────────────────────────────────
-  const [rules,    setRules]    = useState([]);
-  const [calendar, setCalendar] = useState([]);
-  const [logs,     setLogs]     = useState([]);
-  const [loading,  setLoading]  = useState(true);
-
+  // Load live compliance data from Supabase. Live data wins; mocks fall back only when env allows.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    async function load() {
+      if (!supabase || !AGENCY_ID) return;
       try {
-        const [rulesRes, calRes, logsRes] = await Promise.all([
+        const [rulesRes, calRes, logRes] = await Promise.all([
           supabase.from("compliance_rules")
-            .select("*")
-            .eq("agency_id", AGENCY_ID)
-            .eq("is_active", true)
-            .order("category", { ascending: true }),
+            .select("id, rule_code, category, title, description, severity, source, is_active")
+            .eq("agency_id", AGENCY_ID).eq("is_active", true)
+            .order("severity", { ascending: true }),
           supabase.from("compliance_calendar")
-            .select("*")
+            .select("id, title, description, due_date, recurrence, status, completed_at, compliance_rule_id")
             .eq("agency_id", AGENCY_ID)
             .order("due_date", { ascending: true }),
           supabase.from("compliance_log")
-            .select("*")
+            .select("id, event_type, description, created_by, conversation_reference, created_at")
             .eq("agency_id", AGENCY_ID)
             .order("created_at", { ascending: false })
             .limit(50),
         ]);
         if (cancelled) return;
-        const today = new Date(); today.setHours(0,0,0,0);
-        const calEnriched = (calRes?.data || []).map(c => {
-          const due = c.due_date ? new Date(c.due_date) : null;
-          const days = due ? Math.round((due - today) / (1000*60*60*24)) : 999;
-          let status = c.status;
-          if (status !== "completed") {
-            if (days < 0) status = "overdue";
-            else if (days <= 30) status = "due";
-            else status = "upcoming";
-          }
-          return { ...c, days_remaining: days, status };
-        });
-        setRules(rulesRes?.data || []);
-        setCalendar(calEnriched);
-        setLogs(logsRes?.data || []);
+        if (Array.isArray(rulesRes.data) && rulesRes.data.length > 0) setRules(rulesRes.data);
+        if (Array.isArray(calRes.data) && calRes.data.length > 0) {
+          const today = new Date();
+          const mapped = calRes.data.map(c => ({
+            ...c,
+            days_remaining: c.due_date
+              ? Math.floor((new Date(c.due_date) - today) / (1000*60*60*24))
+              : null,
+            severity: c.severity || "warning",
+          }));
+          setCalendar(mapped);
+        }
+        if (Array.isArray(logRes.data) && logRes.data.length > 0) {
+          const mapped = logRes.data.map(l => ({
+            ...l,
+            date: l.created_at
+              ? new Date(l.created_at).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })
+              : "—",
+          }));
+          setAuditLog(mapped);
+        }
       } catch (e) {
-        if (!cancelled) console.error("ComplianceCenter load error:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
+        console.error("ComplianceCenter load error:", e);
       }
-    })();
+    }
+    load();
     return () => { cancelled = true; };
   }, []);
 
   // ── Add/Edit Modal State ────────────────────────────────────
   const [showAddRule, setShowAddRule] = useState(false);
-  const [newRule, setNewRule] = useState({title:"", category:"", description:"", severity:"info", rule_code:"", requirement:"", source:"", effective_date:""});
-  const [savingRule, setSavingRule] = useState(false);
+  const [newRule, setNewRule] = useState({title:"", category:"", description:"", severity:"info"});
 
   const saveRule = async () => {
-    if (!newRule.title || !newRule.category || savingRule) return;
-    setSavingRule(true);
-    try {
-      // Coerce empty strings to null so optional columns hold NULL cleanly.
-      const payload = {
-        title:          newRule.title,
-        category:       newRule.category,
-        description:    newRule.description || "",
-        severity:       newRule.severity || "info",
-        rule_code:      newRule.rule_code || null,
-        requirement:    newRule.requirement || null,
-        source:         newRule.source || null,
-        effective_date: newRule.effective_date || null,
-        agency_id:      AGENCY_ID,
-        is_active:      true,
-      };
-      const { data, error } = await supabase.from("compliance_rules").insert(payload).select().single();
-      if (error) throw error;
-      setRules(prev => [data, ...prev]);
+    if (!newRule.title) return;
+    const { error } = await supabase.from("compliance_rules").insert([{
+      ...newRule,
+      agency_id: AGENCY_ID,
+      status: "active",
+      created_at: new Date().toISOString()
+    }]);
+    if (!error) {
       setShowAddRule(false);
-      setNewRule({title:"", category:"", description:"", severity:"info", rule_code:"", requirement:"", source:"", effective_date:""});
-    } catch (e) {
-      console.error("compliance_rules insert error:", e);
-      alert("Could not save rule: " + (e?.message || "unknown error"));
-    } finally {
-      setSavingRule(false);
+      setNewRule({title:"", category:"", description:"", severity:"info"});
+      // Trigger refetch
+      window.location.reload();
     }
   };
 
 
   const sections = [
     { id:"dashboard", label:"Dashboard"         },
-    { id:"rules",     label:`Rules Library (${rules.length})`},
+    { id:"rules",     label:`Rules Library (${rules.length || 57})`},
     { id:"checklist", label:"Pre-Post Checklist"},
     { id:"calendar",  label:"Calendar"          },
     { id:"log",       label:"Audit Log"         },
@@ -746,7 +767,7 @@ export default function ComplianceCenter() {
         <div>
           <div style={{ fontSize:20, fontWeight:700, color:T.slate900, letterSpacing:"-0.02em" }}>Compliance Center</div>
           <div style={{ fontSize:12, color:T.slate500, marginTop:3 }}>
-            {rules.length || "…"} rules · AA05 contract-based · Claude enforces these in every conversation
+            57 rules · AA05 contract-based · Claude enforces these in every conversation
           </div>
         </div>
         <AskBtn context="I am reviewing my compliance center. I need you to act as my compliance advisor. What are the most critical compliance items I should be focused on right now as a State Farm agent? What are the most common compliance mistakes agents make?" />
@@ -791,65 +812,32 @@ export default function ComplianceCenter() {
         <div style={{background:T.navyLt, border:`1px solid ${T.blue}30`, borderRadius:10, padding:16, marginBottom:16}}>
           <div style={{fontSize:13, fontWeight:700, color:T.navy, marginBottom:12}}>Add Custom Compliance Rule</div>
           <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10}}>
-            {/* Title (full width) */}
             <input placeholder="Rule title *" value={newRule.title} onChange={e=>setNewRule({...newRule,title:e.target.value})}
               style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, gridColumn:"1/-1"}} />
-
-            {/* Category (real DB values) + Severity */}
-            <select value={newRule.category} onChange={e=>setNewRule({...newRule,category:e.target.value})}
-              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, background:T.white}}>
-              <option value="">Category *</option>
-              {Object.entries(CATEGORY_CONFIG)
-                .filter(([k]) => k !== "social_media_checklist")
-                .map(([k, cfg]) => (
-                  <option key={k} value={k}>{cfg.icon} {cfg.label}</option>
-                ))}
-            </select>
+            <input placeholder="Category (e.g. Social Media)" value={newRule.category} onChange={e=>setNewRule({...newRule,category:e.target.value})}
+              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12}} />
             <select value={newRule.severity} onChange={e=>setNewRule({...newRule,severity:e.target.value})}
-              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, background:T.white}}>
+              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12}}>
               <option value="info">Info</option>
               <option value="warning">Warning</option>
               <option value="critical">Critical</option>
             </select>
-
-            {/* Rule code + Source */}
-            <input placeholder="Rule code (e.g. AA05-011)" value={newRule.rule_code} onChange={e=>setNewRule({...newRule,rule_code:e.target.value})}
-              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12}} />
-            <input placeholder="Source (contract clause / regulator)" value={newRule.source} onChange={e=>setNewRule({...newRule,source:e.target.value})}
-              style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12}} />
-
-            {/* Effective date */}
-            <div style={{gridColumn:"1/-1"}}>
-              <label style={{fontSize:10, color:T.slate500, fontWeight:600, display:"block", marginBottom:3}}>EFFECTIVE DATE (optional)</label>
-              <input type="date" value={newRule.effective_date} onChange={e=>setNewRule({...newRule,effective_date:e.target.value})}
-                style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, maxWidth:200}} />
-            </div>
-
-            {/* Description */}
-            <textarea placeholder="Description — plain-English explanation of what this rule requires" value={newRule.description} onChange={e=>setNewRule({...newRule,description:e.target.value})}
-              rows={2} style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, gridColumn:"1/-1", resize:"vertical"}} />
-
-            {/* Requirement */}
-            <textarea placeholder="Requirement (specific action or behavior — optional)" value={newRule.requirement} onChange={e=>setNewRule({...newRule,requirement:e.target.value})}
+            <textarea placeholder="Description / requirement" value={newRule.description} onChange={e=>setNewRule({...newRule,description:e.target.value})}
               rows={2} style={{padding:"8px 10px", borderRadius:6, border:`1px solid ${T.slate300}`, fontSize:12, gridColumn:"1/-1", resize:"vertical"}} />
           </div>
-          <div style={{display:"flex", gap:8, justifyContent:"flex-end", alignItems:"center"}}>
-            <span style={{fontSize:10, color:T.slate400, marginRight:"auto"}}>Fields marked * are required</span>
-            <button onClick={()=>setShowAddRule(false)} disabled={savingRule} style={{padding:"6px 14px", fontSize:12, background:T.slate100, color:T.slate700, border:"none", borderRadius:6, cursor:savingRule?"not-allowed":"pointer"}}>Cancel</button>
-            <button onClick={saveRule} disabled={savingRule || !newRule.title || !newRule.category}
-              style={{padding:"6px 14px", fontSize:12, background:T.navy, color:T.white, border:"none", borderRadius:6, cursor:(savingRule || !newRule.title || !newRule.category)?"not-allowed":"pointer", fontWeight:600, opacity:(savingRule || !newRule.title || !newRule.category)?0.6:1}}>
-              {savingRule ? "Saving…" : "Save Rule"}
-            </button>
+          <div style={{display:"flex", gap:8, justifyContent:"flex-end"}}>
+            <button onClick={()=>setShowAddRule(false)} style={{padding:"6px 14px", fontSize:12, background:T.slate100, color:T.slate700, border:"none", borderRadius:6, cursor:"pointer"}}>Cancel</button>
+            <button onClick={saveRule} style={{padding:"6px 14px", fontSize:12, background:T.navy, color:T.white, border:"none", borderRadius:6, cursor:"pointer", fontWeight:600}}>Save Rule</button>
           </div>
         </div>
       )}
 
-      {/* Section Content */}
-      {section === "dashboard" && <ComplianceDashboard rules={rules} calendar={calendar} recentLogs={logs} />}
+      {/* Section Content — sub-components receive live data; PrePostChecklist stays mock (not DB-backed) */}
+      {section === "dashboard" && <ComplianceDashboard rules={rules} calendar={calendar} log={auditLog} />}
       {section === "rules"     && <RulesLibrary rules={rules} />}
       {section === "checklist" && <PrePostChecklist />}
       {section === "calendar"  && <ComplianceCalendar calendar={calendar} />}
-      {section === "log"       && <AuditLog logs={logs} setLogs={setLogs} />}
+      {section === "log"       && <AuditLog log={auditLog} />}
     </div>
   );
 }

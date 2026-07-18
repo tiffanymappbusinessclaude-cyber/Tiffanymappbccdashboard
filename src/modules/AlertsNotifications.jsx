@@ -31,39 +31,39 @@ import EmptyState from "../components/EmptyState.jsx";
 //   - Claude (during conversations)
 // ============================================================
 
+
 // ─── Design Tokens ────────────────────────────────────────────
 const T = {
-  navy:    "#1B2B4B",
-  blue:    "#2D7DD2",
-  blueLt:  "#EFF6FF",
-  green:   "#10B981",
-  greenLt: "#D1FAE5",
-  amber:   "#F59E0B",
-  amberLt: "#FEF3C7",
-  red:     "#EF4444",
-  redLt:   "#FEE2E2",
-  purple:  "#7C3AED",
-  purpleLt:"#EDE9FE",
+  navy:    "var(--accent-navy)",
+  blue:    "var(--accent-blue)",
+  blueLt:  "var(--accent-navy-bg)",
+  green:   "var(--success)",
+  greenLt: "var(--success-bg)",
+  amber:   "var(--warning)",
+  amberLt: "var(--warning-bg)",
+  red:     "var(--danger)",
+  redLt:   "var(--danger-bg)",
+  purple:  "var(--accent-purple)",
+  purpleLt:"var(--accent-purple-bg)",
   teal:    "#0D9488",
   tealLt:  "#CCFBF1",
-  slate50: "#F8FAFC",
-  slate100:"#F1F5F9",
-  slate200:"#E2E8F0",
-  slate400:"#94A3B8",
-  slate500:"#64748B",
-  slate600:"#475569",
-  slate700:"#334155",
-  slate800:"#1E293B",
-  slate900:"#0F172A",
-  white:   "#FFFFFF",
+  slate50: "var(--bg-panel-subtle)",
+  slate100:"var(--bg-panel)",
+  slate200:"var(--border-subtle)",
+  slate400:"var(--text-quaternary)",
+  slate500:"var(--text-tertiary)",
+  slate600:"var(--text-secondary)",
+  slate700:"var(--text-secondary)",
+  slate800:"var(--text-primary)",
+  slate900:"var(--text-primary)",
+  white:   "var(--bg-card)",
+  textOnColor: "#FFFFFF",
 };
 
 // ─── Alert Type Config ────────────────────────────────────────
 const ALERT_TYPES = {
   compliance:   { label:"Compliance",   color:T.red,    bg:T.redLt,    icon:"🛡️" },
   automation:   { label:"Automation",   color:T.teal,   bg:T.tealLt,   icon:"⚡" },
-  recipe_silent_failure:
-                { label:"Automation Stale", color:T.teal,   bg:T.tealLt,   icon:"⚡" },
   financial:    { label:"Financial",    color:T.blue,   bg:T.blueLt,   icon:"💰" },
   hr:           { label:"HR",           color:T.green,  bg:T.greenLt,  icon:"👥" },
   document:     { label:"Documents",    color:T.amber,  bg:T.amberLt,  icon:"📁" },
@@ -78,26 +78,180 @@ const SEVERITY = {
   info:     { color:T.blue,   bg:T.blueLt,   label:"Info",     order:2 },
 };
 
+// ─── Mock Data ────────────────────────────────────────────────
+const MOCK_ALERTS = [
+  // Critical — unread
+  {
+    id:"a1", alert_type:"automation", severity:"critical",
+    title:"Daily Briefing Email Failed",
+    message:"Gmail OAuth token expired — Daily Briefing automation failed this morning at 6:02 AM. Reconnect Gmail in Composio to restore your morning briefing.",
+    module_reference:"automations",
+    is_read:false, is_resolved:false,
+    due_date:null,
+    created_at:"Today 6:02 AM",
+    action_label:"Go to Automations",
+    action_module:"automations",
+  },
+  {
+    id:"a2", alert_type:"compliance", severity:"critical",
+    title:"SF Social Media Audit Due in 14 Days",
+    message:"Your annual State Farm social media compliance audit is due May 11, 2026. Review all social profiles for compliance, accurate contact info, proper disclosures, and remove any non-compliant content.",
+    module_reference:"compliance",
+    is_read:false, is_resolved:false,
+    due_date:"May 11, 2026",
+    created_at:"Today 7:00 AM",
+    action_label:"Go to Compliance",
+    action_module:"compliance",
+  },
+
+  // Warning — unread
+  {
+    id:"a3", alert_type:"social_media", severity:"warning",
+    title:"Instagram Manual Post Needed Today",
+    message:"1 Instagram post is scheduled for today at 11:00 AM: 'Behind the scenes at the agency this Monday morning...' — Instagram requires manual posting. Post this now to stay on schedule.",
+    module_reference:"social",
+    is_read:false, is_resolved:false,
+    due_date:"Today 11:00 AM",
+    created_at:"Today 8:00 AM",
+    action_label:"Go to Social Media",
+    action_module:"social",
+  },
+  {
+    id:"a4", alert_type:"financial", severity:"warning",
+    title:"SBA Loan Payment Due May 1",
+    message:"Your SBA Loan monthly payment of $1,847 is due May 1, 2026 — 4 days away. Verify funds are available in your operating account.",
+    module_reference:"financials",
+    is_read:false, is_resolved:false,
+    due_date:"May 1, 2026",
+    created_at:"Today 7:00 AM",
+    action_label:"Go to Financials",
+    action_module:"financials",
+  },
+  {
+    id:"a5", alert_type:"document", severity:"warning",
+    title:"Document Import — Partial Success",
+    message:"Chase bank statement imported April 15 with partial success. 18 transactions loaded to journal_entries. 3 pages could not be parsed and are saved to Google Drive for manual review.",
+    module_reference:"documents",
+    is_read:false, is_resolved:false,
+    due_date:null,
+    created_at:"Apr 15 3:00 PM",
+    action_label:"Go to Documents",
+    action_module:"documents",
+  },
+  {
+    id:"a6", alert_type:"compliance", severity:"warning",
+    title:"Monthly Auto Application Review Due April 30",
+    message:"Monthly auto application compliance review is due April 30. Pull RAZ000BT report, review SAM report (RAZ000BV), and review agent experience report. Document findings.",
+    module_reference:"compliance",
+    is_read:true, is_resolved:false,
+    due_date:"Apr 30, 2026",
+    created_at:"Apr 25 7:00 AM",
+    action_label:"Go to Compliance",
+    action_module:"compliance",
+  },
+  {
+    id:"a7", alert_type:"financial", severity:"warning",
+    title:"Monthly PFA Reconciliation Due",
+    message:"April PFA bank statement reconciliation is due by May 14. Verify sequential check order and document completion. Maintain 3 months of reconciled statements.",
+    module_reference:"financials",
+    is_read:true, is_resolved:false,
+    due_date:"May 14, 2026",
+    created_at:"Apr 25 7:00 AM",
+    action_label:"Go to Financials",
+    action_module:"financials",
+  },
+
+  // Info — unread
+  {
+    id:"a8", alert_type:"hr", severity:"info",
+    title:"New Applicant — Jamie Chen (Score 8/10)",
+    message:"Resume received via Gmail from Jamie Chen for Licensed Sales Agent position. Claude score: 8/10. One Page Interview Focus generated and ready to review. Strengths: 3 years P&C experience, currently licensed IL.",
+    module_reference:"hr",
+    is_read:false, is_resolved:false,
+    due_date:null,
+    created_at:"Apr 26 9:14 AM",
+    action_label:"Go to HR",
+    action_module:"hr",
+  },
+  {
+    id:"a9", alert_type:"financial", severity:"info",
+    title:"Q1 Bank Reconciliation Ready to Review",
+    message:"Q1 2026 bank reconciliation has been prepared and is ready for your review. All three months balance. Total Q1 revenue: $124,700.",
+    module_reference:"financials",
+    is_read:true, is_resolved:false,
+    due_date:null,
+    created_at:"Apr 26 8:00 AM",
+    action_label:"Go to Financials",
+    action_module:"financials",
+  },
+  {
+    id:"a10", alert_type:"compliance", severity:"info",
+    title:"E&O Renewal — Begin Process in 96 Days",
+    message:"Your E&O insurance policy renews August 2026. The 90-day advance renewal window opens in 6 days (May 1). Contact Hartford to begin the renewal process.",
+    module_reference:"compliance",
+    is_read:true, is_resolved:false,
+    due_date:"May 1, 2026",
+    created_at:"Apr 27 7:00 AM",
+    action_label:"Go to Compliance",
+    action_module:"compliance",
+  },
+  {
+    id:"a11", alert_type:"system", severity:"info",
+    title:"Welcome to Your Business Command Center",
+    message:"Your BCC is live and loaded with your agency data. Daily briefings will arrive each morning at 6AM. Your document importer is active — send financial documents to your Gmail and they will be processed automatically. Welcome to Smith Insurance Agency BCC powered by Imaginary Farms LLC.",
+    module_reference:"dashboard",
+    is_read:true, is_resolved:false,
+    due_date:null,
+    created_at:"Apr 15 12:00 PM",
+    action_label:null,
+    action_module:null,
+  },
+
+  // Resolved
+  {
+    id:"a12", alert_type:"document", severity:"info",
+    title:"COMP_RECAP April 2026 — Import Complete",
+    message:"SF COMP_RECAP for April 2026 imported successfully. 5 records loaded to comp_recap table, aipp_tracking updated. Total compensation: $48,240.",
+    module_reference:"financials",
+    is_read:true, is_resolved:true,
+    due_date:null,
+    created_at:"Apr 26 2:30 PM",
+    resolved_at:"Apr 26 2:31 PM",
+    action_label:null,
+    action_module:null,
+  },
+  {
+    id:"a13", alert_type:"automation", severity:"warning",
+    title:"Facebook Post Failed — Apr 23",
+    message:"Facebook post scheduled for April 23 at 9:00 AM failed due to API rate limit. Post was retried automatically and published successfully at 9:14 AM.",
+    module_reference:"social",
+    is_read:true, is_resolved:true,
+    due_date:null,
+    created_at:"Apr 23 9:00 AM",
+    resolved_at:"Apr 23 9:14 AM",
+    action_label:null,
+    action_module:null,
+  },
+  {
+    id:"a14", alert_type:"hr", severity:"info",
+    title:"Resume Scanner — No New Resumes",
+    message:"Daily resume scan completed. No new resumes detected in inbox.",
+    module_reference:"hr",
+    is_read:true, is_resolved:true,
+    due_date:null,
+    created_at:"Today 7:00 AM",
+    resolved_at:"Today 7:00 AM",
+    action_label:null,
+    action_module:null,
+  },
+];
+
 // ─── Shared Components ────────────────────────────────────────
 const Card = ({ children, style={} }) => (
   <div style={{ background:T.white, border:`1px solid ${T.slate200}`, borderRadius:12, padding:"16px 18px", ...style }}>
     {children}
   </div>
 );
-
-
-// Format an ISO timestamp like "Jun 29, 9:26pm" — degrades gracefully on
-// missing/invalid input so the UI never crashes on a stray null.
-const formatTimestamp = (iso) => {
-  if (!iso) return "";
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "";
-    const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase().replace(" ", "");
-    return `${dateStr}, ${timeStr}`;
-  } catch { return ""; }
-};
 
 const AskBtn = ({ context, size = "normal", demoMode = false }) => {
   const [open, setOpen] = useState(false);
@@ -123,7 +277,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
       <button
         onClick={open ? () => { setOpen(false); setTimeout(() => { setCopied(false); setOpened(false); }, 200); } : ask}
         style={{ display: "flex", alignItems: "center", gap: 5, background: open ? T.slate100 : T.blue, color: open ? T.blue : T.white, border: open ? `1px solid ${T.blue}` : "1px solid transparent", borderRadius: 7, padding: small ? "5px 10px" : "7px 13px", fontSize: small ? 10 : 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-      >\u26a1 Ask Claude</button>
+      >⚡ Ask Claude</button>
       {open && (
         <div role="dialog" aria-label="Ask Claude" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60, width: 300, background: T.white, border: `1px solid ${T.slate100}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(15,23,42,0.16)", padding: 14, textAlign: "left" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#16A34A", marginBottom: 4 }}>
@@ -135,7 +289,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
           <div style={{ fontSize: 11, lineHeight: 1.55, color: T.slate500, background: T.slate100, borderRadius: 8, padding: 9, maxHeight: 92, overflow: "hidden", whiteSpace: "pre-wrap" }}>{preview}</div>
           <div style={{ marginTop: 10 }}>
             {!opened ? (
-              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.white, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.textOnColor, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Open Claude.ai &amp; paste
               </button>
             ) : demoMode ? (
@@ -204,15 +358,15 @@ const AlertCard = ({ alert, onRead, onResolve, onNavigate }) => {
             {alert.message}
           </div>
           {alert.resolved_at && (
-            <div style={{ fontSize:11, color:T.green, marginBottom:10 }}>✓ Resolved {formatTimestamp(alert.resolved_at)}</div>
+            <div style={{ fontSize:11, color:T.green, marginBottom:10 }}>✓ Resolved {alert.resolved_at}</div>
           )}
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            {alert.module_reference && !alert.is_resolved && (
+            {alert.action_module && !alert.is_resolved && (
               <button
-                onClick={() => onNavigate(alert.module_reference)}
+                onClick={() => onNavigate(alert.action_module)}
                 style={{ padding:"6px 14px", fontSize:11, fontWeight:600, color:T.white, background:T.navy, border:"none", borderRadius:7, cursor:"pointer" }}
               >
-                Open Module
+                {alert.action_label || "Open Module"}
               </button>
             )}
             {!alert.is_resolved && (
@@ -489,25 +643,25 @@ const NotificationPrefs = () => {
 export default function AlertsNotifications({ onNavigate }) {
   const [section, setSection] = useState("overview");
   const { data: liveAlerts, loading: alertsLoading } = useSupabaseTable("alerts", AGENCY_ID, { orderBy: "created_at", ascending: false });
-  const [alerts, setAlerts] = useState([]);
+  const useMockData = import.meta.env.VITE_USE_MOCK_DATA !== "false";
+  const [alerts, setAlerts] = useState(useMockData ? MOCK_ALERTS : []);
   useEffect(() => {
-    if (Array.isArray(liveAlerts)) setAlerts(liveAlerts);
+    if (liveAlerts && liveAlerts.length > 0) {
+      // Normalize DB severity vocabulary -> UI severity vocabulary.
+      // DB uses: high / medium / low. UI sections filter by: critical / warning / info.
+      // Without this map, "high" alerts fall through and don't render in any of the
+      // three Overview sections (Critical / Warnings / Info).
+      const sevMap = { high: "critical", medium: "warning", low: "info" };
+      const normalized = liveAlerts.map(a => ({
+        ...a,
+        severity: sevMap[a.severity] || a.severity,
+      }));
+      setAlerts(normalized);
+    }
   }, [liveAlerts]);
 
-  // Persist mark-read and mark-resolved to the database. Local state is
-  // updated optimistically so the UI feels instant; the Supabase write
-  // happens in the background. Errors silently revert on next refresh.
-  const markRead = async (id) => {
-    setAlerts(p => p.map(a => a.id === id ? { ...a, is_read: true } : a));
-    try { await supabase.from("alerts").update({ is_read: true }).eq("id", id); }
-    catch (e) { console.error("Failed to mark alert read:", e); }
-  };
-  const markResolved = async (id) => {
-    const nowIso = new Date().toISOString();
-    setAlerts(p => p.map(a => a.id === id ? { ...a, is_resolved: true, resolved_at: nowIso } : a));
-    try { await supabase.from("alerts").update({ is_resolved: true, resolved_at: nowIso }).eq("id", id); }
-    catch (e) { console.error("Failed to resolve alert:", e); }
-  };
+  const markRead    = (id) => setAlerts(p => p.map(a => a.id===id ? {...a, is_read:true} : a));
+  const markResolved= (id) => setAlerts(p => p.map(a => a.id===id ? {...a, is_resolved:true, resolved_at:"Just now"} : a));
 
   if (alertsLoading) return <div style={{padding:40,textAlign:"center",fontSize:13,color:"#64748B"}}>Loading alerts…</div>;
   if (alerts.length === 0) return <EmptyState module="alerts" />;

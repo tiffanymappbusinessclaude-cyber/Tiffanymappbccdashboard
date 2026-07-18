@@ -178,7 +178,7 @@ This `PRODUCT_VISION.md` is the engineering-side companion to those pages. When 
 - **Tax module** (IA) instead of **Compliance module** (IF) — grounded in entity-type tax profiles (Sole Prop, LLC, S-Corp, C-Corp, Partnership) rather than AA05 Agreement clauses.
 - **QBO + multi-entity consolidation** as the primary financial data hook (IA) instead of AIPP/ScoreCard/COMP_RECAP flows (IF).
 - **Different brand palette** — IA uses navy/teal (modern operational); IF uses coral/cream (agricultural feel).
-- **Different partner structure** — IA has a single-payer Founding Ambassador model (Jay Trudeau, grandfathered 30%); IF has a dual-payment model where Alyssa's 20% ambassador override can stack on Kellie or Kim's channel partner spread.
+- **Different partner structure** — IA has a single-payer Founding Ambassador model (Jay Trudeau, grandfathered 30%); IF has a dual-payment model where Alyssa's 20% ambassador override can stack on Kellie or the agent's channel partner spread.
 
 The IA `PRODUCT_VISION.md` lives at `cindarellabots-droid/SMBBCC-Imaginary-AI` and follows this same structure. Setup Claudes on IA work read that doc — never this one. Never bleed IF terminology (State Farm, AIPP, AA05, ScoreCard, COMP_RECAP) into IA work, or vice versa. Separation is a legal-hygiene requirement, not a stylistic preference.
 

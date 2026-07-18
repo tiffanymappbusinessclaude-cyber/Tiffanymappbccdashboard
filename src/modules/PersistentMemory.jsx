@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { useSupabaseTable } from "../lib/hooks.js";
 import { supabase, AGENCY_ID } from "../lib/supabase.js";
 
 // ============================================================
@@ -21,47 +20,206 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 //   relationships       — Key contacts and vendors
 //   compliance_notes    — Agent-specific compliance reminders
 //
-// DATA: Reads/writes persistent_memory table in Supabase
-// DATA: Loaded from persistent_memory via useSupabaseTable hook.
+// DATA: Reads/writes persistent_memory table in Supabase.
+//   • READ:   useEffect on mount loads all is_active rows for AGENCY_ID
+//   • CREATE: handleSave INSERTs when no id present
+//   • UPDATE: handleSave UPDATEs by id when present
+//   • DELETE: handleDelete soft-deletes (is_active = false)
+//   MOCK_MEMORY below is a dev-only fallback gated by VITE_USE_MOCK_DATA env.
+//   In production (.env.production sets VITE_USE_MOCK_DATA=false) live data wins.
 // ============================================================
+
 
 // ─── Design Tokens ────────────────────────────────────────────
 const T = {
-  navy:    "#1B2B4B",
-  blue:    "#2D7DD2",
-  blueLt:  "#EFF6FF",
-  green:   "#10B981",
-  greenLt: "#D1FAE5",
-  amber:   "#F59E0B",
-  amberLt: "#FEF3C7",
-  red:     "#EF4444",
-  redLt:   "#FEE2E2",
-  purple:  "#7C3AED",
-  purpleLt:"#EDE9FE",
+  navy:    "var(--accent-navy)",
+  blue:    "var(--accent-blue)",
+  blueLt:  "var(--accent-navy-bg)",
+  green:   "var(--success)",
+  greenLt: "var(--success-bg)",
+  amber:   "var(--warning)",
+  amberLt: "var(--warning-bg)",
+  red:     "var(--danger)",
+  redLt:   "var(--danger-bg)",
+  purple:  "var(--accent-purple)",
+  purpleLt:"var(--accent-purple-bg)",
   teal:    "#0D9488",
   tealLt:  "#CCFBF1",
-  slate50: "#F8FAFC",
-  slate100:"#F1F5F9",
-  slate200:"#E2E8F0",
-  slate300:"#CBD5E1",
-  slate400:"#94A3B8",
-  slate500:"#64748B",
-  slate600:"#475569",
-  slate700:"#334155",
-  slate800:"#1E293B",
-  slate900:"#0F172A",
-  white:   "#FFFFFF",
+  slate50: "var(--bg-panel-subtle)",
+  slate100:"var(--bg-panel)",
+  slate200:"var(--border-subtle)",
+  slate300:"var(--border-strong)",
+  slate400:"var(--text-quaternary)",
+  slate500:"var(--text-tertiary)",
+  slate600:"var(--text-secondary)",
+  slate700:"var(--text-secondary)",
+  slate800:"var(--text-primary)",
+  slate900:"var(--text-primary)",
+  white:   "var(--bg-card)",
+  textOnColor: "#FFFFFF",
 };
 
 // ─── Category Config ──────────────────────────────────────────
+// Categories mirror persistent_memory.category values written by Claude across sessions.
+// First 9 are user-facing context categories; last 2 are operational (session logs + handoff).
 const CATEGORIES = [
-  { id: "agency_profile",    label: "Agency Profile",    icon: "🏢", color: T.blue,   colorLt: T.blueLt,   description: "Entity details, licensing, contact information" },
-  { id: "staff",             label: "Staff & Team",      icon: "👥", color: T.purple, colorLt: T.purpleLt, description: "Team members, roles, employment details" },
-  { id: "business_rules",    label: "Business Rules",    icon: "⚙️", color: T.navy,   colorLt: T.slate100, description: "Rules Claude must always follow in every conversation" },
-  { id: "financial_context", label: "Financial Context", icon: "💰", color: T.green,  colorLt: T.greenLt,  description: "Accounting setup, CPA details, compensation structure" },
-  { id: "goals",             label: "Goals & Priorities",icon: "🎯", color: T.amber,  colorLt: T.amberLt,  description: "Current targets, priorities, milestones" },
-  { id: "relationships",     label: "Key Relationships", icon: "🤝", color: T.teal,   colorLt: T.tealLt,   description: "CPA, vendors, SF contacts, key business relationships" },
-  { id: "compliance_notes",  label: "Compliance Notes",  icon: "🛡️", color: T.red,    colorLt: T.redLt,    description: "Agency-specific compliance reminders and notes" },
+  { id: "agency_profile",       label: "Agency Profile",        icon: "🏢", color: T.blue,   colorLt: T.blueLt,   description: "Entity, licensing, contact, key identifiers" },
+  { id: "business_context",     label: "Business Context",      icon: "📋", color: T.navy,   colorLt: T.slate100, description: "Market, history, current install state" },
+  { id: "financial_context",    label: "Financial Context",     icon: "💰", color: T.green,  colorLt: T.greenLt,  description: "Accounting setup, CPA notes, period anchors" },
+  { id: "sf_compensation",      label: "SF Compensation",       icon: "📊", color: T.teal,   colorLt: T.tealLt,   description: "SMVC, AIPP, ScoreBoard, comp_recap structure" },
+  { id: "accounting_rules",     label: "Accounting Rules",      icon: "📐", color: T.purple, colorLt: T.purpleLt, description: "Cash basis, PFA, owner draws, COMP_RECAP discipline" },
+  { id: "compliance_rules",     label: "Compliance Rules",      icon: "🛡️", color: T.red,    colorLt: T.redLt,    description: "Word rules with AA05 citations, 26-item social checklist" },
+  { id: "communication_prefs",  label: "Communication Style",   icon: "💬", color: T.amber,  colorLt: T.amberLt,  description: "How the agent wants Claude to communicate and act" },
+  { id: "key_contacts",         label: "Key Contacts",          icon: "🤝", color: T.teal,   colorLt: T.tealLt,   description: "Channel partners, install vendor, CPA, service mailbox" },
+  { id: "goals",                label: "Goals & Priorities",    icon: "🎯", color: T.amber,  colorLt: T.amberLt,  description: "Current targets, priorities, milestones" },
+  { id: "session_log",          label: "Session Logs",          icon: "📝", color: T.slate500, colorLt: T.slate100, description: "What Claude shipped each session — operational audit trail" },
+  { id: "next_session_handoff", label: "Next Session Handoff",  icon: "🚀", color: T.navy,   colorLt: T.slate100, description: "Active task queue for the next Claude instance" },
+  { id: "infrastructure_state", label: "Infrastructure State",  icon: "⚙️", color: T.slate500, colorLt: T.slate100, description: "Live install counts, recipe inventory, and BCC infrastructure status" },
+];
+
+// ─── Mock Data ────────────────────────────────────────────────
+const MOCK_MEMORY = [
+  // Agency Profile
+  {
+    id: "1", category: "agency_profile", title: "Agency Overview",
+    content: `Agency Name: Smith Insurance Agency
+Owner: Jane Smith
+Entity Type: S-Corporation
+SF Agent Code: IL 22-441A
+Licensed States: IL, WI, IN
+Primary Email: jane@smithagency.com
+Phone: (312) 555-0182
+Address: 1420 N. Michigan Ave, Suite 301, Chicago, IL 60610
+BCC Setup Date: April 15, 2026`,
+    added_by: "system", source: "initial_setup",
+  },
+  {
+    id: "2", category: "agency_profile", title: "Business Context",
+    content: `Jane has operated this agency since 2018. Prior career in banking gave her strong financial acumen. Agency focus is personal lines with a growing commercial book. Located in the suburban Chicago market, high competition area. Jane reviews her BCC every morning before 9AM and prefers direct, concise communication with bullet points for action items.`,
+    added_by: "system", source: "discovery_call",
+  },
+
+  // Staff
+  {
+    id: "3", category: "staff", title: "Team Overview",
+    content: `Current Team (3 staff):
+
+1. Marcus Thompson — Licensed Sales Agent (W-2)
+   Start: Jan 2022 · Salary: $52,000 + commission
+   Licensed: IL, WI · Strong life insurance producer
+   Email: marcus@smithagency.com
+
+2. Priya Patel — Office Manager (W-2, unlicensed)
+   Start: Mar 2020 · Salary: $42,000
+   Handles operations, billing, client service
+   Email: priya@smithagency.com
+
+3. Tyler Smith — Part-time Support (W-2, family)
+   Start: Jun 2024 · Hourly: $18/hr
+   Jane's son. Works 20hrs/wk. Below standard deduction.
+   No FIT withheld. Flag for CPA at year-end for W-2.`,
+    added_by: "system", source: "discovery_call",
+  },
+
+  // Business Rules
+  {
+    id: "4", category: "business_rules", title: "Accounting Rules",
+    content: `1. Cash basis ONLY — revenue counts when money hits the bank account. Never count pending or promised payments as current revenue.
+2. PFA (Policy Financing Arrangement) is NOT a business asset. It does not appear on the balance sheet. It is a SF compliance item only.
+3. Owner draws and S-Corp distributions are equity transactions — never expenses.
+4. Owner W-2 wages must reflect reasonable compensation for S-Corp — flag for CPA annually.
+5. Always reconcile COMP_RECAP to GL before closing a period.
+6. Tyler Smith (family employee) requires W-2 at year-end. No FIT withheld — below standard deduction threshold. Review with Steven Bonventre.
+7. S-Corp Medical premiums for Jane are tracked in account 6115 and added to W-2 Box 1.`,
+    added_by: "system", source: "if_standard_rules",
+  },
+  {
+    id: "5", category: "business_rules", title: "SF Compliance Rules",
+    content: `1. Never suggest social media content that promises specific rates or savings.
+2. All advertising must be pre-approved by SF before publishing.
+3. Required disclosures must appear on all marketing materials.
+4. Flag license renewal deadlines 60 days in advance.
+5. Flag E&O insurance renewal 90 days before expiration.
+6. PFA activity should be reviewed with CPA annually.
+7. No rebating or inducements to policyholders.
+8. Do not suggest content that could be confused with official SF corporate communications.`,
+    added_by: "system", source: "if_compliance_rules",
+  },
+  {
+    id: "6", category: "business_rules", title: "Communication Preferences",
+    content: `- Direct and concise. No fluff.
+- Use bullet points for action items.
+- Flag financial issues immediately — do not soften bad news.
+- Jane reviews BCC every morning before 9AM.
+- Prefers email briefings over in-app notifications for critical items.
+- When recommending actions, lead with the most important item.`,
+    added_by: "system", source: "discovery_call",
+  },
+
+  // Financial Context
+  {
+    id: "7", category: "financial_context", title: "Accounting & Tax Setup",
+    content: `Entity: S-Corporation (elected 2019)
+Fiscal Year: Calendar Year (Jan–Dec)
+Accounting Method: Cash Basis
+Payroll Provider: Gusto (bi-weekly)
+CPA: Steven Bonventre at Club Capital Tax LLC
+CPA Email: steven@clubcapitaltax.com
+CPA Phone: (312) 555-0198
+Owner W-2 Salary: $85,000/year (reasonable comp)
+S-Corp Distributions: Separate from salary, tracked in equity
+S-Corp Medical: Jane's health insurance added to W-2 Box 1`,
+    added_by: "system", source: "discovery_call",
+  },
+  {
+    id: "8", category: "financial_context", title: "SF Compensation Structure",
+    content: `AIPP Target 2026: $142,000
+Prior Year AIPP Actual 2025: $138,200
+ScoreBoard Participation: Yes — targeting President level
+Primary Revenue Lines: Auto, Home, Life, Personal Articles
+Multi-State Comp: IL (primary), WI, IN — all comp reported on IL COMP_RECAP
+COMP_RECAP: Received monthly from SF, imported via Doc Importer`,
+    added_by: "system", source: "discovery_call",
+  },
+
+  // Goals
+  {
+    id: "9", category: "goals", title: "2026 Goals",
+    content: `1. Hit AIPP target of $142,000 (currently at 47.5% — on track)
+2. Grow new business premium by 15% vs 2025
+3. Add one licensed team member by Q3 2026
+4. Achieve ScoreBoard President recognition
+5. Reduce operating expense ratio below 45%
+6. Complete full BCC data migration by end of April
+7. Launch social media content calendar — 4 posts/week`,
+    added_by: "system", source: "discovery_call",
+  },
+
+  // Relationships
+  {
+    id: "10", category: "relationships", title: "Key Contacts",
+    content: `CPA: Steven Bonventre — Club Capital Tax LLC — steven@clubcapitaltax.com
+SF Field Leader: Michael Torres — michael.torres@statefarm.com (personal email on file)
+Payroll: Gusto support — support@gusto.com
+E&O Insurance: Hartford — policy #HRT-8821-IL — renews Aug 2026
+Attorney: Davis & Park LLC — Michelle Park — (312) 555-0211
+Landlord: Midwest Properties LLC — lease expires Dec 2027
+IT Support: TechForce Chicago — helpdesk@techforcechicago.com`,
+    added_by: "system", source: "discovery_call",
+  },
+
+  // Compliance Notes
+  {
+    id: "11", category: "compliance_notes", title: "Agency-Specific Compliance Reminders",
+    content: `- IL license renewal due: October 2026 — also covers WI and IN non-resident
+- CE hours required: 24 hours IL by Oct 2026 — 14 hours completed as of Apr 2026
+- E&O renewal: August 2026 — flag 90 days out (May 2026)
+- Annual social media audit: Due by Nov 2026
+- Privacy notice distribution: Due by Nov 2026
+- W-2 filing: January 31, 2027 for 2026 tax year
+- Tyler Smith family employment: Review with Steven at year-end for proper W-2 treatment`,
+    added_by: "system", source: "discovery_call",
+  },
 ];
 
 // ─── Shared Components ────────────────────────────────────────
@@ -89,7 +247,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
       <button
         onClick={open ? () => { setOpen(false); setTimeout(() => { setCopied(false); setOpened(false); }, 200); } : ask}
         style={{ display: "flex", alignItems: "center", gap: 5, background: open ? T.slate100 : T.blue, color: open ? T.blue : T.white, border: open ? `1px solid ${T.blue}` : "1px solid transparent", borderRadius: 7, padding: small ? "5px 10px" : "7px 13px", fontSize: small ? 10 : 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-      >\u26a1 Ask Claude</button>
+      >⚡ Ask Claude</button>
       {open && (
         <div role="dialog" aria-label="Ask Claude" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60, width: 300, background: T.white, border: `1px solid ${T.slate100}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(15,23,42,0.16)", padding: 14, textAlign: "left" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#16A34A", marginBottom: 4 }}>
@@ -101,7 +259,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
           <div style={{ fontSize: 11, lineHeight: 1.55, color: T.slate500, background: T.slate100, borderRadius: 8, padding: 9, maxHeight: 92, overflow: "hidden", whiteSpace: "pre-wrap" }}>{preview}</div>
           <div style={{ marginTop: 10 }}>
             {!opened ? (
-              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.white, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.textOnColor, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Open Claude.ai &amp; paste
               </button>
             ) : demoMode ? (
@@ -330,7 +488,7 @@ const EditModal = ({ item, categories, onSave, onCancel, onDelete }) => {
               disabled={!title.trim() || !content.trim()}
               style={{
                 padding: "7px 16px", fontSize: 11, fontWeight: 600,
-                color: T.white, background: T.navy,
+                color: T.textOnColor, background: T.navy,
                 border: "none", borderRadius: 7, cursor: "pointer",
                 opacity: (!title.trim() || !content.trim()) ? 0.5 : 1,
               }}
@@ -403,18 +561,42 @@ const CategorySidebar = ({ categories, activeCategory, counts, onChange }) => (
 
 // ─── Main Module ──────────────────────────────────────────────
 export default function PersistentMemory() {
-  // Live-fetch from Supabase persistent_memory table
-  const { data: liveMemories, loading: memoryLoading } = useSupabaseTable(
-    "persistent_memory", AGENCY_ID, { orderBy: "updated_at", ascending: false }
-  );
-  const [memories,        setMemories]        = useState([]);
-  useEffect(() => {
-    if (Array.isArray(liveMemories)) setMemories(liveMemories);
-  }, [liveMemories]);
+  const useMockData = import.meta.env.VITE_USE_MOCK_DATA !== "false";
+  const [memories,        setMemories]        = useState(useMockData ? MOCK_MEMORY : []);
   const [activeCategory,  setActiveCategory]  = useState("all");
   const [editingItem,     setEditingItem]      = useState(null);
   const [showNewModal,    setShowNewModal]     = useState(false);
   const [searchQuery,     setSearchQuery]      = useState("");
+  const [loading,         setLoading]          = useState(true);
+
+  // Load live persistent_memory from Supabase. Live data wins over MOCK_MEMORY when present.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!supabase || !AGENCY_ID) { setLoading(false); return; }
+      try {
+        const { data, error } = await supabase
+          .from("persistent_memory")
+          .select("id, category, title, content, source, added_by, is_active, updated_at, created_at")
+          .eq("agency_id", AGENCY_ID)
+          .eq("is_active", true)
+          .order("updated_at", { ascending: false });
+        if (cancelled) return;
+        if (error) {
+          console.error("PersistentMemory load error:", error);
+          return;
+        }
+        if (Array.isArray(data) && data.length > 0) {
+          setMemories(data);
+        }
+        // Otherwise keep whatever was initialized (mock or empty array per env)
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   // Counts per category
   const counts = {
@@ -443,69 +625,91 @@ export default function PersistentMemory() {
   }, {});
 
   const handleSave = async (item) => {
+    // Dev / preview fallback: when Supabase isn't reachable, keep prior local-only behavior.
+    if (!supabase || !AGENCY_ID) {
+      if (item.id) {
+        setMemories(prev => prev.map(m => m.id === item.id ? item : m));
+      } else {
+        setMemories(prev => [...prev, { ...item, id: Date.now().toString(), added_by: "owner", source: "manual" }]);
+      }
+      setEditingItem(null);
+      setShowNewModal(false);
+      return;
+    }
     try {
       if (item.id) {
-        const { data: updated, error } = await supabase
+        // UPDATE existing row
+        const { data, error } = await supabase
           .from("persistent_memory")
           .update({
-            title: item.title,
-            content: item.content,
-            category: item.category,
+            title:      item.title,
+            content:    item.content,
+            category:   item.category,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", item.id)
+          .eq("agency_id", AGENCY_ID)
           .select()
           .single();
         if (error) {
-          console.error("Update memory failed:", error);
-          alert("Update memory failed: " + error.message);
+          console.error("PersistentMemory update error:", error);
+          alert("Failed to save memory: " + (error.message || "unknown error"));
           return;
         }
-        setMemories(prev => prev.map(m => m.id === item.id ? updated : m));
+        setMemories(prev => prev.map(m => m.id === item.id ? { ...m, ...data } : m));
       } else {
-        const { data: newRow, error } = await supabase
+        // INSERT new row
+        const { data, error } = await supabase
           .from("persistent_memory")
           .insert({
             agency_id: AGENCY_ID,
-            category: item.category,
-            title: item.title,
-            content: item.content,
+            category:  item.category,
+            title:     item.title,
+            content:   item.content,
+            source:    "owner_manual",
+            added_by:  "owner",
             is_active: true,
-            added_by: "owner",
-            source: "manual",
           })
           .select()
           .single();
         if (error) {
-          console.error("Add memory failed:", error);
-          alert("Add memory failed: " + error.message);
+          console.error("PersistentMemory insert error:", error);
+          alert("Failed to save memory: " + (error.message || "unknown error"));
           return;
         }
-        setMemories(prev => [...prev, newRow]);
+        setMemories(prev => [data, ...prev]);
       }
       setEditingItem(null);
       setShowNewModal(false);
     } catch (e) {
-      console.error("Save memory error:", e);
-      alert("Save memory failed: " + (e?.message || String(e)));
+      console.error("PersistentMemory save exception:", e);
+      alert("Failed to save memory: " + (e?.message || e));
     }
   };
 
   const handleDelete = async (id) => {
+    if (!supabase || !AGENCY_ID) {
+      setMemories(prev => prev.map(m => m.id === id ? { ...m, is_active: false } : m));
+      setEditingItem(null);
+      return;
+    }
+    if (typeof window !== "undefined" && !window.confirm("Delete this memory? Claude will no longer reference it in conversations.")) return;
     try {
       const { error } = await supabase
         .from("persistent_memory")
-        .update({ is_active: false })
-        .eq("id", id);
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("agency_id", AGENCY_ID);
       if (error) {
-        console.error("Delete memory failed:", error);
-        alert("Delete memory failed: " + error.message);
+        console.error("PersistentMemory delete error:", error);
+        alert("Failed to delete memory: " + (error.message || "unknown error"));
         return;
       }
       setMemories(prev => prev.map(m => m.id === id ? { ...m, is_active: false } : m));
       setEditingItem(null);
     } catch (e) {
-      console.error("Delete memory error:", e);
-      alert("Delete memory failed: " + (e?.message || String(e)));
+      console.error("PersistentMemory delete exception:", e);
+      alert("Failed to delete memory: " + (e?.message || e));
     }
   };
 
@@ -534,7 +738,7 @@ export default function PersistentMemory() {
             onClick={() => setShowNewModal(true)}
             style={{
               display: "flex", alignItems: "center", gap: 6,
-              background: T.navy, color: T.white,
+              background: T.navy, color: T.textOnColor,
               border: "none", borderRadius: 8,
               padding: "8px 16px", fontSize: 12, fontWeight: 600,
               cursor: "pointer",

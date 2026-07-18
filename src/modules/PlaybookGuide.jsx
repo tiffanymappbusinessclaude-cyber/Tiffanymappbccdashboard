@@ -1,58 +1,23 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState } from 'react';
+import {
+  Search, X, BookOpen, ChevronDown, ChevronsDown,
+  ChevronsUp, AlertTriangle, Sparkles, Info, Compass, Lightbulb,
+} from 'lucide-react';
+import AskClaudeButton from '../components/AskClaudeButton.jsx';
 
-// ============================================================
-// BCC PLAYBOOK & GUIDE MODULE v1.0
-// Business Command Center — State Farm Agent Edition
-// Built by Imaginary Farms LLC · imaginary-farms.com
-// DATA: 100% client-side. No DB dependency.
-// ============================================================
+// PlaybookGuide — client-facing playbook of prompts organized by cadence and module.
+//
+// This module is the client's daily reference for how to work with their Claude.
+// Every prompt has an "Ask Claude" button that copies a context-wrapped payload
+// to the clipboard so the client can paste directly into their Claude.ai tab.
+//
+// Content authored 2026-07-01, sourced from the approved v3 preview review.
+// Rebecca (Imaginary Farms) is the editorial voice.
+//
+// The "Your first 30 minutes" section opens by default. All other sections
+// collapse by default until the user expands them or runs a search.
 
-const T = {navy:"#1B2B4B",blue:"#2D7DD2",blueLt:"#EFF6FF",green:"#10B981",greenLt:"#D1FAE5",amber:"#F59E0B",amberLt:"#FEF3C7",red:"#EF4444",redLt:"#FEE2E2",coral:"#F97066",coralLt:"#FEF1EE",purple:"#7C3AED",purpleLt:"#EDE9FE",cream:"#FFF8F0",slate50:"#F8FAFC",slate100:"#F1F5F9",slate200:"#E2E8F0",slate300:"#CBD5E1",slate400:"#94A3B8",slate500:"#64748B",slate600:"#475569",slate700:"#334155",slate800:"#1E293B",slate900:"#0F172A",white:"#FFFFFF"};
-
-const iconPaths = {
-  sparkles:  <path d="M12 3l1.9 4.3L18 9l-4.1 1.7L12 15l-1.9-4.3L6 9l4.1-1.7L12 3zM19 14l.8 1.7L21.5 17l-1.7.8L19 20l-.8-2.2L16 17l1.7-1.3L19 14zM5 15l.6 1.4L7 17l-1.4.7L5 19l-.6-1.3L3 17l1.4-.6L5 15z" />,
-  info:      <><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></>,
-  warn:      <><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>,
-  compass:   <><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></>,
-  bookOpen:  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />,
-  search:    <><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
-  x:         <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>,
-  chevronDown: <polyline points="6 9 12 15 18 9" />,
-  chevronsDown:<><polyline points="7 13 12 18 17 13" /><polyline points="7 6 12 11 17 6" /></>,
-  chevronsUp:  <><polyline points="17 11 12 6 7 11" /><polyline points="17 18 12 13 7 18" /></>,
-};
-function Icon({ name, size = 16, color = "currentColor", strokeWidth = 1.75, fill = "none" }) {
-  const p = iconPaths[name];
-  if (!p) return null;
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>{p}</svg>;
-}
-
-function AskBtn({ context, size = "normal" }) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const ref = useRef(null);
-  const small = size === "small";
-  useEffect(() => {
-    if (!open) return;
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setTimeout(() => setCopied(false), 200); } };
-    const k = (e) => { if (e.key === "Escape") { setOpen(false); setTimeout(() => setCopied(false), 200); } };
-    document.addEventListener("mousedown", h); document.addEventListener("keydown", k);
-    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("keydown", k); };
-  }, [open]);
-  const ask = async () => { setOpen(true); try { await navigator.clipboard.writeText(context); setCopied(true); } catch { setCopied(true); } };
-  return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
-      <button onClick={open ? () => setOpen(false) : ask} style={{ display: "flex", alignItems: "center", gap: 5, background: open ? T.slate100 : T.blue, color: open ? T.blue : T.white, border: open ? `1px solid ${T.blue}` : "1px solid transparent", borderRadius: 7, padding: small ? "5px 10px" : "7px 13px", fontSize: small ? 10 : 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>⚡ Ask Claude</button>
-      {open && (
-        <div role="dialog" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60, width: 300, background: T.white, border: `1px solid ${T.slate100}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(15,23,42,0.16)", padding: 14, textAlign: "left" }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#16A34A", marginBottom: 4 }}>{copied ? "✓ Context copied to your clipboard" : "Copying…"}</div>
-          <div style={{ fontSize: 11, color: T.slate500, marginBottom: 10, lineHeight: 1.5 }}>Paste it into your Claude.ai tab. Your BCC data goes with the prompt.</div>
-          <button onClick={() => window.open("https://claude.ai/new", "_blank", "noopener,noreferrer")} style={{ width: "100%", background: T.navy, color: T.white, border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Open Claude.ai in a new tab</button>
-        </div>
-      )}
-    </div>
-  );
-}
+// ─── Content ──────────────────────────────────────────────────────────────────
 
 const INTRO_CALLOUTS = [
   {
@@ -82,6 +47,7 @@ const INTRO_CALLOUTS = [
   },
 ];
 
+// PLAYBOOK_DATA — 13 sections, 79 prompts.
 const PLAYBOOK_DATA = [
   {
     id: 's0',
@@ -323,130 +289,492 @@ const PLAYBOOK_DATA = [
   },
 ];
 
+// ─── Styling helpers ──────────────────────────────────────────────────────────
+
 const CALLOUT_STYLES = {
-  brand:    { bg: T.coralLt,  border: T.coral,  iconColor: T.coral,  iconName: "sparkles" },
-  info:     { bg: T.blueLt,   border: T.blue,   iconColor: T.blue,   iconName: "info" },
-  warn:     { bg: T.amberLt,  border: T.amber,  iconColor: T.amber,  iconName: "warn" },
-  coaching: { bg: T.cream,    border: T.navy,   iconColor: T.navy,   iconName: "compass" },
+  brand:    { bg: 'var(--if-cream)',      border: 'var(--if-coral)',   iconColor: 'var(--if-coral)',   Icon: Sparkles },
+  info:     { bg: 'var(--if-blue-lt)',    border: 'var(--if-blue)',    iconColor: 'var(--if-blue)',    Icon: Info },
+  warn:     { bg: 'var(--if-warning-lt)', border: 'var(--if-warning)', iconColor: 'var(--if-warning)', Icon: AlertTriangle },
+  coaching: { bg: 'var(--if-cream)',      border: 'var(--if-navy)',    iconColor: 'var(--if-navy)',    Icon: Compass },
 };
 
 function Callout({ variant, title, body }) {
-  const s = CALLOUT_STYLES[variant] || CALLOUT_STYLES.info;
+  const s = CALLOUT_STYLES[variant] || CALLOUT_STYLES.brand;
+  const Icon = s.Icon;
   return (
-    <div style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: "14px 16px", margin: "10px 0", display: "flex", alignItems: "flex-start", gap: 12 }}>
-      <div style={{ flexShrink: 0, marginTop: 2 }}><Icon name={s.iconName} size={18} color={s.iconColor} strokeWidth={2} /></div>
-      <div style={{ flex: 1 }}>
-        {title && <div style={{ fontSize: 13, fontWeight: 700, color: T.slate900, marginBottom: 4, lineHeight: 1.35 }}>{title}</div>}
-        {body && <div style={{ fontSize: 12, color: T.slate600, lineHeight: 1.6 }}>{body}</div>}
+    <div style={{
+      backgroundColor: s.bg,
+      borderLeft: `4px solid ${s.border}`,
+      padding: '14px 16px',
+      borderRadius: '8px',
+      marginBottom: '12px',
+      display: 'flex',
+      gap: '12px',
+      alignItems: 'flex-start',
+    }}>
+      <div style={{ flexShrink: 0, marginTop: '2px' }}>
+        <Icon size={18} color={s.iconColor} />
+      </div>
+      <div style={{ flex: 1, fontSize: '14px', lineHeight: 1.6, color: 'var(--if-ink)' }}>
+        <strong style={{ color: 'var(--if-navy)', marginRight: '4px' }}>{title}</strong>
+        <span style={{ color: 'var(--if-ink)' }}>{body}</span>
       </div>
     </div>
   );
 }
 
 function PromptCard({ prompt, sectionTitle, subsectionTitle, highlight }) {
-  const q = prompt.prompt || prompt.text || "";
-  const context = `From the BCC Playbook & Guide.\nSection: ${sectionTitle || ""}\nSubsection: ${subsectionTitle || ""}\nPrompt title: ${prompt.title || ""}\n\n---\n\n${q}`;
-  const bodyEls = highlight ? highlight(prompt.text || q) : (prompt.text || q);
+  const heading = subsectionTitle ? `${sectionTitle} · ${subsectionTitle}` : sectionTitle;
   return (
-    <div style={{ background: T.white, border: `1px solid ${T.slate200}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: T.slate900, lineHeight: 1.35 }}>{highlight ? highlight(prompt.title || "") : (prompt.title || "")}</span>
-          {prompt.tag && <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: T.blue, background: T.blueLt, padding: "2px 7px", borderRadius: 12 }}>{prompt.tag}</span>}
+    <div
+      className="playbook-prompt-card"
+      style={{
+        padding: '18px 20px',
+        marginBottom: '12px',
+        backgroundColor: 'var(--if-surface)',
+        border: '1px solid var(--if-line)',
+        borderRadius: '12px',
+        transition: 'border-color 0.15s, box-shadow 0.15s, transform 0.15s',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '10px', flexWrap: 'wrap' }}>
+        <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--if-navy)', flex: 1, minWidth: '200px', lineHeight: 1.35 }}>
+          {highlight(prompt.title)}
         </div>
-        <AskBtn context={context} size="small" />
+        <span
+          style={{
+            fontSize: '10px',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            color: 'white',
+            background: 'linear-gradient(135deg, var(--if-coral) 0%, #E85D75 100%)',
+            padding: '4px 10px',
+            borderRadius: '999px',
+            whiteSpace: 'nowrap',
+            boxShadow: '0 1px 3px rgba(232,93,117,0.25)',
+          }}
+        >
+          {prompt.tag}
+        </span>
       </div>
-      <div style={{ fontSize: 12, color: T.slate600, lineHeight: 1.65, background: T.slate50, padding: "10px 12px", borderRadius: 7, borderLeft: `3px solid ${T.blue}` }}>{bodyEls}</div>
+      <div style={{ fontSize: '14px', lineHeight: 1.65, color: 'var(--if-ink)', marginBottom: prompt.tip ? '12px' : '14px' }}>
+        {highlight(prompt.text)}
+      </div>
+      {prompt.tip && (
+        <div
+          style={{
+            fontSize: '12.5px',
+            color: 'var(--if-navy)',
+            marginBottom: '14px',
+            padding: '10px 12px',
+            borderRadius: '8px',
+            backgroundColor: 'var(--if-cream)',
+            border: '1px solid var(--if-coral-lt)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px',
+            lineHeight: 1.55,
+          }}
+        >
+          <Lightbulb size={13} style={{ marginTop: 2, flexShrink: 0, color: 'var(--if-coral)' }} />
+          <div><em>Tip:</em> {prompt.tip}</div>
+        </div>
+      )}
+      <div>
+        <AskClaudeButton
+          moduleLabel="Playbook & Guide"
+          subject={heading + ' — ' + prompt.title}
+          suggestedPrompt={prompt.prompt}
+          label="Try in Claude"
+          variant="solid"
+          size="sm"
+        />
+      </div>
     </div>
   );
 }
 
 function matchesQuery(prompt, q) {
   if (!q) return true;
-  const hay = [prompt.title, prompt.text, prompt.prompt, prompt.tag].filter(Boolean).join(" ").toLowerCase();
-  return hay.includes(q);
+  const needle = q.toLowerCase();
+  return (
+    prompt.title.toLowerCase().includes(needle) ||
+    prompt.text.toLowerCase().includes(needle) ||
+    (prompt.tag || '').toLowerCase().includes(needle) ||
+    (prompt.tip || '').toLowerCase().includes(needle)
+  );
 }
 
 function makeHighlighter(q) {
-  if (!q) return null;
-  const needle = q.toLowerCase();
+  if (!q) return (text) => text;
   return (text) => {
-    if (!text || typeof text !== "string") return text;
-    const lower = text.toLowerCase();
-    const parts = [];
-    let i = 0, k = 0;
-    while (i < text.length) {
-      const idx = lower.indexOf(needle, i);
-      if (idx === -1) { parts.push(text.slice(i)); break; }
-      if (idx > i) parts.push(text.slice(i, idx));
-      parts.push(<mark key={`h-${k++}`} style={{ background: T.amberLt, color: T.slate900, padding: "0 2px", borderRadius: 2 }}>{text.slice(idx, idx + needle.length)}</mark>);
-      i = idx + needle.length;
-    }
-    return parts;
+    if (!text) return text;
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return text;
+    const before = text.slice(0, idx);
+    const match  = text.slice(idx, idx + q.length);
+    const after  = text.slice(idx + q.length);
+    return (
+      <>
+        {before}
+        <mark style={{ backgroundColor: 'var(--if-warning-lt)', color: 'var(--if-navy)', padding: '0 2px', borderRadius: '2px' }}>
+          {match}
+        </mark>
+        {after}
+      </>
+    );
   };
 }
 
 function Section({ section, query, forceOpen, highlight }) {
-  const shouldOpen = Boolean(forceOpen || (section.id === "s0"));
-  const subsections = section.subsections || [];
-  const bareprompts = section.prompts || [];
-  const filteredSubs = subsections.map((sub) => ({ ...sub, prompts: (sub.prompts || []).filter((p) => matchesQuery(p, query)) })).filter((sub) => (sub.prompts || []).length > 0 || matchesQuery({ title: sub.title, text: sub.intro || "" }, query));
-  const filteredBare = bareprompts.filter((p) => matchesQuery(p, query));
-  const totalMatches = filteredSubs.reduce((n, s) => n + (s.prompts || []).length, 0) + filteredBare.length;
-  if (query && totalMatches === 0) return null;
+  const { visiblePrompts, visibleSubsections, totalCount } = useMemo(() => {
+    if (section.subsections) {
+      const subs = section.subsections
+        .map((sub) => ({ ...sub, prompts: sub.prompts.filter((p) => matchesQuery(p, query)) }))
+        .filter((sub) => sub.prompts.length > 0);
+      return { visiblePrompts: [], visibleSubsections: subs, totalCount: subs.reduce((n, s) => n + s.prompts.length, 0) };
+    }
+    const prompts = (section.prompts || []).filter((p) => matchesQuery(p, query));
+    return { visiblePrompts: prompts, visibleSubsections: [], totalCount: prompts.length };
+  }, [section, query]);
+
+  const isCalloutOnly = section.callouts && section.callouts.length > 0;
+
+  const calloutMatches = useMemo(() => {
+    if (!isCalloutOnly) return false;
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return section.callouts.some((c) => (c.title + ' ' + c.body).toLowerCase().includes(q));
+  }, [section, query, isCalloutOnly]);
+
+  if (query && !isCalloutOnly && totalCount === 0) return null;
+  if (query && isCalloutOnly && !calloutMatches) return null;
+
   return (
-    <details open={shouldOpen || Boolean(query)} style={{ background: T.white, border: `1px solid ${T.slate200}`, borderRadius: 12, marginBottom: 14, overflow: "hidden" }}>
-      <summary style={{ padding: "14px 18px", cursor: "pointer", listStyle: "none", background: T.slate50, borderBottom: `1px solid ${T.slate200}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: T.slate900, letterSpacing: "-0.01em" }}>{highlight ? highlight(section.title || "") : section.title}</div>
-          {section.subtitle && <div style={{ fontSize: 11, color: T.slate500, marginTop: 3, lineHeight: 1.4 }}>{section.subtitle}</div>}
-        </div>
-        <span className="playbook-chevron" style={{ color: T.slate500, transition: "transform 0.2s", flexShrink: 0 }}><Icon name="chevronDown" size={18} /></span>
-      </summary>
-      <div style={{ padding: "16px 18px" }}>
-        {section.intro && <div style={{ fontSize: 12, color: T.slate600, lineHeight: 1.65, marginBottom: 14, background: T.slate50, padding: "10px 12px", borderRadius: 7 }}>{highlight ? highlight(section.intro) : section.intro}</div>}
-        {section.callouts && section.callouts.map((c, ci) => <Callout key={ci} variant={c.variant} title={c.title} body={c.body} />)}
-        {filteredBare.map((p, pi) => <PromptCard key={`bp-${pi}`} prompt={p} sectionTitle={section.title} subsectionTitle="" highlight={highlight} />)}
-        {filteredSubs.map((sub, si) => (
-          <div key={`sub-${si}`} style={{ marginTop: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.6, color: T.slate500, marginBottom: 4 }}>{highlight ? highlight(sub.title || "") : sub.title}</div>
-            {sub.intro && <div style={{ fontSize: 12, color: T.slate600, lineHeight: 1.65, marginBottom: 10 }}>{highlight ? highlight(sub.intro) : sub.intro}</div>}
-            {(sub.prompts || []).map((p, pi) => <PromptCard key={`sp-${si}-${pi}`} prompt={p} sectionTitle={section.title} subsectionTitle={sub.title} highlight={highlight} />)}
+    <details open={forceOpen} style={{ marginBottom: '16px', backgroundColor: 'var(--if-surface)', border: '1px solid var(--if-line)', borderRadius: '12px', overflow: 'hidden' }}>
+      <summary style={{ padding: '18px 20px', cursor: 'pointer', listStyle: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', backgroundColor: 'var(--if-cream)', borderBottom: '1px solid var(--if-line)' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: '17px', color: 'var(--if-navy)', marginBottom: '4px' }}>
+            {highlight(section.title)}
           </div>
-        ))}
+          <div style={{ fontSize: '13px', color: 'var(--if-muted)', lineHeight: 1.5 }}>
+            {section.subtitle}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          {!isCalloutOnly && totalCount > 0 && (
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--if-muted)', backgroundColor: 'var(--if-page)', padding: '3px 10px', borderRadius: '10px', border: '1px solid var(--if-line)' }}>
+              {totalCount} prompt{totalCount === 1 ? '' : 's'}
+            </span>
+          )}
+          <ChevronDown size={18} color="var(--if-muted)" style={{ transition: 'transform 200ms' }} className="playbook-chevron" />
+        </div>
+      </summary>
+
+      <div style={{ padding: '20px' }}>
+        {section.intro && (
+          <p style={{ fontSize: '14px', color: 'var(--if-ink)', lineHeight: 1.7, marginTop: 0, marginBottom: '16px' }}>{section.intro}</p>
+        )}
+
+        {isCalloutOnly ? (
+          section.callouts.map((c, i) => (
+            <Callout key={i} variant="warn" title={c.title} body={c.body} />
+          ))
+        ) : visibleSubsections.length > 0 ? (
+          visibleSubsections.map((sub) => (
+            <div key={sub.title} style={{ marginBottom: '20px' }}>
+              <h4 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--if-navy)', borderBottom: '2px solid var(--if-coral-lt)', paddingBottom: '6px', marginTop: 0, marginBottom: '12px' }}>
+                {highlight(sub.title)}
+              </h4>
+              {sub.prompts.map((p, i) => (
+                <PromptCard key={sub.title + i} prompt={p} sectionTitle={section.title} subsectionTitle={sub.title} highlight={highlight} />
+              ))}
+            </div>
+          ))
+        ) : (
+          visiblePrompts.map((p, i) => (
+            <PromptCard key={section.id + i} prompt={p} sectionTitle={section.title} highlight={highlight} />
+          ))
+        )}
       </div>
     </details>
   );
 }
 
 export default function PlaybookGuide() {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const [expandAll, setExpandAll] = useState(false);
-  const [collapseAll, setCollapseAll] = useState(0);
-  const highlight = useMemo(() => makeHighlighter(query.trim().toLowerCase()), [query]);
-  const forceOpen = Boolean(query) || expandAll;
-  const collapseEverything = () => { setExpandAll(false); setCollapseAll((k) => k + 1); };
+
+  const forceOpenAll = query.trim().length > 0 || expandAll;
+  const highlight = useMemo(() => makeHighlighter(query.trim()), [query]);
+
+  const totalPrompts = useMemo(() => {
+    let n = 0;
+    for (const s of PLAYBOOK_DATA) {
+      if (s.subsections) {
+        for (const sub of s.subsections) n += sub.prompts.length;
+      } else if (s.prompts) {
+        n += s.prompts.length;
+      }
+    }
+    return n;
+  }, []);
+
+  const visibleSectionCount = useMemo(() => {
+    if (!query.trim()) return PLAYBOOK_DATA.length;
+    const q = query.trim().toLowerCase();
+    let count = 0;
+    for (const s of PLAYBOOK_DATA) {
+      if (s.callouts && s.callouts.length) {
+        if (s.callouts.some((c) => (c.title + ' ' + c.body).toLowerCase().includes(q))) count++;
+      } else if (s.subsections) {
+        if (s.subsections.some((sub) => sub.prompts.some((p) => matchesQuery(p, q)))) count++;
+      } else if (s.prompts) {
+        if (s.prompts.some((p) => matchesQuery(p, q))) count++;
+      }
+    }
+    return count;
+  }, [query]);
+
+  function jumpTo(id) {
+    if (typeof document === 'undefined') return;
+    const el = document.getElementById('playbook-section-' + id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   return (
-    <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 26, fontWeight: 800, color: T.slate900, letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: 10 }}>
-          <Icon name="bookOpen" size={24} color={T.blue} strokeWidth={2} /> Playbook &amp; Guide
+    <div style={{ padding: '0 0 48px', maxWidth: '960px', margin: '0 auto' }}>
+      {/* Hero header */}
+      <div
+        style={{
+          position: 'relative',
+          background: 'linear-gradient(135deg, #1B2B4B 0%, #2D3E63 55%, #F5946A 130%)',
+          color: 'white',
+          padding: '32px 32px 28px',
+          borderRadius: '20px',
+          marginBottom: '24px',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ position: 'absolute', top: -30, right: -30, opacity: 0.08, transform: 'rotate(-12deg)', pointerEvents: 'none' }}>
+          <BookOpen size={200} />
         </div>
-        <div style={{ fontSize: 13, color: T.slate500, marginTop: 4, lineHeight: 1.5 }}>Every prompt in here has an "Ask Claude" button. It copies a context-wrapped version to your clipboard so you can paste directly into your Claude.ai tab.</div>
-      </div>
-      <div style={{ marginBottom: 16 }}>{INTRO_CALLOUTS.map((c, ci) => <Callout key={ci} variant={c.variant} title={c.title} body={c.body} />)}</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 18, background: T.white, border: `1px solid ${T.slate200}`, borderRadius: 10, padding: 10 }}>
-        <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 500 }}>
-          <div style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.slate400 }}><Icon name="search" size={14} /></div>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search all prompts, titles, tags…" style={{ width: "100%", padding: "8px 32px 8px 32px", fontSize: 12, border: `1px solid ${T.slate200}`, borderRadius: 7, background: T.white, color: T.slate900, boxSizing: "border-box" }} />
-          {query && <button onClick={() => setQuery("")} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: T.slate500, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Clear search"><Icon name="x" size={14} /></button>}
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+            <Sparkles size={20} />
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.92 }}>
+              Playbook &amp; Guide
+            </span>
+          </div>
+          <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 800, lineHeight: 1.2 }}>
+            How to work with your Claude, in plain English.
+          </h1>
+          <p style={{ fontSize: '14px', margin: '10px 0 20px', opacity: 0.92, lineHeight: 1.6, maxWidth: '640px' }}>
+            {PLAYBOOK_DATA.length} sections · {totalPrompts} ready-to-use prompts. Every one has a
+            one-click <em>Try in Claude</em> button. Search anything, jump anywhere.
+          </p>
+
+          {/* Big search */}
+          <div style={{ position: 'relative', marginBottom: '14px' }}>
+            <Search
+              size={18}
+              style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(15,23,42,0.55)', pointerEvents: 'none' }}
+            />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search prompts, tags, tips, or section titles…"
+              style={{
+                width: '100%',
+                padding: '14px 44px 14px 46px',
+                borderRadius: '12px',
+                fontSize: '15px',
+                border: 'none',
+                background: 'rgba(255,255,255,0.96)',
+                color: 'var(--if-navy)',
+                boxSizing: 'border-box',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+              }}
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                aria-label="Clear search"
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'rgba(15,23,42,0.08)',
+                  border: 'none',
+                  padding: '6px',
+                  borderRadius: '999px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                }}
+              >
+                <X size={14} color="var(--if-navy)" />
+              </button>
+            )}
+          </div>
+
+          {/* Stats + expand toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '12px', opacity: 0.94, flexWrap: 'wrap' }}>
+            {query.trim() ? (
+              <div>
+                <strong style={{ fontSize: '15px', marginRight: 4 }}>{visibleSectionCount}</strong>
+                matching section{visibleSectionCount === 1 ? '' : 's'} for "{query}"
+              </div>
+            ) : (
+              <>
+                <div>
+                  <strong style={{ fontSize: '15px', marginRight: 4 }}>{PLAYBOOK_DATA.length}</strong>
+                  sections
+                </div>
+                <div>
+                  <strong style={{ fontSize: '15px', marginRight: 4 }}>{totalPrompts}</strong>
+                  prompts
+                </div>
+                <div style={{ marginLeft: 'auto' }}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandAll((v) => !v)}
+                    style={{
+                      background: 'rgba(255,255,255,0.14)',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      color: 'white',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    {expandAll ? <ChevronsUp size={13} /> : <ChevronsDown size={13} />}
+                    {expandAll ? 'Collapse all' : 'Expand all'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-        <button onClick={() => setExpandAll(true)} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.white, color: T.slate700, border: `1px solid ${T.slate300}`, borderRadius: 7, padding: "7px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}><Icon name="chevronsDown" size={13} /> Expand all</button>
-        <button onClick={collapseEverything} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.white, color: T.slate700, border: `1px solid ${T.slate300}`, borderRadius: 7, padding: "7px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}><Icon name="chevronsUp" size={13} /> Collapse all</button>
       </div>
-      <div key={`sections-${collapseAll}`}>{PLAYBOOK_DATA.map((section) => <Section key={section.id} section={section} query={query.trim().toLowerCase()} forceOpen={forceOpen} highlight={highlight} />)}</div>
-      <div style={{ marginTop: 24, padding: "14px 18px", background: T.slate50, border: `1px solid ${T.slate200}`, borderRadius: 10, fontSize: 11, color: T.slate500, lineHeight: 1.6, textAlign: "center" }}>Playbook content authored by Rebecca — Imaginary Farms LLC · The Claude Whisperer. Every prompt is copy-ready.</div>
-      <style>{`details[open] .playbook-chevron { transform: rotate(180deg); } details summary::-webkit-details-marker { display: none; }`}</style>
+
+      {/* Intro callouts */}
+      <div style={{ marginBottom: '28px' }}>
+        {INTRO_CALLOUTS.map((c, i) => (
+          <Callout key={i} variant={c.variant} title={c.title} body={c.body} />
+        ))}
+      </div>
+
+      {/* Quick-jump nav — hides during active search */}
+      {!query.trim() && (
+        <div
+          className="if-no-print"
+          style={{
+            display: 'flex',
+            gap: '6px',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            padding: '10px 12px',
+            marginBottom: '20px',
+            background: 'var(--if-surface)',
+            border: '1px solid var(--if-line)',
+            borderRadius: '12px',
+          }}
+        >
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 10px 4px 4px',
+            fontSize: '11px',
+            fontWeight: 700,
+            color: 'var(--if-muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}>
+            <Compass size={12} /> Jump to
+          </div>
+          {PLAYBOOK_DATA.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => jumpTo(s.id)}
+              style={{
+                fontSize: '12px',
+                fontWeight: 500,
+                color: 'var(--if-navy)',
+                background: 'var(--if-page)',
+                border: '1px solid var(--if-line)',
+                padding: '4px 10px',
+                borderRadius: '999px',
+                cursor: 'pointer',
+              }}
+              title={s.subtitle}
+            >
+              {s.title}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Sections */}
+      <div>
+        {PLAYBOOK_DATA.map((section, idx) => (
+          <div id={'playbook-section-' + section.id} key={section.id} style={{ scrollMarginTop: '20px' }}>
+            <Section
+              section={section}
+              query={query.trim()}
+              forceOpen={forceOpenAll || (idx === 0 && !query.trim())}
+              highlight={highlight}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Footer note */}
+      <div
+        style={{
+          marginTop: '36px',
+          padding: '20px 22px',
+          borderRadius: '14px',
+          background: 'linear-gradient(135deg, var(--if-cream) 0%, #FFF7ED 100%)',
+          border: '1px solid var(--if-coral-lt)',
+          fontSize: '13px',
+          color: 'var(--if-ink)',
+          lineHeight: 1.7,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+          <Info size={14} color="var(--if-coral)" />
+          <strong style={{ color: 'var(--if-navy)' }}>How to use this Playbook.</strong>
+        </div>
+        Every prompt has a <em>Try in Claude</em> button. Click it — the prompt copies to your clipboard with a
+        context header telling your Claude which section you're in. Switch to your Claude.ai tab, paste with
+        Cmd+V (Mac) or Ctrl+V (Windows), and hit Enter. Keep Claude.ai open in the same browser and you're one
+        paste away from any prompt in here.
+      </div>
+
+      <style>{`
+        details[open] .playbook-chevron {
+          transform: rotate(180deg);
+        }
+        details summary::-webkit-details-marker {
+          display: none;
+        }
+        .playbook-prompt-card:hover {
+          border-color: var(--if-coral-lt) !important;
+          box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+          transform: translateY(-1px);
+        }
+      `}</style>
     </div>
   );
 }

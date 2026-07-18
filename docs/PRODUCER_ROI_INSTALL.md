@@ -1,3 +1,34 @@
+<!--
+============================================================
+  REALITY UPDATE — 2026-07-02
+  This addendum reflects the live state of <AGENCY_NAME> Agency's BCC.
+  It supersedes anything below in the pre-addendum content of this file.
+  The pre-addendum content is kept verbatim for historical / install-time reference.
+============================================================
+-->
+
+# 🔄 Reality Update — 2026-07-02
+
+The Performance tab install steps below are complete. Current state:
+
+## What's populated
+- ✅ `agency.smvc_rate_pc` = 10.00%
+- ✅ `agency.blended_rate_other` = 9.00%
+- ✅ `agency.lapse_rate_annual` = 10.00%
+- ✅ `staff` populated (19 rows) with role names matching the convention
+- ✅ `commission_structures` scaffold rows present for Andrew Harrison, Jakyah McGee, Arnisha Moore, Bryce Reid (per-producer variant confirmations still pending the agent)
+- ✅ `Producer Underperformance Watcher` active and firing
+
+## What's not populated yet
+- ❌ `producer_production` is 0 rows. The `Producer Production Report Processor` recipe is active but has never found data.
+- **Root cause:** SF's monthly producer production report email hasn't been forwarded to `<AGENCY_CLAUDE_EMAIL>` yet.
+- **Impact:** The Performance tab renders empty state. AIPP forward projections show "awaiting data." Producer ROI math has no substrate to run against.
+- **Unblock:** the agent forwards one SF producer production report email. The parser runs on the next scheduled cron tick and populates the table. Everything downstream then works automatically.
+
+---
+
+<!-- Original PRODUCER_ROI_INSTALL.md content follows below. -->
+
 # Producer ROI Install Playbook
 
 > Specific install steps for the **HR & People → Performance tab** Producer ROI feature.

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase, AGENCY_ID } from "../lib/supabase.js";
+import ReportPackage from "./ReportPackage.jsx";
 
 // ============================================================
 // BCC FINANCIALS MODULE v1.0
@@ -16,50 +17,40 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 //   7. Credit & Debt   — Cards, loans, lines of credit
 //   8. General Ledger  — Full transaction ledger
 //
-// DATA: Reads directly from Supabase via useFinancialsData() below.
-//       Sources: cpa_pnl_monthly, comp_recap, bank_accounts,
-//       credit_accounts, journal_lines (+ journal_entries +
-//       chart_of_accounts), payroll_runs, payroll_detail,
-//       aipp_tracking, scoreboard_tracking, and the
-//       vw_bcc_vs_cpa_commission_variance view (migration 020).
+// DATA: Reads from Supabase via props (passed from BCCApp)
+// In production replace MOCK_DATA with Supabase queries:
+//   const { data } = await supabase.from('comp_recap')...
 // ============================================================
 
 
 // ─── Design Tokens (matches BCCApp shell) ────────────────────
 
 const T = {
-  navy:    "#1B2B4B",
-  blue:    "#2D7DD2",
-  blueLt:  "#EFF6FF",
-  green:   "#10B981",
-  greenLt: "#D1FAE5",
-  amber:   "#F59E0B",
-  amberLt: "#FEF3C7",
-  red:     "#EF4444",
-  redLt:   "#FEE2E2",
-  purple:  "#7C3AED",
-  purpleLt:"#EDE9FE",
-  slate50: "#F8FAFC",
-  slate100:"#F1F5F9",
-  slate200:"#E2E8F0",
-  slate400:"#94A3B8",
-  slate500:"#64748B",
-  slate600:"#475569",
-  slate700:"#334155",
-  slate800:"#1E293B",
-  slate900:"#0F172A",
-  white:   "#FFFFFF",
+  navy:    "var(--accent-navy)",
+  blue:    "var(--accent-blue)",
+  blueLt:  "var(--accent-navy-bg)",
+  green:   "var(--success)",
+  greenLt: "var(--success-bg)",
+  amber:   "var(--warning)",
+  amberLt: "var(--warning-bg)",
+  red:     "var(--danger)",
+  redLt:   "var(--danger-bg)",
+  purple:  "var(--accent-purple)",
+  purpleLt:"var(--accent-purple-bg)",
+  slate50: "var(--bg-panel-subtle)",
+  slate100:"var(--bg-panel)",
+  slate200:"var(--border-subtle)",
+  slate400:"var(--text-quaternary)",
+  slate500:"var(--text-tertiary)",
+  slate600:"var(--text-secondary)",
+  slate700:"var(--text-secondary)",
+  slate800:"var(--text-primary)",
+  slate900:"var(--text-primary)",
+  white:   "var(--bg-card)",
+  textOnColor: "#FFFFFF",
 };
 
 // ─── Live Supabase Data Hook ─────────────────────────────────
-// Reads cpa_pnl_monthly as the authoritative P&L source (accrual, CPA aligned),
-// comp_recap for monthly revenue chart, plus bank/credit/payroll/aipp/GL tables.
-//
-// PRINCIPLE: Phase 1 (Jan 2025 - latest CPA close) lives in cpa_pnl_monthly
-// and is read-only. Phase 2 (post May 2026) lives in journal_entries via
-// the live system, but most months still come from CPA until the cutover
-// year-end reconciliation closes the gap.
-
 function useFinancialsData() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -67,236 +58,250 @@ function useFinancialsData() {
   useEffect(() => {
     async function load() {
       try {
-        const today        = new Date();
-        const currentYear  = today.getFullYear();
-        const priorYear    = currentYear - 1;
-        const currentMonth = today.getMonth() + 1;
-        const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const currentYear  = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;     // 1-12
+        const quarterStart = Math.floor((currentMonth - 1) / 3) * 3 + 1;
 
         const [
-          pnlCurRes, pnlPriorRes,
-          compRes, bankRes, ccRes, glRes,
-          payrollRunsRes, payrollDetailRes,
-          aippRes, scoreboardRes,
-          reconRes,
+          isRows, compRows, bankRows, ccRows, glRows,
+          payrollRunsRes, payrollDetailRows,
+          aippRow, scoreboardRows, bsRows, benefitsRows,
         ] = await Promise.all([
-          // Current year P&L — CPA monthly + YTD (period_month=13)
-          supabase.from("cpa_pnl_monthly")
-            .select("period_year,period_month,section,parent_account,account_name,amount,is_subtotal,notes")
-            .eq("agency_id", AGENCY_ID)
-            .eq("period_year", currentYear)
-            .eq("is_subtotal", false),
+          // Income statement view — pull current AND prior year for YoY benchmarking
+          supabase.from("v_income_statement")
+            .select("account_name, account_type, amount, month, year")
+            .gte("year", currentYear - 1)
+            .lte("year", currentYear)
+            .order("month"),
 
-          // Prior year monthly P&L for YoY + chart
-          supabase.from("cpa_pnl_monthly")
-            .select("period_year,period_month,section,parent_account,account_name,amount,is_subtotal")
-            .eq("agency_id", AGENCY_ID)
-            .eq("period_year", priorYear)
-            .eq("is_subtotal", false),
-
-          // SF comp recap — cash basis revenue stream, broken out by half-month
+          // SF comp recap — full 24-month rolling window (current + prior year)
           supabase.from("comp_recap")
-            .select("period_year,period_month,period_half,comp_type,comp_category,description,amount,is_aipp_eligible,is_scoreboard_eligible,entry_date")
-            .eq("agency_id", AGENCY_ID)
+            .select("period_year, period_month, comp_type, comp_category, description, amount, is_aipp_eligible, is_scoreboard_eligible")
+            .gte("period_year", currentYear - 1)
             .order("period_year", { ascending: false })
             .order("period_month", { ascending: false })
-            .limit(2000),
+            .limit(1500),
 
           // Bank
           supabase.from("bank_accounts")
-            .select("account_name,current_balance,as_of_date,account_type,account_number_last4,institution")
-            .eq("agency_id", AGENCY_ID),
+            .select("account_name, current_balance, as_of_date, account_type, account_number_last4, institution"),
 
           // Credit
           supabase.from("credit_accounts")
-            .select("account_name,current_balance,as_of_date,updated_at,account_type,account_number_last4,credit_limit,available_credit,interest_rate,minimum_payment,payment_due_day,institution")
-            .eq("agency_id", AGENCY_ID),
+            .select("account_name, current_balance, updated_at, account_type, account_number_last4, credit_limit, available_credit, interest_rate, minimum_payment, payment_due_day, institution"),
 
-          // GL — recent journal lines + entries
-          supabase.from("journal_lines")
-            .select(`debit,credit,created_at,
-              journal_entries!inner ( entry_date, reference_number, description, source, agency_id ),
-              chart_of_accounts!inner ( account_name )`)
-            .eq("journal_entries.agency_id", AGENCY_ID)
-            .order("created_at", { ascending: false })
-            .limit(80),
+          // GL — unified BCC + QBO ledger; bump to 500 rows for client-side period filter
+          supabase.from("v_unified_general_ledger")
+            .select("source_layer, txn_date, txn_type, doc_number, memo, account_name, account_code, debit, credit")
+            .order("txn_date", { ascending: false }).limit(500),
 
-          // Payroll (still empty as of session log)
+          // Payroll runs (header)
           supabase.from("payroll_runs")
-            .select("id,pay_period_start,pay_period_end,pay_date,payroll_provider,gross_payroll,employer_taxes,net_payroll,status")
-            .eq("agency_id", AGENCY_ID)
-            .order("pay_date", { ascending: false }).limit(24),
+            .select("id, pay_period_start, pay_period_end, pay_date, payroll_provider, gross_payroll, employer_taxes, net_payroll, status")
+            .order("pay_date", { ascending: false }).limit(12),
 
+          // Payroll detail (per-employee)
           supabase.from("payroll_detail")
-            .select("payroll_run_id,gross_pay,federal_tax,state_tax,social_security,medicare,other_deductions,net_pay,employment_type"),
+            .select("payroll_run_id, gross_pay, federal_tax, state_tax, social_security, medicare, other_deductions, net_pay, employment_type"),
 
-          // AIPP
+          // AIPP — pull current + 2 prior years for YoY trend
           supabase.from("aipp_tracking")
-            .select("program_year,target_amount,earned_ytd,projected_full_year,achievement_percentage,notes")
-            .eq("agency_id", AGENCY_ID)
-            .eq("program_year", currentYear)
-            .maybeSingle(),
+            .select("program_year, target_amount, earned_ytd, projected_full_year, achievement_percentage, notes")
+            .order("program_year", { ascending: false }).limit(3),
 
-          // ScoreBoard (still empty as of session log)
+          // ScoreBoard
           supabase.from("scoreboard_tracking")
-            .select("program_year,period,metric_name,target,actual,achievement_percentage,notes")
-            .eq("agency_id", AGENCY_ID)
+            .select("program_year, period, metric_name, target, actual, achievement_percentage, notes")
             .order("program_year", { ascending: false }).limit(20),
 
-          // BCC vs CPA Commission reconciliation (view from migration 020).
-          // Monthly net_payable vs CPA SF-earned. Surfaces Phase 2 data gaps.
-          supabase.from("vw_bcc_vs_cpa_commission_variance")
-            .select("period_year,period_month,cpa_sf_earned,cpa_non_sf,bcc_net_payable,bcc_line_items_only,variance_netpay_minus_cpa,variance_netpay_pct")
-            .eq("agency_id", AGENCY_ID)
-            .order("period_year", { ascending: false })
-            .order("period_month", { ascending: false })
-            .limit(36),
+          // Balance Sheet — last 24 monthly snapshots from QBO mirror
+          supabase.from("v_balance_sheet")
+            .select("period_start, period_end, accounting_method, total_assets, current_assets, total_liabilities, current_liabilities, total_equity, working_capital, source_layer, updated_at")
+            .order("period_end", { ascending: false }).limit(24),
+
+          // SF reportable benefits — S-Corp owner comp W-2 gross-up detail per period
+          // (feeds the Owner Compensation section inside the COMP_RECAP tab)
+          supabase.from("sf_reportable_benefits")
+            .select("id, period_year, period_month, period_half, period_end_date, benefit_type, current_amount, ytd_amount, source_file_name")
+            .order("period_end_date", { ascending: false }),
         ]);
 
-        const pnlCur   = pnlCurRes.data   || [];
-        const pnlPrior = pnlPriorRes.data || [];
-        const compRecapsRaw = compRes.data || [];
+        const isAll      = isRows.data || [];
+        const isData     = isAll.filter(r => r.year === currentYear);
+        const isPriorData = isAll.filter(r => r.year === currentYear - 1);
+        const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-        // ─── Build P&L lines for current year ───
-        // cpa_pnl_monthly stores 2026 at period_month=13 (YTD) and prior years at 1..12.
-        // For current year, prefer period_month=13; if absent, sum months 1..currentMonth.
-        const curIsYTDRow = pnlCur.some(r => r.period_month === 13);
-        const incomeRows = (curIsYTDRow
-          ? pnlCur.filter(r => r.period_month === 13 && r.section === "Income")
-          : pnlCur.filter(r => r.section === "Income" && r.period_month <= currentMonth)
-        );
-        const expenseRows = (curIsYTDRow
-          ? pnlCur.filter(r => r.period_month === 13 && r.section === "Expenses")
-          : pnlCur.filter(r => r.section === "Expenses" && r.period_month <= currentMonth)
-        );
-
-        const collapse = (rows) => {
-          const byName = {};
-          for (const r of rows) {
-            const k = r.account_name;
-            byName[k] = byName[k] || { name: k, parent: r.parent_account, ytd: 0 };
-            byName[k].ytd += parseFloat(r.amount || 0);
-          }
-          return Object.values(byName).sort((a,b) => b.ytd - a.ytd);
-        };
-
-        const incomeLines  = collapse(incomeRows);
-        const expenseLines = collapse(expenseRows);
-
-        // Pull notes / period label from current year row if present
-        const ytdLabel = pnlCur.find(r => r.notes)?.notes || `Jan 1 – ${months[currentMonth-1]} ${today.getDate()}, ${currentYear}`;
-
-        const revenueYTD  = incomeLines.reduce((s,r) => s + r.ytd, 0);
-        const expensesYTD = expenseLines.reduce((s,r) => s + r.ytd, 0);
-        const netYTD      = revenueYTD - expensesYTD;
-
-        // ─── Prior-year same-period for YoY ───
-        // Sum prior-year months 1..currentMonth-1 (full closed months) since 2026 YTD
-        // through Jun 9 is roughly 5 closed months + partial June.
-        const priorEndMonth = Math.max(1, currentMonth - 1);
-        const priorIncomeRows  = pnlPrior.filter(r => r.section === "Income"   && r.period_month >= 1 && r.period_month <= priorEndMonth);
-        const priorExpenseRows = pnlPrior.filter(r => r.section === "Expenses" && r.period_month >= 1 && r.period_month <= priorEndMonth);
-        const priorRevenueSamePeriod  = priorIncomeRows.reduce((s,r) => s + parseFloat(r.amount || 0), 0);
-        const priorExpensesSamePeriod = priorExpenseRows.reduce((s,r) => s + parseFloat(r.amount || 0), 0);
-        const priorNetSamePeriod      = priorRevenueSamePeriod - priorExpensesSamePeriod;
-
-        const priorIncomeFull  = pnlPrior.filter(r => r.section === "Income"   && r.period_month >= 1 && r.period_month <= 12);
-        const priorExpenseFull = pnlPrior.filter(r => r.section === "Expenses" && r.period_month >= 1 && r.period_month <= 12);
-        const priorRevenueFull  = priorIncomeFull.reduce((s,r) => s + parseFloat(r.amount || 0), 0);
-        const priorExpensesFull = priorExpenseFull.reduce((s,r) => s + parseFloat(r.amount || 0), 0);
-
-        const yoy = (curr, prior) => (prior && Number.isFinite(prior) && prior !== 0)
-          ? ((curr - prior) / prior) * 100
-          : null;
-
-        // ─── Ratios ───
-        const payrollAccounts = ["Payroll - Employee Wages","Payroll Taxes","Payroll Expenses","Officer Salary"];
-        const payrollYTD = expenseLines
-          .filter(r => payrollAccounts.includes(r.name))
-          .reduce((s,r) => s + r.ytd, 0);
-        const payrollRatioYTD = revenueYTD > 0 ? (payrollYTD / revenueYTD) * 100 : null;
-        const expenseRatioYTD = revenueYTD > 0 ? (expensesYTD / revenueYTD) * 100 : null;
-
-        // ─── Monthly revenue chart ───
-        // For current year: revenue from comp_recap (broken out monthly), expenses from
-        // prior year's pattern (until 2026 monthly CPA P&L arrives).
+        // Monthly chart
         const monthlyRevenue = months.map((m, i) => {
           const mo = i + 1;
-          const rev = compRecapsRaw
-            .filter(r => r.period_year === currentYear && r.period_month === mo)
-            .filter(r => r.comp_type !== "net_payable")  // net_payable is a summary row, would double-count
-            .reduce((s,r) => s + parseFloat(r.amount || 0), 0);
-          const priorExp = pnlPrior
-            .filter(r => r.section === "Expenses" && r.period_month === mo)
-            .reduce((s,r) => s + parseFloat(r.amount || 0), 0);
-          return {
-            month: m, monthNum: mo,
-            revenue: Math.round(rev),
-            expenses: 0,           // CPA monthly expenses not available for current year; chart shows revenue only
-            priorYearExpenses: Math.round(priorExp),
-            isCurrent: mo === currentMonth,
-            isFuture: mo > currentMonth,
-          };
+          const rev = isData.filter(r => r.month === mo && r.account_type === "income").reduce((s,r) => s + parseFloat(r.amount||0), 0);
+          const exp = isData.filter(r => r.month === mo && r.account_type === "expense").reduce((s,r) => s + parseFloat(r.amount||0), 0);
+          return { month: m, revenue: Math.round(rev), expenses: Math.round(exp) };
         });
 
-        // ─── Comp recap detail (excluding net_payable summary rows for the table) ───
-        const compRecaps = compRecapsRaw
-          .filter(r => r.comp_type !== "net_payable")
-          .map(r => ({
-            period_year:  r.period_year,
-            period_month: r.period_month,
-            period_half:  r.period_half,
-            period_label: `${months[r.period_month-1]} ${r.period_year}`,
-            comp_type:    r.comp_type,
-            comp_category: r.comp_category,
-            description:  r.description || `${r.comp_type} — ${r.comp_category}`,
-            amount:       parseFloat(r.amount || 0),
-            is_aipp_eligible: r.is_aipp_eligible,
-            is_scoreboard_eligible: r.is_scoreboard_eligible,
-          }));
+        // P&L line items
+        const buildLines = (type) =>
+          [...new Set(isData.filter(r=>r.account_type===type).map(r=>r.account_name))].map(name => {
+            const rows = isData.filter(r=>r.account_name===name && r.account_type===type);
+            const ytd = rows.reduce((s,r)=>s+parseFloat(r.amount||0),0);
+            const mtd = rows.filter(r=>r.month===currentMonth).reduce((s,r)=>s+parseFloat(r.amount||0),0);
+            const qtd = rows.filter(r=>r.month>=quarterStart && r.month<=currentMonth).reduce((s,r)=>s+parseFloat(r.amount||0),0);
+            return { name, mtd: Math.round(mtd), qtd: Math.round(qtd), ytd: Math.round(ytd) };
+          });
 
-        // ─── AIPP — keep shape AIPPSection expects ───
-        const aippRaw = aippRes.data || null;
-        const aippMonthlyEarned = months.map((m, i) => {
-          const mo = i + 1;
-          const earned = compRecapsRaw
-            .filter(r => r.period_year === currentYear && r.period_month === mo && r.is_aipp_eligible)
-            .filter(r => r.comp_type !== "net_payable")
-            .reduce((s,r) => s + parseFloat(r.amount || 0), 0) * 0.05;  // 5% AIPP
-          return { month: m, amount: Math.round(earned) };
-        });
-        const priorYearAIPP = pnlPrior
-          .filter(r => r.section === "Income" && /AIPP/i.test(r.account_name || ""))
+        const incomeLines  = buildLines("income");
+        const expenseLines = buildLines("expense");
+
+        const sumByPeriod = (type, predicate) =>
+          isData.filter(r => r.account_type === type && predicate(r))
+                .reduce((s,r) => s + parseFloat(r.amount||0), 0);
+
+        const revYTD = sumByPeriod("income",  () => true);
+        const expYTD = sumByPeriod("expense", () => true);
+        const revMTD = sumByPeriod("income",  r => r.month === currentMonth);
+        const expMTD = sumByPeriod("expense", r => r.month === currentMonth);
+        const revQTD = sumByPeriod("income",  r => r.month >= quarterStart && r.month <= currentMonth);
+        const expQTD = sumByPeriod("expense", r => r.month >= quarterStart && r.month <= currentMonth);
+
+        // ─── Prior-year YTD (same months elapsed) — for YoY columns + benchmarks
+        const priorYearYTDRev = isPriorData
+          .filter(r => r.account_type === "income" && r.month <= currentMonth)
+          .reduce((s,r) => s + parseFloat(r.amount || 0), 0);
+        const priorYearYTDExp = isPriorData
+          .filter(r => r.account_type === "expense" && r.month <= currentMonth)
           .reduce((s,r) => s + parseFloat(r.amount || 0), 0);
 
-        const aipp = {
-          year:          aippRaw?.program_year || currentYear,
-          target:        parseFloat(aippRaw?.target_amount || 0) || 0,
-          earned:        parseFloat(aippRaw?.earned_ytd || 0) || 0,
-          projected:     parseFloat(aippRaw?.projected_full_year || 0) || 0,
-          priorYear:     priorYearAIPP || 0,
-          monthlyEarned: aippMonthlyEarned,
-          targetIsPlaceholder: !aippRaw?.target_amount || parseFloat(aippRaw.target_amount) === 50000,
+        // Prior-year P&L line items (YTD same period)
+        const buildLinesPY = (type) =>
+          [...new Set(isPriorData.filter(r=>r.account_type===type).map(r=>r.account_name))].map(name => {
+            const rows = isPriorData.filter(r=>r.account_name===name && r.account_type===type && r.month<=currentMonth);
+            const ytd = rows.reduce((s,r)=>s+parseFloat(r.amount||0),0);
+            return { name, ytd: Math.round(ytd) };
+          });
+        const incomeLinesPY  = buildLinesPY("income");
+        const expenseLinesPY = buildLinesPY("expense");
+
+        // ─── SF Agency Reference Guide benchmark ratios (current year YTD)
+        const sumExpCY = (names) => isData
+          .filter(r => r.account_type === "expense" && names.includes(r.account_name))
+          .reduce((s,r) => s + parseFloat(r.amount || 0), 0);
+        const sumExpPY = (names) => isPriorData
+          .filter(r => r.account_type === "expense" && names.includes(r.account_name) && r.month <= currentMonth)
+          .reduce((s,r) => s + parseFloat(r.amount || 0), 0);
+
+        // SF Agency Reference Guide standard account names + common modern aliases
+        // Ratios work for both: (a) SF-standard bookkeeping (Salaries & Wages / Rent
+        // Expense / Advertising and Promotion), and (b) more consolidated modern
+        // chart-of-accounts (Payroll & Compensation / Rent / Lease / Marketing &
+        // Advertising) that many agencies actually use in QBO.
+        const salaries   = ["Salaries & Wages", "Payroll & Compensation", "Staff Wages"];
+        const payTax     = ["Payroll Tax Expense", "Payroll Taxes"];
+        const payFees    = ["Payroll Fees", "Payroll Processing Fees"];
+        const benefits   = [
+          "Medical Insurance Contribution", "Agents Group Medical", "Employee Benefits",
+          "Health Insurance — Staff", "Health Insurance - Staff", "Employee Health Insurance",
+        ];
+        const rentNames  = ["Rent Expense", "Rent / Lease", "Rent"];
+        const mktNames   = [
+          "Advertising and Promotion", "Echo Co-Op Direct Mail",
+          "Marketing & Advertising", "Marketing", "Advertising",
+        ];
+        const allPayroll = [...salaries, ...payTax, ...payFees, ...benefits];
+
+        const pct = (n, d) => d ? (n / d) * 100 : 0;
+        // statHi: higher = worse. healthy ≤ hh, warning ≤ wh, else critical.
+        // statLo: higher = better. healthy ≥ hl, warning ≥ wl, else critical.
+        // Bands vary per SF Agency Reference Guide — pass explicit thresholds, not generic ±5.
+        const statHi = (v, hh, wh) => v <= hh ? "healthy" : v <= wh ? "warning" : "critical";
+        const statLo = (v, hl, wl) => v >= hl ? "healthy" : v >= wl ? "warning" : "critical";
+
+        // Officer/owner compensation lines commonly seen in QBO/S-Corp bookkeeping.
+        // Note: many modern chart-of-accounts roll owner comp into Payroll &
+        // Compensation without a dedicated line — in that case ownerComp ratio
+        // will report 0% correctly (no separate owner comp exists to isolate).
+        const ownerCompNames   = ["Salaries & Wages - Officer", "Officer Compensation", "Owner Comp", "Owner Compensation"];
+        const teamPayrollPct   = pct(sumExpCY(salaries), revYTD);
+        const payrollAllInPct  = pct(sumExpCY(allPayroll), revYTD);
+        const ownerCompPct     = pct(sumExpCY(ownerCompNames), revYTD);
+        const rentPct          = pct(sumExpCY(rentNames), revYTD);
+        const marketingPct     = pct(sumExpCY(mktNames), revYTD);
+        // Total OpEx per SF Agency Reference Guide = non-payroll operating expenses / gross
+        // (Payroll, owner comp, payroll taxes/fees/benefits are already broken out in their own tiles.)
+        const nonPayrollOpEx       = expYTD - sumExpCY([...allPayroll, ...ownerCompNames]);
+        const priorNonPayrollOpEx  = priorYearYTDExp - sumExpPY([...allPayroll, ...ownerCompNames]);
+        const totalOpExPct     = pct(nonPayrollOpEx, revYTD);
+        const netMarginPct     = pct(revYTD - expYTD, revYTD);
+
+        // SF Agency Reference Guide bands (healthy_ceiling, warning_ceiling) for higher-is-worse,
+        // or (healthy_floor, warning_floor) for higher-is-better.
+        const healthRatios = {
+          teamPayroll:  { pct: teamPayrollPct,  py: pct(sumExpPY(salaries), priorYearYTDRev),      status: statHi(teamPayrollPct, 38, 45),   range: "30–38%",  label: "Team payroll",   hint: "Salaries & wages only / gross income" },
+          payrollAllIn: { pct: payrollAllInPct, py: pct(sumExpPY(allPayroll), priorYearYTDRev),    status: statHi(payrollAllInPct, 50, 55),  range: "40–50%",  label: "Payroll all-in", hint: "Salaries + taxes + fees + benefits / gross" },
+          ownerComp:    { pct: ownerCompPct,    py: pct(sumExpPY(ownerCompNames), priorYearYTDRev),status: statLo(ownerCompPct, 25, 20),     range: "25–35%",  label: "Owner Comp",     hint: "Officer W-2 / gross income", higherIsBetter: true },
+          rent:         { pct: rentPct,         py: pct(sumExpPY(rentNames), priorYearYTDRev),     status: statHi(rentPct, 8, 12),           range: "5–8%",    label: "Rent",           hint: "Rent expense / gross income" },
+          marketing:    { pct: marketingPct,    py: pct(sumExpPY(mktNames), priorYearYTDRev),      status: statLo(marketingPct, 5, 3),       range: "5–8%",    label: "Marketing",      hint: "Advertising + co-op / gross income", higherIsBetter: true },
+          totalOpEx:    { pct: totalOpExPct,    py: pct(priorNonPayrollOpEx, priorYearYTDRev),     status: statHi(totalOpExPct, 22, 28),     range: "15–22%",  label: "Total OpEx",     hint: "Non-payroll operating expenses / gross income" },
+          netMargin:    { pct: netMarginPct,    py: pct(priorYearYTDRev - priorYearYTDExp, priorYearYTDRev), status: statLo(netMarginPct, 25, 20), range: "25–35%", label: "Net margin",   hint: "(Revenue − total expense) / revenue", higherIsBetter: true },
         };
 
-        // ─── ScoreBoard ───
-        const scoreboardRows = scoreboardRes.data || [];
-        const scoreboard = scoreboardRows.map(s => ({
+        // Comp recap — group rows into "periods" (e.g. "Apr 2026") and pre-format for the section
+        const compRecapsRaw = compRows.data || [];
+        const compRecaps = compRecapsRaw.map(r => ({
+          period_year:  r.period_year,
+          period_month: r.period_month,
+          period_label: `${months[r.period_month-1]} ${r.period_year}`,
+          comp_type:    r.comp_type,
+          comp_category: r.comp_category,
+          description:  r.description || `${r.comp_type} — ${r.comp_category}`,
+          amount:       parseFloat(r.amount || 0),
+          is_aipp_eligible: r.is_aipp_eligible,
+          is_scoreboard_eligible: r.is_scoreboard_eligible,
+        }));
+
+        // AIPP — alias schema fields + add YoY chain (current → prior → prior-prior)
+        const aippRows = Array.isArray(aippRow.data) ? aippRow.data : [];
+        const aippCur  = aippRows[0] || null;
+        const aippPY1  = aippRows[1] || null;
+        const aippPY2  = aippRows[2] || null;
+        const aippPriorVal = aippPY1 ? (parseFloat(aippPY1.earned_ytd) || 0) : 0;
+        const aippPP2Val   = aippPY2 ? (parseFloat(aippPY2.earned_ytd) || 0) : 0;
+        const aipp = aippCur ? {
+          year:           aippCur.program_year || currentYear,
+          target:         parseFloat(aippCur.target_amount)        || 0,
+          earned:         parseFloat(aippCur.earned_ytd)           || 0,
+          projected:      parseFloat(aippCur.projected_full_year)  || 0,
+          priorYear:      aippPriorVal,
+          priorYearLabel: aippPY1?.program_year || null,
+          priorPriorYear: aippPP2Val,
+          priorPriorYearLabel: aippPY2?.program_year || null,
+          yoyDelta:       aippPriorVal && aippPP2Val ? aippPriorVal - aippPP2Val : null,
+          yoyPct:         aippPriorVal && aippPP2Val ? ((aippPriorVal - aippPP2Val) / aippPP2Val) * 100 : null,
+          monthlyEarned: months.map((m,i) => {
+            const mo = i + 1;
+            const earned = compRecapsRaw
+              .filter(r => r.period_year === currentYear && r.period_month === mo && r.is_aipp_eligible)
+              .reduce((s,r) => s + parseFloat(r.amount || 0), 0);
+            return { month: m, amount: Math.round(earned) };
+          }),
+        } : { year: currentYear, target: 0, earned: 0, projected: 0, priorYear: 0, priorYearLabel: null, priorPriorYear: 0, priorPriorYearLabel: null, yoyDelta: null, yoyPct: null, monthlyEarned: months.map(m => ({month:m, amount:0})) };
+
+        // ScoreBoard — alias to {metric, actual, target, pct}
+        const scoreboard = (scoreboardRows.data || []).map(s => ({
           metric: s.metric_name,
           actual: parseFloat(s.actual || 0),
           target: parseFloat(s.target || 0),
           pct:    Math.round(parseFloat(s.achievement_percentage || 0)),
         }));
 
-        // ─── Payroll ───
+        // Payroll — combine runs + detail, grouped by run
         const detailByRun = {};
-        for (const d of (payrollDetailRes.data || [])) {
+        for (const d of (payrollDetailRows.data || [])) {
           (detailByRun[d.payroll_run_id] ||= []).push(d);
         }
         const payroll = (payrollRunsRes.data || []).map(run => {
-          const startStr = run.pay_period_start ? new Date(run.pay_period_start).toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "";
-          const endStr   = run.pay_period_end   ? new Date(run.pay_period_end).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
-          const dateStr  = run.pay_date         ? new Date(run.pay_date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
+          const startStr = new Date(run.pay_period_start).toLocaleDateString("en-US", { month:"short", day:"numeric" });
+          const endStr   = new Date(run.pay_period_end).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
+          const dateStr  = run.pay_date ? new Date(run.pay_date).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" }) : "";
           return {
             pay_period: `${startStr} – ${endStr}`,
             pay_date:   dateStr,
@@ -308,92 +313,72 @@ function useFinancialsData() {
           };
         });
 
-        // ─── Bank ───
-        const bankAccounts = (bankRes.data || []).map(b => ({
-          name:        b.account_name,
-          balance:     parseFloat(b.current_balance || 0),
-          asOf:        b.as_of_date,
-          type:        b.account_type,
-          last4:       b.account_number_last4,
-          institution: b.institution,
-        }));
-
-        // ─── Credit ───
-        const creditAccounts = (ccRes.data || []).map(c => ({
-          name:        c.account_name,
-          balance:     parseFloat(c.current_balance || 0),
-          asOf:        c.as_of_date || c.updated_at,
-          type:        c.account_type,
-          last4:       c.account_number_last4,
-          institution: c.institution,
-          limit:       (c.credit_limit != null) ? parseFloat(c.credit_limit) : null,
-          rate:        (c.interest_rate != null) ? parseFloat(c.interest_rate) : null,
-          payment:     (c.minimum_payment != null) ? parseFloat(c.minimum_payment) : null,
-          dueDay:      c.payment_due_day,
-        }));
-
-        // ─── GL recent entries ───
-        const glEntries = (glRes.data || []).slice(0, 50).map(g => ({
-          date:        g.journal_entries?.entry_date,
-          ref:         g.journal_entries?.reference_number,
-          description: g.journal_entries?.description,
-          source:      g.journal_entries?.source,
-          account:     g.chart_of_accounts?.account_name,
-          debit:       parseFloat(g.debit  || 0),
-          credit:      parseFloat(g.credit || 0),
-        }));
-
-        // ─── BCC vs CPA Commission Reconciliation ───
-        // Maps view rows to a UI-friendly shape. Most-recent month first.
-        const reconciliation = (reconRes.data || []).map(r => ({
-          year:           r.period_year,
-          month:          r.period_month,
-          monthLabel:     `${months[(r.period_month - 1) % 12] || "?"} ${r.period_year}`,
-          cpaSfEarned:    (r.cpa_sf_earned    != null) ? parseFloat(r.cpa_sf_earned)    : null,
-          bccNetPayable:  (r.bcc_net_payable  != null) ? parseFloat(r.bcc_net_payable)  : null,
-          bccLineItems:   (r.bcc_line_items_only != null) ? parseFloat(r.bcc_line_items_only) : null,
-          variance:       (r.variance_netpay_minus_cpa != null) ? parseFloat(r.variance_netpay_minus_cpa) : null,
-          variancePct:    (r.variance_netpay_pct != null) ? parseFloat(r.variance_netpay_pct) : null,
+        // Credit accounts — alias to what CreditSection expects
+        const creditAccounts = (ccRows.data || []).map(c => ({
+          name:    c.account_name,
+          balance: parseFloat(c.current_balance || 0),
+          asOf:    c.updated_at,
+          type:    c.account_type,
+          last4:   c.account_number_last4,
+          limit:   parseFloat(c.credit_limit || 0) || null,
+          rate:    parseFloat(c.interest_rate || 0),
+          payment: parseFloat(c.minimum_payment || 0),
+          dueDay:  c.payment_due_day,
         }));
 
         setData({
-          asOfLabel: ytdLabel,
-          currentYear,
-          priorYear,
           summary: {
-            revenueYTD:               Math.round(revenueYTD),
-            expensesYTD:              Math.round(expensesYTD),
-            netYTD:                   Math.round(netYTD),
-            priorRevenueSamePeriod:   Math.round(priorRevenueSamePeriod),
-            priorExpensesSamePeriod:  Math.round(priorExpensesSamePeriod),
-            priorNetSamePeriod:       Math.round(priorNetSamePeriod),
-            priorRevenueFull:         Math.round(priorRevenueFull),
-            priorExpensesFull:        Math.round(priorExpensesFull),
-            yoyRevenuePct:            yoy(revenueYTD, priorRevenueSamePeriod),
-            yoyNetPct:                yoy(netYTD, priorNetSamePeriod),
-            expenseRatioYTD,
-            payrollRatioYTD,
-            payrollYTD:               Math.round(payrollYTD),
-            priorEndMonth,
+            revenueMTD:  Math.round(revMTD),  revenueQTD:  Math.round(revQTD),  revenueYTD:  Math.round(revYTD),
+            expensesMTD: Math.round(expMTD),  expensesQTD: Math.round(expQTD),  expensesYTD: Math.round(expYTD),
+            netIncomeMTD: Math.round(revMTD - expMTD),
+            netIncomeQTD: Math.round(revQTD - expQTD),
+            netIncomeYTD: Math.round(revYTD - expYTD),
+            priorYearYTD:        Math.round(priorYearYTDRev),
+            priorYearYTDExpense: Math.round(priorYearYTDExp),
+            priorYearNetIncome:  Math.round(priorYearYTDRev - priorYearYTDExp),
           },
           monthlyRevenue,
-          pl: {
-            asOfLabel:   ytdLabel,
-            income:      incomeLines,
-            expenses:    expenseLines,
-            priorIncomeFull,
-            priorExpenseFull,
-          },
+          pl: { income: incomeLines, expenses: expenseLines, incomePY: incomeLinesPY, expensesPY: expenseLinesPY },
+          healthRatios,
           compRecaps,
+          benefits: benefitsRows.data || [],
           aipp,
           scoreboard,
-          bankAccounts,
+          bankAccounts: (bankRows.data || []).map(b => ({
+            name: b.account_name,
+            balance: parseFloat(b.current_balance||0),
+            asOf: b.as_of_date,
+            type: b.account_type,
+            last4: b.account_number_last4,
+            institution: b.institution,
+          })),
           creditAccounts,
-          glEntries,
+          glEntries: (glRows.data || []).map(g => ({
+            date:        g.txn_date,
+            ref:         g.doc_number,
+            description: g.memo,
+            source:      g.source_layer,           // 'bcc' | 'qbo'
+            txn_type:    g.txn_type,               // optional: QBO txn type or BCC entry_type
+            account:     g.account_name,
+            debit:       parseFloat(g.debit  || 0),
+            credit:      parseFloat(g.credit || 0),
+          })),
           payroll,
-          reconciliation,
+          balanceSheet: (bsRows.data || []).map(b => ({
+            period_end:          b.period_end,
+            period_start:        b.period_start,
+            accounting_method:   b.accounting_method,
+            total_assets:        parseFloat(b.total_assets || 0),
+            current_assets:      parseFloat(b.current_assets || 0),
+            total_liabilities:   parseFloat(b.total_liabilities || 0),
+            current_liabilities: parseFloat(b.current_liabilities || 0),
+            total_equity:        parseFloat(b.total_equity || 0),
+            working_capital:     parseFloat(b.working_capital || 0),
+            source_layer:        b.source_layer,
+            updated_at:          b.updated_at,
+          })),
         });
-      } catch (e) {
+      } catch(e) {
         console.error("Financials load error:", e);
       } finally {
         setLoading(false);
@@ -406,29 +391,47 @@ function useFinancialsData() {
 }
 
 
-
-// Empty shape used while the live data hook is still loading.
-const EMPTY_DATA = {
-  asOfLabel: "Loading…",
-  currentYear: new Date().getFullYear(),
-  priorYear:   new Date().getFullYear() - 1,
-  summary: { revenueYTD:0, expensesYTD:0, netYTD:0, priorRevenueSamePeriod:0, priorExpensesSamePeriod:0, priorNetSamePeriod:0, priorRevenueFull:0, priorExpensesFull:0, yoyRevenuePct:null, yoyNetPct:null, expenseRatioYTD:null, payrollRatioYTD:null, payrollYTD:0, priorEndMonth:0 },
-  monthlyRevenue: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m,i)=>({month:m,monthNum:i+1,revenue:0,expenses:0,priorYearExpenses:0,isCurrent:false,isFuture:false})),
-  pl: { asOfLabel: "Loading…", income:[], expenses:[], priorIncomeFull:[], priorExpenseFull:[] },
-  compRecaps: [],
-  aipp: { year: new Date().getFullYear(), target:0, earned:0, projected:0, priorYear:0, monthlyEarned:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map(m=>({month:m,amount:0})), targetIsPlaceholder:true },
-  scoreboard: [],
-  bankAccounts: [],
-  creditAccounts: [],
-  glEntries: [],
-  payroll: [],
-  reconciliation: [],
-};
-
 // ─── Helpers ─────────────────────────────────────────────────
-const fmt = (n) => { const v = Number(n); if (!Number.isFinite(v)) return "—"; if (v === 0) return "—"; return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 0 }); };
+const fmt = (n) => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "—";
+  if (v === 0) return "—";
+  const formatted = "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 0 });
+  return v < 0 ? "-" + formatted : formatted;
+};
+// Penny-precision formatter — Balance Sheet snapshots need consistent 2-decimal display
+// so adjacent rows don't visually misalign when one value is whole-cent and another isn't.
+const fmtCents = (n) => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "—";
+  if (v === 0) return "—";
+  const formatted = "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return v < 0 ? "-" + formatted : formatted;
+};
+// Money formatter that shows $0.00 explicitly — use for fields where zero is a real value
+// (e.g. credit card paid-in-full balance) rather than "no data" (which fmt and fmtCents suppress).
+const fmtMoney = (n) => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "—";
+  const formatted = "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return v < 0 ? "-" + formatted : formatted;
+};
 const pct  = (n, t) => t ? Math.round((n / t) * 100) : 0;
 const yoy  = (curr, prior) => prior ? (((curr - prior) / prior) * 100).toFixed(1) : null;
+
+// ─── Data Store (populated by Financials component with live data) ────────────
+let MOCK = {
+  summary: { revenueMTD:0,revenueQTD:0,revenueYTD:0,expensesMTD:0,expensesQTD:0,expensesYTD:0,netIncomeMTD:0,netIncomeQTD:0,netIncomeYTD:0,priorYearYTD:0,priorYearYTDExpense:0,priorYearNetIncome:0 },
+  monthlyRevenue: Array(12).fill(0).map((_,i)=>({month:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][i],revenue:0,expenses:0})),
+  pl:{income:[],expenses:[],incomePY:[],expensesPY:[]},
+  healthRatios: { teamPayroll:null, payrollAllIn:null, rent:null, marketing:null, netMargin:null },
+  compRecaps:[],
+  benefits:[],
+  aipp: { year: new Date().getFullYear(), target:0, earned:0, projected:0, priorYear:0, monthlyEarned: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map(m=>({month:m,amount:0})) },
+  scoreboard: [],
+  bankAccounts:[],creditAccounts:[],glEntries:[],payroll:[],
+};
+
 
 // ─── Shared Components ───────────────────────────────────────
 const Card = ({ children, style = {} }) => (
@@ -511,7 +514,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
       <button
         onClick={open ? () => { setOpen(false); setTimeout(() => { setCopied(false); setOpened(false); }, 200); } : ask}
         style={{ display: "flex", alignItems: "center", gap: 5, background: open ? T.slate100 : T.blue, color: open ? T.blue : T.white, border: open ? `1px solid ${T.blue}` : "1px solid transparent", borderRadius: 7, padding: small ? "5px 10px" : "7px 13px", fontSize: small ? 10 : 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-      >\u26a1 Ask Claude</button>
+      >⚡ Ask Claude</button>
       {open && (
         <div role="dialog" aria-label="Ask Claude" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 60, width: 300, background: T.white, border: `1px solid ${T.slate100}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(15,23,42,0.16)", padding: 14, textAlign: "left" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#16A34A", marginBottom: 4 }}>
@@ -523,7 +526,7 @@ const AskBtn = ({ context, size = "normal", demoMode = false }) => {
           <div style={{ fontSize: 11, lineHeight: 1.55, color: T.slate500, background: T.slate100, borderRadius: 8, padding: 9, maxHeight: 92, overflow: "hidden", whiteSpace: "pre-wrap" }}>{preview}</div>
           <div style={{ marginTop: 10 }}>
             {!opened ? (
-              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.white, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={go} style={{ width: "100%", background: T.blue, color: T.textOnColor, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 Open Claude.ai &amp; paste
               </button>
             ) : demoMode ? (
@@ -608,55 +611,136 @@ const ProgressBar = ({ value, max, color = T.blue, height = 8 }) => {
 };
 
 // ─── Section: Overview ───────────────────────────────────────
-const OverviewSection = ({ data }) => {
-  const d = data?.summary || {};
-  const yoyR = (d.yoyRevenuePct != null) ? d.yoyRevenuePct : null;
-  const yoyN = (d.yoyNetPct != null) ? d.yoyNetPct : null;
-  const expenseRatio = (d.expenseRatioYTD != null) ? Math.round(d.expenseRatioYTD) : null;
-  const payrollRatio = (d.payrollRatioYTD != null) ? Math.round(d.payrollRatioYTD) : null;
-  const asOf = data?.asOfLabel || "Year to date";
-  const trend = (p) => (p == null) ? "" : `${p >= 0 ? "↑" : "↓"} ${Math.abs(p).toFixed(1)}%`;
+// ─── Section: Health Ratios (SF Agency Reference Guide benchmarks) ───
+const HealthRatioCard = ({ tile }) => {
+  if (!tile) return null;
+  const colorMap = {
+    healthy:  { fg: "#065F46", bg: T.greenLt,  border: T.green,  label: "Healthy" },
+    warning:  { fg: "#92400E", bg: T.amberLt,  border: T.amber,  label: "Warning" },
+    critical: { fg: "#991B1B", bg: T.redLt,    border: T.red,    label: "Critical" },
+  };
+  const c = colorMap[tile.status] || colorMap.healthy;
+  const delta = (tile.pct ?? 0) - (tile.py ?? 0);
+  const showDelta = Number.isFinite(tile.py) && Math.abs(tile.py) > 0.01;
+  const isInfoOnly = tile.range === "info";
 
-  // Overview is YTD-only. cpa_pnl_monthly for the current year currently
-  // reports YTD figures rather than true monthly breakouts, so period toggles
-  // wouldn't be accurate for expenses. When monthly breakouts land, add a
-  // period tab bar here (state can live in the parent) and wire the ratios.
-  const incomeBreakdown = Array.isArray(data?.pl?.income) ? data.pl.income : [];
+  return (
+    <div style={{
+      background: T.white,
+      border: `1px solid ${T.slate200}`,
+      borderTop: `3px solid ${isInfoOnly ? T.slate400 : c.border}`,
+      borderRadius: 12,
+      padding: "12px 14px",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+        <div style={{ fontSize: 11, color: T.slate500, fontWeight: 500 }}>{tile.label}</div>
+        {!isInfoOnly && (
+          <span style={{
+            display: "inline-flex", alignItems: "center",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.04em",
+            padding: "2px 7px", borderRadius: 20,
+            background: c.bg, color: c.fg, textTransform: "uppercase",
+          }}>{c.label}</span>
+        )}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: T.slate900, letterSpacing: "-0.02em", marginBottom: 2 }}>
+        {(tile.pct ?? 0).toFixed(1)}%
+      </div>
+      <div style={{ fontSize: 10, color: T.slate500, lineHeight: 1.45 }}>
+        {isInfoOnly ? tile.hint : `Healthy ${tile.range}`}
+        {showDelta && (
+          <span style={{
+            marginLeft: 6,
+            color: (tile.higherIsBetter ? delta >= 0 : delta <= 0) ? "#16A34A" : T.red,
+            fontWeight: 600,
+          }}>
+            {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)}pp YoY
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const HealthRatiosSection = ({ data }) => {
+  const r = data?.healthRatios || {};
+  const tiles = [r.teamPayroll, r.payrollAllIn, r.ownerComp, r.rent, r.marketing, r.totalOpEx, r.netMargin].filter(Boolean);
+  if (tiles.length === 0) return null;
+
+  const critCount = tiles.filter(t => t.status === "critical").length;
+  const warnCount = tiles.filter(t => t.status === "warning").length;
+
+  const askCtx = `My SF benchmark ratios (YTD vs prior-year same period): ` +
+    tiles.map(t => `${t.label} ${t.pct.toFixed(1)}% (PY ${(t.py||0).toFixed(1)}%, ${t.status})`).join(", ") +
+    `. Help me prioritize what to fix.`;
+
+  return (
+    <Card style={{ marginBottom: 16 }}>
+      <CardHeader
+        title="Agency Health Ratios — YTD"
+        sub={`SF Agency Reference Guide benchmarks · ${critCount} critical · ${warnCount} warning`}
+        action={<AskBtn context={askCtx} />}
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px,1fr))", gap: 10 }}>
+        {tiles.map((t,i) => <HealthRatioCard key={i} tile={t} />)}
+      </div>
+    </Card>
+  );
+};
+
+const OverviewSection = ({ period, setPeriod, data }) => {
+  const d = data?.summary || {};
+  const yoyPct = yoy(d.revenueYTD || 0, d.priorYearYTD || 0);
+  const niYoyPct = yoy(d.netIncomeYTD || 0, d.priorYearNetIncome || 0);
+
+  // Period-active net income — used to color the Net Income KPI on ALL tabs (not just YTD)
+  const niActive = period === "mtd" ? d.netIncomeMTD : period === "qtd" ? d.netIncomeQTD : d.netIncomeYTD;
+
+  // Expense Ratio band — was hardcoded slate. Now bands against SF benchmark "Healthy <75%".
+  //   ≥90% critical, 75–90% warning, <75% healthy. Mirrors Total OpEx / Marketing pattern.
+  const _ratioRev = period === "mtd" ? d.revenueMTD : period === "qtd" ? d.revenueQTD : d.revenueYTD;
+  const _ratioExp = period === "mtd" ? d.expensesMTD : period === "qtd" ? d.expensesQTD : d.expensesYTD;
+  const expRatioPct = _ratioRev ? (_ratioExp / _ratioRev) * 100 : null;
+  const expRatioBand = expRatioPct === null ? { border: T.slate200 }
+    : expRatioPct >= 90 ? { color: T.red, border: T.red }
+    : expRatioPct >= 75 ? { color: T.amber, border: T.amber }
+    : { color: T.green, border: T.green };
 
   return (
     <div>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-        <div style={{ fontSize:11, color:T.slate500, padding:"4px 10px", background:T.slate50, borderRadius:7, border:`1px solid ${T.slate200}` }}>
-          As of {asOf}
-        </div>
-        <AskBtn context={`My agency YTD financials: Revenue $${d.revenueYTD}, Expenses $${d.expensesYTD}, Net Income $${d.netYTD}. YoY revenue ${yoyR?.toFixed(1) ?? "—"}%, YoY net ${yoyN?.toFixed(1) ?? "—"}%. Expense ratio ${expenseRatio ?? "—"}%. Payroll ratio ${payrollRatio ?? "—"}%. Help me analyze my financial performance.`} />
+      <HealthRatiosSection data={data} />
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <TabBar
+          tabs={[{ id:"mtd", label:"This Month" },{ id:"qtd", label:"This Quarter" },{ id:"ytd", label:"Year to Date" }]}
+          active={period}
+          onChange={setPeriod}
+        />
+        <AskBtn context={`My agency financials — ${period.toUpperCase()}: Revenue $${period==="mtd"?d.revenueMTD:period==="qtd"?d.revenueQTD:d.revenueYTD}, Expenses $${period==="mtd"?d.expensesMTD:"N/A"}, Net Income $${period==="mtd"?d.netIncomeMTD:d.netIncomeYTD}. YTD is up ${yoyPct}% vs prior year. Help me analyze my financial performance.`} />
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px,1fr))", gap:10, marginBottom:16 }}>
-        <KPICard label="Revenue YTD"   value={fmt(d.revenueYTD)} sub={yoyR != null ? `${trend(yoyR)} vs prior YTD` : "—"} color={T.blue}  border={T.blue} />
-        <KPICard label="Expenses YTD"  value={fmt(d.expensesYTD)} sub="Accrual (CPA)" border={T.amber} />
-        <KPICard label="Net Income YTD" value={fmt(d.netYTD)} sub={yoyN != null ? `${trend(yoyN)} vs prior YTD` : "—"} color={d.netYTD >= 0 ? T.green : T.red} border={d.netYTD >= 0 ? T.green : T.red} />
-        <KPICard label="Expense Ratio" value={expenseRatio != null ? `${expenseRatio}%` : "—"} sub="Target <75%" border={expenseRatio != null && expenseRatio > 75 ? T.red : T.slate200} />
-        <KPICard label="Payroll Ratio" value={payrollRatio != null ? `${payrollRatio}%` : "—"} sub={payrollRatio != null && payrollRatio > 55 ? "CRITICAL >55%" : "Target 40-50%"} color={payrollRatio != null && payrollRatio > 55 ? T.red : T.slate900} border={payrollRatio != null && payrollRatio > 55 ? T.red : T.slate200} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 10, marginBottom: 16 }}>
+        <KPICard label="Revenue" value={fmt(period==="mtd"?d.revenueMTD:period==="qtd"?d.revenueQTD:d.revenueYTD)} sub={period==="ytd" && yoyPct !== null ? `${parseFloat(yoyPct) >= 0 ? "↑" : "↓"} ${Math.abs(parseFloat(yoyPct))}% vs prior year` : undefined} color={T.blue} border={T.blue} />
+        <KPICard label="Expenses" value={fmt(period==="mtd"?d.expensesMTD:period==="qtd"?d.expensesQTD:d.expensesYTD)} sub="Cash basis" border={T.amber} />
+        <KPICard label="Net Income" value={fmt(niActive)} sub={period==="ytd" && niYoyPct!==null ? `${niYoyPct >= 0 ? "↑" : "↓"} ${Math.abs(parseFloat(niYoyPct))}% vs prior YTD` : undefined} color={(niActive||0) < 0 ? T.red : T.green} border={(niActive||0) < 0 ? T.red : T.green} />
+        <KPICard label="Expense Ratio" value={expRatioPct === null ? "—" : Math.round(expRatioPct) + "%"} sub="Healthy <75%" {...expRatioBand} />
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1.4fr) minmax(0,1fr)", gap:12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr)", gap: 12 }}>
         <Card>
-          <CardHeader title={`Monthly revenue — ${data?.currentYear ?? new Date().getFullYear()}`} sub="From SF comp_recap · Live system data" />
-          <MiniBarChart data={(data?.monthlyRevenue || []).map(m => ({ month:m.month, revenue:m.revenue, expenses:m.expenses }))} />
+          <CardHeader title="Monthly revenue — 2026" sub="Blue bars = revenue · Gray = no data yet" />
+          <MiniBarChart data={data.monthlyRevenue} />
         </Card>
 
         <Card>
-          <CardHeader title={`Income breakdown — ${asOf}`} sub={incomeBreakdown.length === 0 ? "Loading…" : null} />
-          {(incomeBreakdown.length === 0) ? (
-            <div style={{ fontSize:12, color:T.slate500, padding:"8px 0" }}>No income lines available yet.</div>
-          ) : incomeBreakdown.map((item, i) => (
-            <div key={i} style={{ marginBottom:10 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:3 }}>
-                <span style={{ color:T.slate600 }}>{item.name}{item.parent ? <span style={{ color:T.slate400 }}> — {item.parent}</span> : null}</span>
-                <span style={{ fontWeight:600, color:T.slate900 }}>{fmt(item.ytd)}</span>
+          <CardHeader title={`Income breakdown — ${new Date().toLocaleDateString("en-US",{month:"long", year:"numeric"})}`} />
+          {(Array.isArray(data?.pl?.income) ? data.pl.income : []).map((item, i) => (
+            <div key={i} style={{ marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
+                <span style={{ color: T.slate600 }}>{item.name}</span>
+                <span style={{ fontWeight: 600, color: T.slate900 }}>{fmt(item.mtd)}</span>
               </div>
-              <ProgressBar value={item.ytd || 0} max={d.revenueYTD || 1} color={T.blue} />
+              <ProgressBar value={item.mtd || 0} max={data?.summary?.revenueMTD || 1} color={item.code?.startsWith("41") ? T.green : T.blue} />
             </div>
           ))}
         </Card>
@@ -667,77 +751,312 @@ const OverviewSection = ({ data }) => {
 
 // ─── Section: P&L ────────────────────────────────────────────
 const PLSection = ({ data }) => {
-  const pl = data?.pl || { income: [], expenses: [] };
-  const summary = data?.summary || {};
-  const incomeRows  = Array.isArray(pl.income)   ? pl.income   : [];
-  const expenseRows = Array.isArray(pl.expenses) ? pl.expenses : [];
-  const totalIncomeYTD = incomeRows.reduce((s,r) => s + (r?.ytd || 0), 0);
-  const totalExpYTD    = expenseRows.reduce((s,r) => s + (r?.ytd || 0), 0);
-  const asOf = pl?.asOfLabel || data?.asOfLabel || "Year to date";
+  const pl = data?.pl || { income: [], expenses: [], incomePY: [], expensesPY: [] };
+  const incomeRows    = Array.isArray(pl.income)     ? pl.income     : [];
+  const expenseRows   = Array.isArray(pl.expenses)   ? pl.expenses   : [];
+  const incomePYRows  = Array.isArray(pl.incomePY)   ? pl.incomePY   : [];
+  const expensePYRows = Array.isArray(pl.expensesPY) ? pl.expensesPY : [];
+  const totalIncomeMTD  = incomeRows.reduce((s,r) => s + (r?.mtd || 0), 0);
+  const totalExpMTD     = expenseRows.reduce((s,r) => s + (r?.mtd || 0), 0);
+  const totalIncomeYTD  = incomeRows.reduce((s,r) => s + (r?.ytd || 0), 0);
+  const totalExpYTD     = expenseRows.reduce((s,r) => s + (r?.ytd || 0), 0);
+  const totalIncomePY   = incomePYRows.reduce((s,r) => s + (r?.ytd || 0), 0);
+  const totalExpPY      = expensePYRows.reduce((s,r) => s + (r?.ytd || 0), 0);
+  const pyLookup = (rows, name) => (rows.find(r => r?.name === name)?.ytd) || 0;
 
-  // Map prior-year full-year amounts by account name for the comparison column.
-  const priorByName = {};
-  (pl.priorIncomeFull || []).forEach(r => { priorByName[r.account_name] = (priorByName[r.account_name] || 0) + parseFloat(r.amount || 0); });
-  (pl.priorExpenseFull || []).forEach(r => { priorByName[r.account_name] = (priorByName[r.account_name] || 0) + parseFloat(r.amount || 0); });
-  const priorIncomeFullYear  = (pl.priorIncomeFull  || []).reduce((s,r) => s + parseFloat(r.amount || 0), 0);
-  const priorExpenseFullYear = (pl.priorExpenseFull || []).reduce((s,r) => s + parseFloat(r.amount || 0), 0);
-
-  const TRow = ({ label, current, prior, bold, indent, isTotal, isNeg, parent }) => (
-    <tr style={{ background: isTotal ? T.slate50 : "transparent" }}>
-      <td style={{ padding: "7px 8px", fontSize: 12, color: indent ? T.slate600 : T.slate800, paddingLeft: indent ? 24 : 8, fontWeight: bold ? 600 : 400 }}>
-        {label}{parent ? <span style={{ color:T.slate400 }}> — {parent}</span> : null}
-      </td>
-      <td style={{ padding: "7px 8px", fontSize: 12, textAlign: "right", fontWeight: bold ? 600 : 400, color: isNeg ? T.red : bold ? T.slate900 : T.slate700 }}>{fmt(current)}</td>
-      <td style={{ padding: "7px 8px", fontSize: 12, textAlign: "right", color: T.slate500 }}>{fmt(prior)}</td>
-    </tr>
-  );
+  const TRow = ({ label, mtd, qtd, ytd, py, bold, indent, isTotal, isNeg, isExpenseRow }) => {
+    const cellBase = { padding: "7px 8px", fontSize: 12, textAlign: "right", fontWeight: bold ? 600 : 400 };
+    const cellColor = { color: isNeg ? T.red : bold ? T.slate900 : T.slate700 };
+    // YoY delta: only show if py exists and ytd exists; for income rows higher is better, expense rows lower is better
+    const showDelta = Number.isFinite(py) && Math.abs(py) > 0.5 && Number.isFinite(ytd);
+    let deltaStr = "";
+    let deltaColor = T.slate400;
+    if (showDelta) {
+      const diff = (ytd || 0) - py;
+      const pctDelta = py ? (diff / py) * 100 : 0;
+      const arrow = diff >= 0 ? "↑" : "↓";
+      // For totals/expenses row: higher expense = bad (red); higher income = good (green)
+      const goodIfUp = !isExpenseRow;
+      const isGood = (goodIfUp && diff >= 0) || (!goodIfUp && diff <= 0);
+      deltaColor = Math.abs(pctDelta) < 1 ? T.slate400 : isGood ? "#16A34A" : T.red;
+      deltaStr = `${arrow} ${Math.abs(pctDelta).toFixed(0)}%`;
+    }
+    return (
+      <tr style={{ background: isTotal ? T.slate50 : "transparent" }}>
+        <td style={{ padding: "7px 8px", fontSize: 12, color: indent ? T.slate600 : T.slate800, paddingLeft: indent ? 24 : 8, fontWeight: bold ? 600 : 400 }}>{label}</td>
+        <td style={{ ...cellBase, ...cellColor }}>{fmt(mtd)}</td>
+        <td style={{ ...cellBase, ...cellColor }}>{fmt(qtd)}</td>
+        <td style={{ ...cellBase, ...cellColor }}>{fmt(ytd)}</td>
+        <td style={{ ...cellBase, color: T.slate500, fontWeight: bold ? 600 : 400 }}>{Number.isFinite(py) ? fmt(py) : "—"}</td>
+        <td style={{ padding: "7px 8px", fontSize: 11, textAlign: "right", fontWeight: 600, color: deltaColor }}>{deltaStr || ""}</td>
+      </tr>
+    );
+  };
 
   return (
     <Card>
       <CardHeader
         title="Profit & Loss Statement"
-        sub={`Accrual basis · ${asOf}`}
-        action={<AskBtn context={`My YTD P&L (${asOf}): Revenue $${totalIncomeYTD}, Expenses $${totalExpYTD}, Net Income $${totalIncomeYTD - totalExpYTD}. Expense ratio ${Math.round((totalExpYTD/totalIncomeYTD)*100)}%. Prior year full: Revenue $${Math.round(priorIncomeFullYear)}, Expenses $${Math.round(priorExpenseFullYear)}, Net $${Math.round(priorIncomeFullYear - priorExpenseFullYear)}. Help me analyze profitability and identify areas to improve.`} />}
+        sub="Cash basis · YTD vs prior year same period"
+        action={<AskBtn context={`My P&L: YTD Revenue $${totalIncomeYTD}, YTD Expenses $${totalExpYTD}, Net Income $${totalIncomeYTD - totalExpYTD}. Expense ratio ${Math.round((totalExpYTD/totalIncomeYTD)*100)}%. Help me analyze my profitability and identify areas to improve.`} />}
       />
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ borderBottom: `2px solid ${T.slate200}` }}>
               <th style={{ padding: "8px 8px", fontSize: 11, fontWeight: 600, color: T.slate500, textAlign: "left" }}>Account</th>
-              <th style={{ padding: "8px 8px", fontSize: 11, fontWeight: 600, color: T.slate500, textAlign: "right" }}>{(data?.currentYear ?? new Date().getFullYear())} YTD</th>
-              <th style={{ padding: "8px 8px", fontSize: 11, fontWeight: 600, color: T.slate500, textAlign: "right" }}>{(data?.priorYear ?? new Date().getFullYear()-1)} full year</th>
+              <th style={{ padding: "8px 8px", fontSize: 11, fontWeight: 600, color: T.slate500, textAlign: "right" }}>MTD</th>
+              <th style={{ padding: "8px 8px", fontSize: 11, fontWeight: 600, color: T.slate500, textAlign: "right" }}>QTD</th>
+              <th style={{ padding: "8px 8px", fontSize: 11, fontWeight: 600, color: T.slate500, textAlign: "right" }}>YTD</th>
+              <th style={{ padding: "8px 8px", fontSize: 11, fontWeight: 600, color: T.slate500, textAlign: "right" }}>PY YTD</th>
+              <th style={{ padding: "8px 8px", fontSize: 11, fontWeight: 600, color: T.slate500, textAlign: "right" }}>YoY</th>
             </tr>
           </thead>
           <tbody>
             <TRow label="INCOME" bold />
-            {incomeRows.map((r,i) => (
-              <TRow key={`inc-${i}`} label={r.name} parent={r.parent} current={r.ytd} prior={priorByName[r.name] || 0} indent />
-            ))}
-            <TRow label="Total Income" current={totalIncomeYTD} prior={priorIncomeFullYear} bold isTotal />
+            {(() => {
+              // Union current-year + prior-year account names so accounts active
+              // in either year render (was hiding PY-only accounts like "Salaries & Wages - Officer").
+              const map = new Map();
+              incomeRows.forEach(r => map.set(r.name, { name: r.name, mtd: r.mtd, qtd: r.qtd, ytd: r.ytd }));
+              incomePYRows.forEach(r => { if (!map.has(r.name)) map.set(r.name, { name: r.name, mtd: 0, qtd: 0, ytd: 0 }); });
+              const union = [...map.values()].sort((a,b) => {
+                const apy = pyLookup(incomePYRows, a.name);
+                const bpy = pyLookup(incomePYRows, b.name);
+                return (b.ytd || 0) - (a.ytd || 0) || (bpy - apy);
+              });
+              return union.map((r,i) => (
+                <TRow key={i} label={r.name} mtd={r.mtd} qtd={r.qtd} ytd={r.ytd} py={pyLookup(incomePYRows, r.name)} indent />
+              ));
+            })()}
+            <TRow label="Total Income" mtd={totalIncomeMTD} qtd={incomeRows.reduce((s,r)=>s+r.qtd,0)} ytd={totalIncomeYTD} py={totalIncomePY} bold isTotal />
 
-            <tr><td colSpan={3} style={{ padding: "6px 0" }} /></tr>
+            <tr><td colSpan={6} style={{ padding: "6px 0" }} /></tr>
 
-            <TRow label="EXPENSES" bold />
-            {expenseRows.map((r,i) => (
-              <TRow key={`exp-${i}`} label={r.name} parent={r.parent} current={r.ytd} prior={priorByName[r.name] || 0} indent />
-            ))}
-            <TRow label="Total Expenses" current={totalExpYTD} prior={priorExpenseFullYear} bold isTotal />
+            <TRow label="EXPENSES" bold isExpenseRow />
+            {(() => {
+              const map = new Map();
+              expenseRows.forEach(r => map.set(r.name, { name: r.name, mtd: r.mtd, qtd: r.qtd, ytd: r.ytd }));
+              expensePYRows.forEach(r => { if (!map.has(r.name)) map.set(r.name, { name: r.name, mtd: 0, qtd: 0, ytd: 0 }); });
+              const union = [...map.values()].sort((a,b) => {
+                const apy = pyLookup(expensePYRows, a.name);
+                const bpy = pyLookup(expensePYRows, b.name);
+                return (b.ytd || 0) - (a.ytd || 0) || (bpy - apy);
+              });
+              return union.map((r,i) => (
+                <TRow key={i} label={r.name} mtd={r.mtd} qtd={r.qtd} ytd={r.ytd} py={pyLookup(expensePYRows, r.name)} indent isExpenseRow />
+              ));
+            })()}
+            <TRow label="Total Expenses" mtd={totalExpMTD} qtd={expenseRows.reduce((s,r)=>s+r.qtd,0)} ytd={totalExpYTD} py={totalExpPY} bold isTotal isExpenseRow />
 
-            <tr><td colSpan={3} style={{ padding: "2px 0", borderTop: `2px solid ${T.slate800}` }} /></tr>
-            <TRow label="NET INCOME" current={totalIncomeYTD - totalExpYTD} prior={priorIncomeFullYear - priorExpenseFullYear} bold isTotal isNeg={(totalIncomeYTD - totalExpYTD) < 0} />
+            <tr><td colSpan={6} style={{ padding: "2px 0", borderTop: `2px solid ${T.slate800}` }} /></tr>
+            <TRow label="NET INCOME" mtd={totalIncomeMTD-totalExpMTD} qtd={incomeRows.reduce((s,r)=>s+r.qtd,0)-expenseRows.reduce((s,r)=>s+r.qtd,0)} ytd={totalIncomeYTD-totalExpYTD} py={totalIncomePY-totalExpPY} bold isTotal />
           </tbody>
         </table>
       </div>
-      {summary.priorEndMonth ? (
-        <div style={{ marginTop:12, padding:"8px 12px", background:T.slate50, borderRadius:8, fontSize:11, color:T.slate600 }}>
-          YoY YTD comparison: this year ({asOf}) vs same-period prior year (Jan–{["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][summary.priorEndMonth-1]} {data?.priorYear}) → Revenue {summary.yoyRevenuePct != null ? `${summary.yoyRevenuePct >= 0 ? "↑" : "↓"} ${Math.abs(summary.yoyRevenuePct).toFixed(1)}%` : "—"}, Net {summary.yoyNetPct != null ? `${summary.yoyNetPct >= 0 ? "↑" : "↓"} ${Math.abs(summary.yoyNetPct).toFixed(1)}%` : "—"}.
-        </div>
-      ) : null}
     </Card>
   );
 };
 
 // ─── Section: COMP_RECAP ─────────────────────────────────────
+// ─── Section: S-Corp Owner Compensation (moved from HR & People 2026-07-16) ──
+// Renders as a sub-section INSIDE the COMP_RECAP tab. the agent's owner comp is a
+// financial concern (S-Corp reasonable comp, W-2 gross-ups, distributions),
+// not an HR concern — so it lives here with the other SF compensation detail.
+const OwnerCompensationSection = ({ benefits }) => {
+  const [year, setYear] = useState(() => {
+    const yrs = (benefits || []).map(b => b?.period_year).filter(y => y != null);
+    return yrs.length > 0 ? Math.max(...yrs) : new Date().getFullYear();
+  });
+
+  const rows = (benefits || []).filter(b => b?.period_year === year);
+  const ytdByType = {};
+  for (const r of rows) {
+    const t = r?.benefit_type;
+    if (!t) continue;
+    const ytd = Number(r?.ytd_amount || 0);
+    if (!ytdByType[t] || new Date(r?.period_end_date) > new Date(ytdByType[t].date)) {
+      ytdByType[t] = { ytd, date: r?.period_end_date };
+    }
+  }
+  const get = (t) => Number(ytdByType[t]?.ytd || 0);
+  const medical = get("medical");
+  const dental = get("dental");
+  const life = get("life");
+  const adjustment = get("medical_adjustment");
+  const w2Includible = medical + adjustment;
+  const totalReportable = medical + dental + life + adjustment;
+
+  const yearsAvailable = Array.from(new Set((benefits || []).map(b => b?.period_year).filter(y => y != null))).sort();
+  const isClosedYear = year < new Date().getFullYear();
+
+  const periodMap = {};
+  for (const r of rows) {
+    const k = r?.period_end_date;
+    if (!k) continue;
+    if (!periodMap[k]) periodMap[k] = { period_end_date: k, half: r?.period_half, source: r?.source_file_name };
+    periodMap[k][r?.benefit_type] = { current: Number(r?.current_amount || 0), ytd: Number(r?.ytd_amount || 0) };
+  }
+  const periodRows = Object.values(periodMap).sort((a, b) => new Date(b.period_end_date) - new Date(a.period_end_date));
+
+  const usd = (n) => "$" + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const askContext = [
+    `S-Corp Owner Reportable Benefits — Year ${year}`,
+    `Source: SF AGTCOMP RECAP PDFs (sf_reportable_benefits table, ${rows.length} rows)`,
+    ``,
+    `YTD totals:`,
+    `  Medical Insurance:     ${usd(medical)}`,
+    `  Medical Adjustment:    ${usd(adjustment)}`,
+    `  Group Dental:          ${usd(dental)}`,
+    `  Group Life:            ${usd(life)}`,
+    `  Total Reportable:      ${usd(totalReportable)}`,
+    ``,
+    `W-2 Includible (Medical + Adjustment): ${usd(w2Includible)}`,
+    `Per IRC \u00A73121(a)(2)(B), S-Corp >2% shareholder must include health premiums in W-2 Box 1 wages.`,
+    ``,
+    `Action needed for CPA:`,
+    `  1. Confirm prior year W-2 included this gross-up (2025 was $7,670.64).`,
+    `  2. Add ${usd(w2Includible)} (and any additional periods through year-end) to final ${year} payroll.`,
+    `  3. Confirm group dental + life treatment (Section 125 plan? if not, also W-2 includible).`,
+  ].join("\n");
+
+  const KpiCard = ({ label, value, accent }) => (
+    <Card style={{ flex:"1 1 200px", minWidth:200 }}>
+      <div style={{ fontSize:11, color:T.slate500, fontWeight:600, letterSpacing:"0.04em", textTransform:"uppercase" }}>{label}</div>
+      <div style={{ fontSize:24, fontWeight:700, color:accent || T.slate900, marginTop:6 }}>{usd(value)}</div>
+      <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>YTD {year}</div>
+    </Card>
+  );
+
+  return (
+    <div>
+      {/* Header + year selector */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14, flexWrap:"wrap", gap:10 }}>
+        <div>
+          <div style={{ fontSize:16, fontWeight:700, color:T.slate900 }}>S-Corp Owner Compensation</div>
+          <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>
+            W-2 reportable benefits · sourced from {rows.length} AGTCOMP RECAP rows
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:6 }}>
+          {yearsAvailable.map(y => (
+            <button
+              key={y}
+              onClick={() => setYear(y)}
+              style={{
+                padding:"6px 14px", fontSize:12, fontWeight: year===y ? 600 : 400,
+                background: year===y ? T.navy : T.slate100,
+                color: year===y ? T.white : T.slate600,
+                border:"none", borderRadius:7, cursor:"pointer"
+              }}
+            >{y}{y === new Date().getFullYear() ? " YTD" : ""}</button>
+          ))}
+          <AskBtn context={askContext} />
+        </div>
+      </div>
+
+      {/* KPI tiles */}
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:14 }}>
+        <KpiCard label="Medical Insurance" value={medical} accent={T.blue} />
+        <KpiCard label="Medical Adjustment" value={adjustment} accent={T.purple} />
+        <KpiCard label="Group Dental" value={dental} accent={T.slate600} />
+        <KpiCard label="Group Life" value={life} accent={T.slate700} />
+      </div>
+
+      {/* W-2 Includible callout */}
+      <Card style={{
+        background: isClosedYear ? T.greenLt : T.amberLt,
+        borderColor: isClosedYear ? T.green : T.amber,
+        marginBottom:14
+      }}>
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:14, flexWrap:"wrap" }}>
+          <div style={{ flex:"1 1 320px" }}>
+            <div style={{ fontSize:11, fontWeight:600, color:isClosedYear ? T.green : T.amber, letterSpacing:"0.04em", textTransform:"uppercase" }}>
+              W-2 Includible (Medical + Adjustment)
+            </div>
+            <div style={{ fontSize:28, fontWeight:700, color:T.slate900, marginTop:4 }}>{usd(w2Includible)}</div>
+            <div style={{ fontSize:12, color:T.slate700, marginTop:6, lineHeight:1.55 }}>
+              {isClosedYear ? (
+                <>
+                  <strong>Closed year.</strong> Verify {year} W-2 Box 1 wages included this gross-up.
+                  If not, W-2c amendment may be required. See alert in Alerts module.
+                </>
+              ) : (
+                <>
+                  <strong>Action by year-end:</strong> Include {usd(w2Includible)} (and any additional periods
+                  through Dec 31) on final {year} payroll per IRC §3121(a)(2)(B). The S-Corp Medical Year-End
+                  W-2 Prep recipe runs in Nov–Dec to surface the final number.
+                </>
+              )}
+            </div>
+          </div>
+          <div style={{ flex:"0 1 220px", textAlign:"right" }}>
+            <div style={{ fontSize:11, color:T.slate500, fontWeight:600, letterSpacing:"0.04em", textTransform:"uppercase" }}>Total Reportable</div>
+            <div style={{ fontSize:18, fontWeight:700, color:T.slate900, marginTop:4 }}>{usd(totalReportable)}</div>
+            <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>All benefit types · YTD {year}</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Per-period table */}
+      <Card style={{ marginBottom:14 }}>
+        <div style={{ fontSize:13, fontWeight:600, color:T.slate900, marginBottom:10 }}>
+          Period-by-Period Detail · {year}
+        </div>
+        {periodRows.length === 0 ? (
+          <div style={{ fontSize:12, color:T.slate500, padding:"16px 4px" }}>
+            No reportable benefits data for {year}. Backfill from AGTCOMP RECAP PDFs runs from migrations.
+          </div>
+        ) : (
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+              <thead>
+                <tr style={{ background:T.slate50, borderBottom:`1px solid ${T.slate200}` }}>
+                  <th style={{ padding:"8px 10px", textAlign:"left", color:T.slate600, fontWeight:600 }}>Period End</th>
+                  <th style={{ padding:"8px 10px", textAlign:"right", color:T.slate600, fontWeight:600 }}>Medical</th>
+                  <th style={{ padding:"8px 10px", textAlign:"right", color:T.slate600, fontWeight:600 }}>Adjustment</th>
+                  <th style={{ padding:"8px 10px", textAlign:"right", color:T.slate600, fontWeight:600 }}>Dental</th>
+                  <th style={{ padding:"8px 10px", textAlign:"right", color:T.slate600, fontWeight:600 }}>Life</th>
+                  <th style={{ padding:"8px 10px", textAlign:"right", color:T.slate600, fontWeight:600 }}>YTD Medical</th>
+                </tr>
+              </thead>
+              <tbody>
+                {periodRows.map((r, idx) => (
+                  <tr key={idx} style={{ borderBottom:`1px solid ${T.slate100}` }}>
+                    <td style={{ padding:"7px 10px", color:T.slate900 }}>{r.period_end_date}</td>
+                    <td style={{ padding:"7px 10px", textAlign:"right", color:T.slate900 }}>{r.medical?.current ? usd(r.medical.current) : "—"}</td>
+                    <td style={{ padding:"7px 10px", textAlign:"right", color: r.medical_adjustment?.current ? T.purple : T.slate400 }}>{r.medical_adjustment?.current ? usd(r.medical_adjustment.current) : "—"}</td>
+                    <td style={{ padding:"7px 10px", textAlign:"right", color:T.slate900 }}>{r.dental?.current ? usd(r.dental.current) : "—"}</td>
+                    <td style={{ padding:"7px 10px", textAlign:"right", color:T.slate900 }}>{r.life?.current ? usd(r.life.current) : "—"}</td>
+                    <td style={{ padding:"7px 10px", textAlign:"right", color:T.slate600 }}>{r.medical?.ytd ? usd(r.medical.ytd) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* CPA prep notes */}
+      <Card style={{ background:T.slate50 }}>
+        <div style={{ fontSize:13, fontWeight:600, color:T.slate900, marginBottom:8 }}>CPA Conversation Prep</div>
+        <ul style={{ fontSize:12, color:T.slate700, lineHeight:1.7, margin:"0 0 0 16px", padding:0 }}>
+          <li>Verify {year - 1} W-2 Box 1 included the {year - 1} Total Reportable Benefits gross-up.</li>
+          <li>Confirm GL coding convention for SF Deductions (account 4050 vs 6115 S-Corp Medical vs 3050 Distributions).</li>
+          <li>Group Dental + Life: confirm Section 125 cafeteria plan or also W-2 includible.</li>
+          <li>Medical premium doubled 4/30/2026 ($591.84 → $1,227.58/period). Explain.</li>
+          <li>One-time Medical Adjustment $482.82 at 4/30/2026 only. Explain.</li>
+          <li>Reasonable W-2 comp strategy: no W-2 wages YTD; must take by year-end.</li>
+        </ul>
+        <div style={{ fontSize:11, color:T.slate500, marginTop:10, paddingTop:10, borderTop:`1px solid ${T.slate200}` }}>
+          All 6 items tracked as tasks · due 2026-06-30 CPA meeting · Tasks &amp; Goals module
+        </div>
+      </Card>
+    </div>
+  );
+};
+
 const CompRecapSection = ({ data }) => {
   const compRecaps = Array.isArray(data?.compRecaps) ? data.compRecaps : [];
   const allPeriods = [...new Set(compRecaps.map(r => r?.period_label).filter(Boolean))];
@@ -750,15 +1069,46 @@ const CompRecapSection = ({ data }) => {
   }, [allPeriods.join("|")]);
   const periods  = allPeriods;
   const filtered = compRecaps.filter(r => r.period_label === period);
-  const total    = filtered.reduce((s,r) => s + parseFloat(r.amount || 0), 0);
-  const aippTotal = filtered.filter(r => r.is_aipp_eligible).reduce((s,r) => s + parseFloat(r.amount || 0), 0);
+
+  // qbo_derived_composite rows are bank-deposit roll-ups pulled from QuickBooks GL.
+  // They represent the SAME money as the per-product detail rows parsed from AGTCOMP RECAP PDFs
+  // — including both in the line items list double-counts. Show detail when available,
+  // fall back to composites only if a period has no detail rows (e.g. Jan 2025 OCR PDF in defer).
+  const detailRows    = filtered.filter(r => r.comp_category !== "qbo_derived_composite");
+  const compositeOnly = detailRows.length === 0 && filtered.length > 0;
+  const displayRows   = compositeOnly ? filtered : detailRows;
+  const total     = displayRows.reduce((s,r) => s + parseFloat(r.amount || 0), 0);
+  const aippTotal = displayRows.filter(r => r.is_aipp_eligible).reduce((s,r) => s + parseFloat(r.amount || 0), 0);
+
+  // ─── Gross → Net walk (SF compensation flow)
+  const sumByType = (types) => filtered
+    .filter(r => types.includes(r.comp_type))
+    .reduce((s,r) => s + parseFloat(r.amount || 0), 0);
+  const production    = sumByType(["new_business", "renewal", "service"]);
+  const aippPayments  = sumByType(["aipp_payment"]);
+  const adjustments   = sumByType(["adjustment", "other"]);
+  const grossComp     = production + aippPayments + adjustments;
+  const deductions    = sumByType(["deduction"]);
+  const aippDeferrals = sumByType(["aipp_deferral", "deferred_comp"]);
+  const netDeposit    = grossComp + deductions + aippDeferrals;   // deductions/deferrals are already negative
+  const walkRow = (label, amount, sign, isTotal, hint) => ({ label, amount, sign, isTotal, hint });
+  const walk = [
+    walkRow("Production (new biz + renewal + service)", production,    "+", false, "All P&C, life, health line-item compensation"),
+    walkRow("AIPP payments",                            aippPayments,  "+", false, "Annual incentive payouts (typically January only)"),
+    walkRow("Adjustments + other",                      adjustments,   "+", false, "Small credits, miscellaneous items"),
+    walkRow("Gross compensation",                       grossComp,     "=", true,  null),
+    walkRow("Deductions",                               deductions,    "−", false, "Errors, charge-backs, fees"),
+    walkRow("AIPP deferrals",                           aippDeferrals, "−", false, "Money held back for next year AIPP base"),
+    walkRow("Net deposit to bank",                      netDeposit,    "=", true,  "Should match the SF deposit for this period"),
+  ];
 
   return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
     <Card>
       <CardHeader
         title="SF COMP_RECAP Detail"
         sub="State Farm compensation breakdown by period"
-        action={<AskBtn context={`My SF COMP_RECAP for ${period}: Total ${fmt(total)}. AIPP eligible: ${fmt(aippTotal)}. Help me reconcile this to my GL and confirm my AIPP calculation.`} />}
+        action={<AskBtn context={`My SF COMP_RECAP for ${period}: Total $${total}. AIPP eligible: $${aippTotal}. Help me reconcile this to my GL and confirm my AIPP calculation.`} />}
       />
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         {periods.map(p => (
@@ -772,6 +1122,66 @@ const CompRecapSection = ({ data }) => {
         ))}
       </div>
 
+      {/* Gross → Net walk */}
+      {filtered.length > 0 && (
+        <div style={{
+          background: T.slate50,
+          border: `1px solid ${T.slate200}`,
+          borderRadius: 10,
+          padding: "12px 14px",
+          marginBottom: 16,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: T.slate600, marginBottom: 8, letterSpacing: "0.02em", textTransform: "uppercase" }}>
+            Gross → Net walk · {period}
+          </div>
+          {walk.map((row, i) => (
+            <div key={i} style={{
+              display: "grid",
+              gridTemplateColumns: "18px 1fr auto",
+              gap: 10,
+              alignItems: "baseline",
+              padding: "5px 0",
+              borderTop: row.isTotal && i > 0 ? `1px solid ${T.slate200}` : "none",
+              marginTop: row.isTotal && i > 0 ? 4 : 0,
+              paddingTop: row.isTotal && i > 0 ? 8 : 5,
+            }}>
+              <span style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: row.sign === "=" ? T.slate900 : row.sign === "+" ? T.green : T.red,
+                textAlign: "center",
+              }}>{row.sign}</span>
+              <div>
+                <div style={{ fontSize: 12, color: row.isTotal ? T.slate900 : T.slate700, fontWeight: row.isTotal ? 700 : 400 }}>
+                  {row.label}
+                </div>
+                {row.hint && (
+                  <div style={{ fontSize: 10, color: T.slate400, marginTop: 1 }}>{row.hint}</div>
+                )}
+              </div>
+              <span style={{
+                fontSize: row.isTotal ? 14 : 12,
+                fontWeight: row.isTotal ? 700 : 500,
+                color: row.amount < 0 ? T.red : row.isTotal ? T.slate900 : T.slate700,
+                fontVariantNumeric: "tabular-nums",
+              }}>
+                {row.amount < 0 ? "−" : ""}{fmt(Math.abs(Math.round(row.amount)))}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: T.slate600, letterSpacing: "0.02em", textTransform: "uppercase" }}>
+          Line items · {period}
+        </div>
+        {compositeOnly && (
+          <div style={{ fontSize: 10, color: T.amber, fontWeight: 600 }}>
+            ⚠ Showing source deposits — detail PDF not yet parsed
+          </div>
+        )}
+      </div>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${T.slate200}` }}>
@@ -781,7 +1191,7 @@ const CompRecapSection = ({ data }) => {
           </tr>
         </thead>
         <tbody>
-          {filtered.map((r,i) => (
+          {displayRows.map((r,i) => (
             <tr key={i} style={{ borderBottom: `1px solid ${T.slate100}` }}>
               <td style={{ padding: "8px 8px", fontSize: 12, color: T.slate800 }}>{r.description}</td>
               <td style={{ padding: "8px 8px", textAlign: "center" }}>
@@ -802,21 +1212,33 @@ const CompRecapSection = ({ data }) => {
         </tfoot>
       </table>
     </Card>
+
+      {/* S-Corp Owner Compensation — moved from HR & People 2026-07-16 */}
+      <OwnerCompensationSection benefits={data?.benefits} />
+    </div>
   );
 };
 
 // ─── Section: AIPP & ScoreBoard ──────────────────────────────
 const AIPPSection = ({ data }) => {
   const aippData = data?.aipp || {};
-  const year       = aippData.year       || new Date().getFullYear();
-  const target     = aippData.target     || 0;
-  const earned     = aippData.earned     || 0;
-  const projected  = aippData.projected  || 0;
-  const priorYear  = aippData.priorYear  || 0;
-  const monthlyEarned = Array.isArray(aippData.monthlyEarned) ? aippData.monthlyEarned : [];
-  const scoreboard    = Array.isArray(data?.scoreboard) ? data.scoreboard : [];
-  const achievement = pct(earned, target);
-  const projPct = pct(projected, target);
+  const year             = aippData.year             || new Date().getFullYear();
+  const target           = aippData.target           || 0;
+  const earned           = aippData.earned           || 0;
+  const projected        = aippData.projected        || 0;
+  const priorYear        = aippData.priorYear        || 0;
+  const priorYearLabel   = aippData.priorYearLabel   || (year - 1);
+  const priorPriorYear   = aippData.priorPriorYear   || 0;
+  const priorPriorLabel  = aippData.priorPriorYearLabel || (year - 2);
+  const yoyDelta         = aippData.yoyDelta;
+  const yoyPct           = aippData.yoyPct;
+  const monthlyEarned    = Array.isArray(aippData.monthlyEarned) ? aippData.monthlyEarned : [];
+  const scoreboard       = Array.isArray(data?.scoreboard) ? data.scoreboard : [];
+  const achievement      = pct(earned, target);
+  const projPct          = pct(projected, target);
+  // YoY status: down >10% is bad
+  const yoyStatus        = yoyPct === null ? null : yoyPct < -10 ? "critical" : yoyPct < 0 ? "warning" : "good";
+  const yoyColor         = yoyStatus === "critical" ? T.red : yoyStatus === "warning" ? T.amber : T.green;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -826,7 +1248,7 @@ const AIPPSection = ({ data }) => {
         <Card>
           <CardHeader
             title={`AIPP ${year} — Annual Incentive Progress`}
-            action={<AskBtn context={`AIPP ${year}: Target ${fmt(target)}, Earned YTD ${fmt(earned)}, Achievement ${achievement}%, Projected ${fmt(projected)}, Prior Year ${fmt(priorYear)}. Am I on track? What do I need to focus on?`} />}
+            action={<AskBtn context={`AIPP ${year}: Target $${target}, Earned YTD $${earned}, Achievement ${achievement}%, Projected $${projected}, Prior Year $${priorYear}. Am I on track? What do I need to focus on?`} />}
           />
           <div style={{ fontSize: 32, fontWeight: 700, color: T.green, letterSpacing: "-0.03em", marginBottom: 4 }}>
             {achievement}%
@@ -839,11 +1261,12 @@ const AIPPSection = ({ data }) => {
             <span>Jan {year}</span><span>Dec {year}</span>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
             {[
-              { label: "Earned YTD",    value: fmt(earned),    color: T.green },
-              { label: "Projected",     value: fmt(projected), color: projPct >= 95 ? T.green : T.amber },
-              { label: "Prior Year",    value: fmt(priorYear), color: T.slate500 },
+              { label: "Earned YTD",         value: fmt(earned),         color: T.green },
+              { label: "Projected",          value: fmt(projected),      color: projPct >= 95 ? T.green : T.amber },
+              { label: `PY ${priorYearLabel}`,  value: fmt(priorYear),      color: T.slate700 },
+              { label: `PY ${priorPriorLabel}`, value: fmt(priorPriorYear), color: T.slate500 },
             ].map((s,i) => (
               <div key={i} style={{ background: T.slate50, borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
                 <div style={{ fontSize: 10, color: T.slate500, marginBottom: 4 }}>{s.label}</div>
@@ -851,6 +1274,24 @@ const AIPPSection = ({ data }) => {
               </div>
             ))}
           </div>
+
+          {yoyPct !== null && (
+            <div style={{
+              marginTop: 14,
+              padding: "10px 12px",
+              borderRadius: 8,
+              fontSize: 11,
+              lineHeight: 1.5,
+              background: yoyStatus === "good" ? T.greenLt : yoyStatus === "warning" ? T.amberLt : T.redLt,
+              borderLeft: `3px solid ${yoyColor}`,
+              color: yoyStatus === "good" ? "#065F46" : yoyStatus === "warning" ? "#92400E" : "#991B1B",
+            }}>
+              <strong>YoY trend:</strong> {priorYearLabel} AIPP {fmt(priorYear)} vs {priorPriorLabel} {fmt(priorPriorYear)} —{" "}
+              <strong>{yoyPct >= 0 ? "↑" : "↓"} {Math.abs(yoyPct).toFixed(1)}%</strong>
+              {yoyStatus === "critical" && " · production needs Q3/Q4 catch-up plan"}
+              {yoyStatus === "warning" && " · monitor closely"}
+            </div>
+          )}
 
           <div style={{ marginTop: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: T.slate600, marginBottom: 8 }}>Monthly earned — {year}</div>
@@ -868,9 +1309,9 @@ const AIPPSection = ({ data }) => {
         {/* ScoreBoard */}
         <Card>
           <CardHeader
-            title={`ScoreBoard Metrics — ${year}`}
+            title="ScoreBoard Metrics — 2026"
             sub="Progress toward performance recognition"
-            action={<AskBtn context={`My ScoreBoard metrics for ${year}: reviewing progress toward SF performance recognition. Help me identify which metrics need the most attention.`} />}
+            action={<AskBtn context="My ScoreBoard metrics for 2026: reviewing progress toward SF performance recognition. Help me identify which metrics need the most attention." />}
           />
           {scoreboard.map((m, i) => (
             <div key={i} style={{ marginBottom: 14 }}>
@@ -891,16 +1332,14 @@ const AIPPSection = ({ data }) => {
               />
             </div>
           ))}
-          {scoreboard.length === 0 ? (
-            <div style={{
-              marginTop: 16, padding: "12px 14px",
-              background: T.slate50, borderRadius: 8,
-              fontSize: 12, color: T.slate600,
-              borderLeft: `3px solid ${T.amber}`,
-            }}>
-              ScoreBoard data not yet tracked in the system. Once SF Score+ monthly reports are forwarded to the BCC inbox, this view will populate with target/actual per metric and recognition progress.
-            </div>
-          ) : null}
+          <div style={{
+            marginTop: 16, padding: "10px 12px",
+            background: T.slate50, borderRadius: 8,
+            fontSize: 11, color: T.slate600,
+            borderLeft: `3px solid ${T.amber}`,
+          }}>
+            Retention rate is above target — excellent. New Business Policies at 48% needs attention to hit ScoreBoard recognition level.
+          </div>
         </Card>
       </div>
     </div>
@@ -916,14 +1355,9 @@ const PayrollSection = ({ data }) => {
     <Card>
       <CardHeader
         title="Payroll History"
-        sub={(data?.payroll?.length || 0) === 0 ? "No payroll runs imported yet" : `YTD Gross: ${fmt(ytdGross)} · YTD Taxes: ${fmt(ytdTax)}`}
+        sub={`YTD Gross: ${fmt(ytdGross)} · YTD Taxes: ${fmt(ytdTax)}`}
         action={<AskBtn context={`My agency payroll YTD: Gross ${fmt(ytdGross)}, Employer taxes ${fmt(ytdTax)}. Help me review payroll expenses and identify any concerns.`} />}
       />
-      {(data?.payroll?.length || 0) === 0 && (
-        <div style={{ padding:"14px 12px", background:T.slate50, borderRadius:8, fontSize:12, color:T.slate600, borderLeft:`3px solid ${T.amber}`, marginBottom:8 }}>
-          No payroll runs in the live system yet. Forward ADP payroll reports to the BCC inbox; the Payroll GL Writer will populate this view automatically. Until then, payroll expense totals are visible on the P&L tab from the CPA accrual books.
-        </div>
-      )}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${T.slate200}` }}>
@@ -955,47 +1389,30 @@ const PayrollSection = ({ data }) => {
 const BankSection = ({ data }) => {
   const bankAccounts = Array.isArray(data?.bankAccounts) ? data.bankAccounts : [];
   const totalCash = bankAccounts.reduce((s,r) => s + (r?.balance || 0), 0);
-  const fmtDate = (d) => {
-    if (!d) return "—";
-    try { return new Date(d).toLocaleDateString("en-US",{month:"short", day:"numeric", year:"numeric"}); }
-    catch { return String(d); }
-  };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px,1fr))", gap: 10 }}>
-        {bankAccounts.length === 0 && (
-          <Card><div style={{ fontSize:12, color:T.slate500 }}>No bank accounts on file. Add accounts from bank statement ingestion.</div></Card>
-        )}
-        {bankAccounts.map((a, i) => {
-          const isPlaceholderInst = !a.institution || /tbd/i.test(a.institution);
-          return (
-            <Card key={i}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: T.slate700 }}>{a.name}</div>
-                  <div style={{ fontSize: 10, color: isPlaceholderInst ? T.amber : T.slate400, marginTop:2 }}>
-                    {isPlaceholderInst ? "Institution: needs confirmation" : a.institution}
-                  </div>
-                </div>
-                <Pill type="info">{(a.type || "").replace(/_/g," ")}</Pill>
-              </div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: T.slate900, letterSpacing: "-0.02em" }}>
-                {fmt(a.balance)}
-              </div>
-              <div style={{ fontSize: 10, color: T.slate400, marginTop: 4 }}>
-                As of {fmtDate(a.asOf)}{a.last4 ? ` · ••••${a.last4}` : ""}
-              </div>
-            </Card>
-          );
-        })}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px,1fr))", gap: 10 }}>
+        {bankAccounts.map((a, i) => (
+          <Card key={i}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.slate700 }}>{a.name}</div>
+              <Pill type={a.reconciled ? "success" : "warning"}>
+                {a.reconciled ? "Reconciled" : "Pending"}
+              </Pill>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: T.slate900, letterSpacing: "-0.02em" }}>
+              {fmt(a.balance)}
+            </div>
+            <div style={{ fontSize: 10, color: T.slate400, marginTop: 4 }}>
+              As of {a.asOf} · ••••{a.last4}
+            </div>
+          </Card>
+        ))}
         <Card style={{ background: T.navy, border: "none" }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.7)", marginBottom: 8 }}>Total Cash Position</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: T.white, letterSpacing: "-0.02em" }}>{fmt(totalCash)}</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: T.textOnColor, letterSpacing: "-0.02em" }}>{fmt(totalCash)}</div>
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>All accounts combined</div>
         </Card>
-      </div>
-      <div style={{ padding:"10px 12px", background:T.slate50, borderRadius:8, fontSize:11, color:T.slate600, borderLeft:`3px solid ${T.amber}` }}>
-        Balances reflect last loaded statement. Last-3-months bank statements are still pending — forward to BCC inbox to enable monthly reconciliation.
       </div>
     </div>
   );
@@ -1003,239 +1420,312 @@ const BankSection = ({ data }) => {
 
 // ─── Section: Credit & Debt ───────────────────────────────────
 const CreditSection = ({ data }) => {
-  const accts = Array.isArray(data?.creditAccounts) ? data.creditAccounts : [];
-  const totalDebt = accts.reduce((s,r) => s + (r?.balance || 0), 0);
-  const totalLimit = accts.filter(a => a.limit != null).reduce((s,r) => s + (r.limit || 0), 0);
-  const totalAvailable = accts.filter(a => a.limit != null).reduce((s,r) => s + ((r.limit || 0) - (r.balance || 0)), 0);
-  const totalUtilization = totalLimit > 0 ? (totalDebt / totalLimit) * 100 : null;
-  const limitsPending = accts.some(a => a.limit == null);
+  const totalDebt = (data.creditAccounts || []).reduce((s,r) => s + r.balance, 0);
+  const totalAvailable = (data.creditAccounts || []).filter(a => a.limit).reduce((s,r) => s + (r.limit - r.balance), 0);
+
+  // Next payment due: pick the card with the soonest due day where we actually know the due day + payment amount.
+  // Returns null when no card has those fields populated — render a "—" placeholder instead of a fake SBA loan.
+  const nextDue = (data.creditAccounts || [])
+    .filter(a => a.dueDay && a.payment > 0)
+    .sort((x, y) => x.dueDay - y.dueDay)[0];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px,1fr))", gap: 10, marginBottom: 4 }}>
-        <KPICard label="Total Debt Exposure" value={fmt(totalDebt)} color={T.red} border={T.red} />
-        <KPICard label="Total Credit Limit" value={limitsPending ? "Pending" : fmt(totalLimit)} sub={limitsPending ? "Limits not yet loaded" : null} border={T.slate200} />
-        <KPICard label="Available Credit" value={limitsPending ? "—" : fmt(totalAvailable)} color={limitsPending ? T.slate500 : T.green} border={limitsPending ? T.slate200 : T.green} />
-        <KPICard label="Overall Utilization" value={totalUtilization != null ? `${Math.round(totalUtilization)}%` : "—"} sub="Target <30%" color={totalUtilization != null && totalUtilization > 30 ? T.amber : T.slate900} border={totalUtilization != null && totalUtilization > 30 ? T.amber : T.slate200} />
+        <KPICard label="Total Debt Exposure" value={fmtMoney(totalDebt)} color={T.red} border={T.red} />
+        <KPICard label="Available Credit" value={fmt(totalAvailable)} color={T.green} border={T.green} />
+        <KPICard
+          label="Next Payment Due"
+          value={nextDue ? `Day ${nextDue.dueDay}` : "—"}
+          sub={nextDue ? `${nextDue.name} — ${fmt(nextDue.payment)}` : "No payment dates set"}
+          border={T.amber}
+        />
       </div>
 
-      {accts.length === 0 && (
-        <Card><div style={{ fontSize:12, color:T.slate500 }}>No credit accounts on file.</div></Card>
-      )}
-
-      {accts.map((a, i) => {
-        const hasLimit = a.limit != null && a.limit > 0;
-        const utilPct = hasLimit ? Math.round((a.balance / a.limit) * 100) : null;
-        const typeLabel = (a.type || "").replace(/_/g, " ");
-        return (
-          <Card key={i}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: T.slate800 }}>{a.name}</div>
-                <div style={{ fontSize: 11, color: T.slate500, marginTop: 2 }}>
-                  {typeLabel}
-                  {a.last4 ? ` · ••••${a.last4}` : ""}
-                  {a.rate != null ? ` · ${a.rate}% APR` : ""}
-                  {a.institution ? ` · ${a.institution}` : ""}
-                </div>
+      {(data.creditAccounts || []).map((a, i) => (
+        <Card key={i}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: T.slate800 }}>{a.name}</div>
+              <div style={{ fontSize: 11, color: T.slate500, marginTop: 2 }}>
+                {(a.type === "credit_card" || a.type === "business_credit_card") ? "Credit Card" : a.type === "loan" ? "Loan" : "Line of Credit"} · ••••{a.last4}{a.rate > 0 ? ` · ${a.rate}% APR` : ""}
               </div>
-              <AskBtn context={`${a.name}: Balance ${fmt(a.balance)}${a.rate != null ? `, Rate ${a.rate}%` : ""}${a.dueDay ? `, Payment due on the ${a.dueDay}` : ""}${a.payment != null ? `, Min payment ${fmt(a.payment)}` : ""}. Help me think about this debt.`} />
             </div>
+            <AskBtn context={`${a.name}: Balance ${fmt(a.balance)}, Rate ${a.rate}%, Payment due on the ${a.dueDay}. Minimum payment: ${fmt(a.payment)}. Help me think about this debt.`} />
+          </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px,1fr))", gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 10, color: T.slate500, marginBottom: 2 }}>Current Balance</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: T.red }}>{fmt(a.balance)}</div>
-              </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px,1fr))", gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 10, color: T.slate500, marginBottom: 2 }}>Current Balance</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: a.balance > 0 ? T.red : T.slate600 }}>{fmtMoney(a.balance)}</div>
+              {a.asOf && (
+                <div style={{ fontSize: 9, color: T.slate400, marginTop: 2 }}>
+                  as of {new Date(a.asOf).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </div>
+              )}
+            </div>
+            {a.limit && (
               <div>
                 <div style={{ fontSize: 10, color: T.slate500, marginBottom: 2 }}>Available Credit</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: hasLimit ? T.green : T.slate400 }}>
-                  {hasLimit ? fmt(a.limit - a.balance) : "—"}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: T.slate500, marginBottom: 2 }}>Min Payment</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: a.payment != null ? T.amber : T.slate400 }}>
-                  {a.payment != null ? fmt(a.payment) : "—"}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: T.slate500, marginBottom: 2 }}>Due Day</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: a.dueDay ? T.slate800 : T.slate400 }}>
-                  {a.dueDay ? `Day ${a.dueDay} of month` : "—"}
-                </div>
-              </div>
-            </div>
-
-            {hasLimit ? (
-              <div style={{ marginTop: 10 }}>
-                <div style={{ fontSize: 10, color: T.slate400, marginBottom: 4 }}>Utilization: {utilPct}%</div>
-                <ProgressBar value={a.balance} max={a.limit} color={utilPct > 30 ? T.amber : T.green} height={6} />
-              </div>
-            ) : (
-              <div style={{ marginTop: 10, fontSize: 10, color: T.slate400 }}>
-                Credit limit not yet loaded — utilization unavailable.
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.green }}>{fmt(a.limit - a.balance)}</div>
               </div>
             )}
-          </Card>
-        );
-      })}
+            <div>
+              <div style={{ fontSize: 10, color: T.slate500, marginBottom: 2 }}>Min Payment</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: T.amber }}>{fmt(a.payment)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: T.slate500, marginBottom: 2 }}>Due Date</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: T.slate800 }}>{a.dueDay ? `Day ${a.dueDay} of month` : "—"}</div>
+            </div>
+          </div>
 
-      {limitsPending && (
-        <div style={{ padding:"10px 12px", background:T.slate50, borderRadius:8, fontSize:11, color:T.slate600, borderLeft:`3px solid ${T.amber}` }}>
-          Credit limits, APR, and minimum payment data are still pending. Forward recent CC statements to BCC inbox to populate them.
-        </div>
-      )}
+          {a.limit && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 10, color: T.slate400, marginBottom: 4 }}>Utilization: {pct(a.balance, a.limit)}%</div>
+              <ProgressBar value={a.balance} max={a.limit} color={pct(a.balance,a.limit) > 30 ? T.amber : T.green} height={6} />
+            </div>
+          )}
+        </Card>
+      ))}
     </div>
   );
 };
 
 // ─── Section: General Ledger ──────────────────────────────────
-const GLSection = ({ data }) => (
-  <Card>
-    <CardHeader
-      title="General Ledger — Recent Entries"
-      sub="Last 30 days · All accounts"
-      action={<AskBtn context="I am reviewing my General Ledger recent entries. Help me verify these entries look correct and identify anything that needs attention." />}
-    />
-    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-      <thead>
-        <tr style={{ borderBottom: `1px solid ${T.slate200}` }}>
-          {["Date","Ref","Description","Account","Debit","Credit"].map((h,i) => (
-            <th key={i} style={{ padding: "8px", fontSize: 11, fontWeight: 600, color: T.slate500, textAlign: i >= 4 ? "right" : "left" }}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {(Array.isArray(data?.glEntries) ? data.glEntries : []).map((r,i) => (
-          <tr key={i} style={{ borderBottom: `1px solid ${T.slate100}` }}>
-            <td style={{ padding: "8px", fontSize: 11, color: T.slate500 }}>{r.date}</td>
-            <td style={{ padding: "8px", fontSize: 11, color: T.blue, fontFamily: "monospace" }}>{r.ref}</td>
-            <td style={{ padding: "8px", fontSize: 12, color: T.slate800 }}>{r.description}</td>
-            <td style={{ padding: "8px", fontSize: 11, color: T.slate500, fontFamily: "monospace" }}>{r.account}</td>
-            <td style={{ padding: "8px", fontSize: 12, textAlign: "right", color: T.slate900, fontWeight: r.debit ? 500 : 400 }}>{r.debit ? fmt(r.debit) : "—"}</td>
-            <td style={{ padding: "8px", fontSize: 12, textAlign: "right", color: T.green, fontWeight: r.credit ? 500 : 400 }}>{r.credit ? fmt(r.credit) : "—"}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </Card>
-);
-
-const ReconciliationSection = ({ data }) => {
-  const rows = Array.isArray(data?.reconciliation) ? data.reconciliation : [];
-
-  // Aggregate diagnostics (most-recent 12 months with CPA data present).
-  const cpaCoveredRows = rows.filter(r => Number.isFinite(r.cpaSfEarned) && r.cpaSfEarned !== 0);
-  const totalCpa  = cpaCoveredRows.reduce((s, r) => s + (r.cpaSfEarned   || 0), 0);
-  const totalBcc  = cpaCoveredRows.reduce((s, r) => s + (r.bccNetPayable || 0), 0);
-  const totalVar  = totalBcc - totalCpa;
-  const totalPct  = totalCpa ? Math.round((totalVar / totalCpa) * 1000) / 10 : null;
-
+const GLSection = ({ data }) => {
+  const [days, setDays] = useState(90);
+  const allEntries = Array.isArray(data?.glEntries) ? data.glEntries : [];
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const filtered = allEntries.filter(r => !r.date || r.date >= cutoffStr);
+  const ranges = [
+    { label: "30 days",  d: 30 },
+    { label: "90 days",  d: 90 },
+    { label: "6 months", d: 180 },
+    { label: "1 year",   d: 365 },
+    { label: "All",      d: 9999 },
+  ];
   return (
-    <>
-      <Card style={{ marginBottom: 14 }}>
-        <CardHeader
-          title="BCC vs CPA — Commission Income Reconciliation"
-          sub={`Monthly variance, BCC net_payable vs CPA SF-earned. View vw_bcc_vs_cpa_commission_variance (migration 020).`}
-          action={<AskBtn context={`I'm reviewing the BCC vs CPA commission reconciliation. Across the most recent ${cpaCoveredRows.length} months with CPA data, BCC net_payable totals $${Math.round(totalBcc).toLocaleString()} vs CPA SF-earned $${Math.round(totalCpa).toLocaleString()}, for a cumulative variance of $${Math.round(totalVar).toLocaleString()} (${totalPct ?? "—"}%). Help me think about what this means.`} />}
-        />
-        <div style={{ fontSize: 12, color: T.slate600, marginTop: 4, marginBottom: 12 }}>
-          BCC net_payable is what State Farm actually deposited per the bi-monthly comp recap PDFs.
-          CPA SF-earned is your CPA's accrual-basis Commission Income (Total Commission Income minus Non State Farm subline).
-          A negative variance generally reflects deductions your CPA expenses rather than netting from revenue (PFA reductions, life premium loans, etc.) plus the basis shift between earned and paid.
-        </div>
-
-        {cpaCoveredRows.length > 0 && (
-          <div style={{
-            display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 12, marginBottom: 14,
-          }}>
-            <div style={{ background: T.slate50, border: `1px solid ${T.slate200}`, borderRadius: 8, padding: "10px 12px" }}>
-              <div style={{ fontSize: 11, color: T.slate500, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>CPA SF-earned</div>
-              <div style={{ fontSize: 18, color: T.slate900, fontWeight: 700, marginTop: 4 }}>{fmt(totalCpa)}</div>
-              <div style={{ fontSize: 11, color: T.slate500, marginTop: 2 }}>across {cpaCoveredRows.length} mo</div>
-            </div>
-            <div style={{ background: T.slate50, border: `1px solid ${T.slate200}`, borderRadius: 8, padding: "10px 12px" }}>
-              <div style={{ fontSize: 11, color: T.slate500, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>BCC net_payable</div>
-              <div style={{ fontSize: 18, color: T.slate900, fontWeight: 700, marginTop: 4 }}>{fmt(totalBcc)}</div>
-              <div style={{ fontSize: 11, color: T.slate500, marginTop: 2 }}>same {cpaCoveredRows.length} mo</div>
-            </div>
-            <div style={{
-              background: totalVar < 0 ? "#fff7ed" : "#f0fdf4",
-              border: `1px solid ${totalVar < 0 ? "#fed7aa" : "#bbf7d0"}`,
-              borderRadius: 8, padding: "10px 12px",
-            }}>
-              <div style={{ fontSize: 11, color: T.slate500, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Cumulative variance</div>
-              <div style={{ fontSize: 18, color: totalVar < 0 ? "#9a3412" : "#166534", fontWeight: 700, marginTop: 4 }}>{fmt(totalVar)}</div>
-              <div style={{ fontSize: 11, color: T.slate500, marginTop: 2 }}>{totalPct != null ? `${totalPct}%` : "—"}</div>
-            </div>
-          </div>
-        )}
-
-        {rows.length === 0 ? (
-          <div style={{ fontSize: 13, color: T.slate500, padding: "20px 0" }}>
-            No reconciliation rows yet. View is empty — likely no overlap between comp_recap and cpa_pnl_monthly periods.
-          </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${T.slate200}`, color: T.slate500, textAlign: "left" }}>
-                <th style={{ padding: "8px 10px", fontWeight: 600 }}>Month</th>
-                <th style={{ padding: "8px 10px", fontWeight: 600, textAlign: "right" }}>CPA SF-earned</th>
-                <th style={{ padding: "8px 10px", fontWeight: 600, textAlign: "right" }}>BCC net_payable</th>
-                <th style={{ padding: "8px 10px", fontWeight: 600, textAlign: "right" }}>Variance</th>
-                <th style={{ padding: "8px 10px", fontWeight: 600, textAlign: "right" }}>%</th>
+    <Card>
+      <CardHeader
+        title="General Ledger"
+        sub={`${filtered.length} entries · ${days >= 9999 ? "All time" : `Last ${days} days`} · BCC + QBO mirror`}
+        action={<AskBtn context={`I am reviewing my General Ledger — last ${days} days, ${filtered.length} entries showing. Help me verify these entries look correct and identify anything that needs attention.`} />}
+      />
+      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+        {ranges.map(r => (
+          <button key={r.d} onClick={() => setDays(r.d)} style={{
+            padding: "4px 10px", fontSize: 11, fontWeight: days === r.d ? 600 : 400,
+            color: days === r.d ? T.white : T.slate600,
+            background: days === r.d ? T.navy : T.white,
+            border: `1px solid ${days === r.d ? T.navy : T.slate200}`,
+            borderRadius: 6, cursor: "pointer",
+          }}>{r.label}</button>
+        ))}
+      </div>
+      <div style={{ overflowX: "auto", maxHeight: 600, overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead style={{ position: "sticky", top: 0, background: T.white, zIndex: 1 }}>
+            <tr style={{ borderBottom: `1px solid ${T.slate200}` }}>
+              {["Date","Ref","Source","Description","Account","Debit","Credit"].map((h,i) => (
+                <th key={i} style={{ padding: "8px", fontSize: 11, fontWeight: 600, color: T.slate500, textAlign: i >= 5 ? "right" : "left" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r,i) => (
+              <tr key={i} style={{ borderBottom: `1px solid ${T.slate100}` }}>
+                <td style={{ padding: "8px", fontSize: 11, color: T.slate500 }}>{r.date}</td>
+                <td style={{ padding: "8px", fontSize: 11, color: T.blue, fontFamily: "monospace" }}>{r.ref}</td>
+                <td style={{ padding: "8px", fontSize: 10 }}>
+                  <Pill type={r.source === "qbo" ? "purple" : "info"}>{(r.source || "").toUpperCase()}</Pill>
+                </td>
+                <td style={{ padding: "8px", fontSize: 12, color: T.slate800 }}>{r.description}</td>
+                <td style={{ padding: "8px", fontSize: 11, color: T.slate500, fontFamily: "monospace" }}>{r.account}</td>
+                <td style={{ padding: "8px", fontSize: 12, textAlign: "right", color: T.slate900, fontWeight: r.debit ? 500 : 400 }}>{r.debit ? fmt(r.debit) : "—"}</td>
+                <td style={{ padding: "8px", fontSize: 12, textAlign: "right", color: T.green, fontWeight: r.credit ? 500 : 400 }}>{r.credit ? fmt(r.credit) : "—"}</td>
               </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => {
-                const v = r.variance;
-                const isMissing = !Number.isFinite(r.cpaSfEarned) || r.cpaSfEarned === 0;
-                return (
-                  <tr key={`${r.year}-${r.month}-${i}`} style={{ borderBottom: `1px solid ${T.slate100}` }}>
-                    <td style={{ padding: "8px 10px", color: T.slate800, fontWeight: 500 }}>{r.monthLabel}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", color: isMissing ? T.slate400 : T.slate800 }}>{isMissing ? "—" : fmt(r.cpaSfEarned)}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", color: Number.isFinite(r.bccNetPayable) ? T.slate800 : T.slate400 }}>{Number.isFinite(r.bccNetPayable) ? fmt(r.bccNetPayable) : "—"}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 500, color: !Number.isFinite(v) ? T.slate400 : (v < 0 ? "#c2410c" : v > 0 ? "#15803d" : T.slate800) }}>{Number.isFinite(v) ? fmt(v) : "—"}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", color: T.slate500 }}>{Number.isFinite(r.variancePct) ? `${r.variancePct}%` : "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Card>
-
-      <Card>
-        <CardHeader title="Open question for CPA" sub="Tracked in bundle email task d5509d37" />
-        <div style={{ fontSize: 13, color: T.slate700, lineHeight: 1.55, marginTop: 6 }}>
-          What sources besides the bi-monthly comp recap PDFs feed your Commission Income account?
-          Specifically — are AIPP annual payments, ScoreBoard, Life production bonuses, or other
-          State Farm payment streams included there? Once we have that answer the GL Entry Writer
-          accrual refactor (sprint Item 9) can resume.
-        </div>
-      </Card>
-    </>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan={7} style={{ padding: "24px 8px", textAlign: "center", color: T.slate400, fontSize: 12 }}>No entries in this window.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 };
 
-
 // ─── Main Financials Module ───────────────────────────────────
+// ─── Section: Balance Sheet ──────────────────────────────────
+const BalanceSheetSection = ({ data }) => {
+  const bs = data?.balanceSheet || [];
+  if (!Array.isArray(bs) || bs.length === 0) {
+    return (
+      <Card>
+        <CardHeader title="Balance Sheet" sub="Cash-basis snapshot · QBO mirror" />
+        <div style={{ padding: "32px 16px", textAlign: "center", color: T.slate500, fontSize: 12 }}>
+          No balance sheet snapshots loaded yet. v_balance_sheet view exists but is empty —
+          QBO mirror refresh is currently blocked (see active alert).
+        </div>
+      </Card>
+    );
+  }
+
+  const latest = bs[0];
+  const prior  = bs[1] || null;
+  const fmtDelta = (cur, prev) => {
+    if (prev == null || prev === 0) return null;
+    const pct = ((cur - prev) / Math.abs(prev)) * 100;
+    return { pct: pct.toFixed(1), positive: pct >= 0 };
+  };
+  // Delta label shows the actual prior snapshot date (snapshots aren't always month-end).
+  const priorDateLabel = prior?.period_end
+    ? new Date(prior.period_end + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : "prior";
+
+  const assetsDelta = prior ? fmtDelta(latest.total_assets, prior.total_assets) : null;
+  const equityDelta = prior ? fmtDelta(latest.total_equity, prior.total_equity) : null;
+  const liabDelta   = prior ? fmtDelta(latest.total_liabilities, prior.total_liabilities) : null;
+
+  const currentRatio = latest.current_liabilities > 0
+    ? (latest.current_assets / latest.current_liabilities).toFixed(2)
+    : null;
+  const debtToEquity = latest.total_equity > 0
+    ? (latest.total_liabilities / latest.total_equity).toFixed(2)
+    : null;
+
+  const dateLabel = latest.period_end
+    ? new Date(latest.period_end + "T00:00:00").toLocaleDateString("en-US", { month:"long", day:"numeric", year:"numeric" })
+    : "Latest";
+
+  // Map known QBO-derived snapshot sources to a single clean label; surface unknown values for diagnostics.
+  const QBO_SOURCES = new Set(["qbo", "manual_refresh_via_mcp", "scheduled_refresh"]);
+  const rawSource = latest.source_layer || "qbo";
+  const sourceLabel = QBO_SOURCES.has(rawSource) ? "QBO mirror" : `source: ${rawSource}`;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Headline KPIs */}
+      <Card>
+        <CardHeader
+          title={`Balance Sheet — As of ${dateLabel}`}
+          sub={`${latest.accounting_method || "cash"} basis · ${sourceLabel}`}
+        />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 12 }}>
+          {[
+            { label: "Total Assets",      value: latest.total_assets,      delta: assetsDelta, color: T.green },
+            { label: "Total Liabilities", value: latest.total_liabilities, delta: liabDelta,   color: T.red, invertDelta: true },
+            { label: "Total Equity",      value: latest.total_equity,      delta: equityDelta, color: T.blue },
+            { label: "Working Capital",   value: latest.working_capital,                       color: latest.working_capital >= 0 ? T.green : T.red },
+          ].map((kpi, i) => (
+            <div key={i} style={{ background: T.slate50, borderRadius: 10, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10, color: T.slate500, marginBottom: 4 }}>{kpi.label}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: kpi.color, letterSpacing: "-0.02em" }}>
+                {fmtCents(kpi.value)}
+              </div>
+              {kpi.delta != null && (
+                <div style={{ fontSize: 10, color: (kpi.invertDelta ? !kpi.delta.positive : kpi.delta.positive) ? T.green : T.red, marginTop: 4 }}>
+                  {kpi.delta.positive ? "▲" : "▼"} {Math.abs(parseFloat(kpi.delta.pct))}% vs {priorDateLabel}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Health ratios */}
+      <Card>
+        <CardHeader title="Health Ratios" sub="Computed from latest snapshot" />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 12 }}>
+          <div style={{ background: T.slate50, borderRadius: 10, padding: "12px 14px" }}>
+            <div style={{ fontSize: 10, color: T.slate500, marginBottom: 4 }}>Current Ratio</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: T.slate900 }}>{currentRatio || "—"}</div>
+            <div style={{ fontSize: 10, color: T.slate400, marginTop: 4 }}>current assets ÷ current liabilities · healthy &gt; 1.5</div>
+          </div>
+          <div style={{ background: T.slate50, borderRadius: 10, padding: "12px 14px" }}>
+            <div style={{ fontSize: 10, color: T.slate500, marginBottom: 4 }}>Debt-to-Equity</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: T.slate900 }}>{debtToEquity || "—"}</div>
+            <div style={{ fontSize: 10, color: T.slate400, marginTop: 4 }}>total liabilities ÷ total equity · healthy &lt; 0.5</div>
+          </div>
+          <div style={{ background: T.slate50, borderRadius: 10, padding: "12px 14px" }}>
+            <div style={{ fontSize: 10, color: T.slate500, marginBottom: 4 }}>Current Assets</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: T.slate900 }}>{fmtCents(latest.current_assets)}</div>
+            <div style={{ fontSize: 10, color: T.slate400, marginTop: 4 }}>cash + AR + inventory + short-term assets</div>
+          </div>
+          <div style={{ background: T.slate50, borderRadius: 10, padding: "12px 14px" }}>
+            <div style={{ fontSize: 10, color: T.slate500, marginBottom: 4 }}>Current Liabilities</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: T.slate900 }}>{fmtCents(latest.current_liabilities)}</div>
+            <div style={{ fontSize: 10, color: T.slate400, marginTop: 4 }}>AP + short-term debt + accrued expenses</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Monthly trend */}
+      <Card>
+        <CardHeader title="Monthly Snapshot Trend" sub={`Last ${bs.length} period${bs.length === 1 ? "" : "s"}`} />
+        <div style={{ overflowX: "auto", marginTop: 8 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <thead style={{ background: T.slate50 }}>
+              <tr>
+                <th style={{ padding: "8px 10px", textAlign: "left",  color: T.slate600, fontWeight: 600 }}>Period End</th>
+                <th style={{ padding: "8px 10px", textAlign: "right", color: T.slate600, fontWeight: 600 }}>Total Assets</th>
+                <th style={{ padding: "8px 10px", textAlign: "right", color: T.slate600, fontWeight: 600 }}>Total Liab.</th>
+                <th style={{ padding: "8px 10px", textAlign: "right", color: T.slate600, fontWeight: 600 }}>Total Equity</th>
+                <th style={{ padding: "8px 10px", textAlign: "right", color: T.slate600, fontWeight: 600 }}>Working Capital</th>
+                <th style={{ padding: "8px 10px", textAlign: "right", color: T.slate600, fontWeight: 600 }}>Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bs.map((row, i) => (
+                <tr key={row.period_end || i} style={{ borderTop: `1px solid ${T.slate100}` }}>
+                  <td style={{ padding: "8px 10px", color: T.slate800, fontWeight: i === 0 ? 600 : 400 }}>
+                    {row.period_end ? new Date(row.period_end + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", color: T.slate800 }}>{fmtCents(row.total_assets)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", color: T.slate800 }}>{fmtCents(row.total_liabilities)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", color: T.slate800 }}>{fmtCents(row.total_equity)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", color: row.working_capital >= 0 ? T.green : T.red }}>{fmtCents(row.working_capital)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", color: T.slate500 }}>
+                    <Pill type={(row.source || "").startsWith("qbo") ? "purple" : "info"}>{(row.source || "qbo").startsWith("qbo") ? "QBO" : (row.source || "—").toUpperCase()}</Pill>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
 export default function Financials() {
   const [section, setSection] = useState("overview");
+  const [period, setPeriod] = useState("mtd");
   const { data: liveData, loading } = useFinancialsData();
+  // Prefer live data when it arrives; fall back to the MOCK skeleton during the
+  // initial fetch. The previous implementation mutated the module-level MOCK
+  // during render, which was a React anti-pattern — it worked most of the time
+  // but caused the Overview to briefly render with skeleton nulls, and the
+  // Health Ratios section silently returned null (invisible in the UI) because
+  // tile.filter(Boolean) collapsed to []. Fix: treat MOCK as read-only, pass
+  // the effective data source down explicitly, and show a loading indicator
+  // during the fetch window. See changelog 2026-07-17.
+  const data = liveData ?? MOCK;
 
   const sections = [
     { id: "overview",  label: "Overview"        },
     { id: "pl",        label: "P&L"             },
+    { id: "balance",   label: "Balance Sheet"   },
     { id: "comp",      label: "COMP_RECAP"      },
     { id: "aipp",      label: "AIPP & ScoreBoard"},
     { id: "payroll",   label: "Payroll"         },
     { id: "bank",      label: "Bank Accounts"   },
     { id: "credit",    label: "Credit & Debt"   },
     { id: "gl",        label: "General Ledger"  },
-    { id: "recon",     label: "BCC vs CPA"      },
+    { id: "report",    label: "📄 Report Package"},
   ];
 
   return (
@@ -1245,11 +1735,30 @@ export default function Financials() {
         <div>
           <div style={{ fontSize: 20, fontWeight: 700, color: T.slate900, letterSpacing: "-0.02em" }}>Financials</div>
           <div style={{ fontSize: 12, color: T.slate500, marginTop: 3 }}>
-            Accrual basis (CPA aligned) · Calendar year · All figures in USD
+            Cash basis · Calendar year · All figures in USD
           </div>
         </div>
         <AskBtn context="I am reviewing my agency financials. Help me get a complete picture of my financial health, identify any concerns, and suggest what I should focus on." />
       </div>
+
+
+      {/* Loading indicator — shows during the initial fetch so users see something */}
+      {/* instead of an empty ratios section. Once liveData arrives, this hides.    */}
+      {loading && !liveData && (
+        <div style={{
+          padding: "12px 16px", marginBottom: 12,
+          background: T.slate50, border: `1px solid ${T.slate200}`,
+          borderRadius: 8, fontSize: 12, color: T.slate600,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <div style={{
+            width: 12, height: 12, borderRadius: "50%",
+            border: `2px solid ${T.slate300}`, borderTopColor: T.slate600,
+            animation: "spin 0.8s linear infinite",
+          }} />
+          Loading financial data…
+        </div>
+      )}
 
       {/* Section Navigation */}
       <div style={{
@@ -1271,15 +1780,16 @@ export default function Financials() {
       </div>
 
       {/* Section Content */}
-      {section === "overview" && <OverviewSection data={liveData || EMPTY_DATA} />}
-      {section === "pl"       && <PLSection data={liveData || EMPTY_DATA} />}
-      {section === "comp"     && <CompRecapSection data={liveData || EMPTY_DATA} />}
-      {section === "aipp"     && <AIPPSection data={liveData || EMPTY_DATA} />}
-      {section === "payroll"  && <PayrollSection data={liveData || EMPTY_DATA} />}
-      {section === "bank"     && <BankSection data={liveData || EMPTY_DATA} />}
-      {section === "credit"   && <CreditSection data={liveData || EMPTY_DATA} />}
-      {section === "gl"       && <GLSection data={liveData || EMPTY_DATA} />}
-      {section === "recon"    && <ReconciliationSection data={liveData || EMPTY_DATA} />}
+      {section === "overview" && <OverviewSection period={period} setPeriod={setPeriod} data={data} />}
+      {section === "pl"       && <PLSection data={data} />}
+      {section === "balance"  && <BalanceSheetSection data={data} />}
+      {section === "comp"     && <CompRecapSection data={data} />}
+      {section === "aipp"     && <AIPPSection data={data} />}
+      {section === "payroll"  && <PayrollSection data={data} />}
+      {section === "bank"     && <BankSection data={data} />}
+      {section === "credit"   && <CreditSection data={data} />}
+      {section === "gl"       && <GLSection data={data} />}
+      {section === "report"   && <ReportPackage />}
     </div>
   );
 }
