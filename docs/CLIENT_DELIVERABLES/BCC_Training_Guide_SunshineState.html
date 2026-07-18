@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>The Business Command Center — Training Guide</title>
+  <style>
+    /* ─── Type system ─── */
+    @import url('https://rsms.me/inter/inter.css');
+
+    :root {
+      --navy: #0F2745;
+      --navy-deep: #071224;
+      --blue: #2563EB;
+      --blue-soft: #DBEAFE;
+      --purple: #6D28D9;
+      --purple-soft: #EDE9FE;
+      /* Imaginary Farms brand accents */
+      --if-coral: #E07856;
+      --if-coral-soft: #FBE7DE;
+      --if-cream: #F7F1EA;
+      --slate-900: #0F172A;
+      --slate-700: #334155;
+      --slate-600: #475569;
+      --slate-500: #64748B;
+      --slate-400: #94A3B8;
+      --slate-300: #CBD5E1;
+      --slate-200: #E2E8F0;
+      --slate-100: #F1F5F9;
+      --slate-50:  #F8FAFC;
+      --amber: #B45309;
+      --amber-soft: #FEF3C7;
+      --green: #059669;
+      --green-soft: #D1FAE5;
+      --danger: #B91C1C;
+      --danger-soft: #FEE2E2;
+      --gradient-cover: linear-gradient(135deg, #0F2745 0%, #1A365D 55%, #1E3A5F 75%, #E07856 100%);
+      --gradient-accent: linear-gradient(135deg, #2563EB 0%, #6D28D9 100%);
+      --gradient-if: linear-gradient(135deg, #E07856 0%, #C85A3D 100%);
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body {
+      margin: 0;
+      font-family: 'Inter Variable', 'Inter', system-ui, sans-serif;
+      color: var(--slate-900);
+      background: white;
+      font-size: 11pt;
+      line-height: 1.55;
+      font-feature-settings: 'cv02','cv03','cv04','cv11','ss01';
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── Page structure ─── */
+    @page {
+      size: letter;
+      margin: 0.75in 0.65in;
+      @bottom-center {
+        content: "The Business Command Center  ·  Delivered by Imaginary Farms LLC  ·  imaginary-farms.com";
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 8pt;
+        color: #64748B;
+      }
+      @bottom-right {
+        content: "Page " counter(page);
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 8pt;
+        color: #64748B;
+      }
+    }
+    @page cover { margin: 0; @bottom-center { content: none; } @bottom-right { content: none; } }
+    .cover { page: cover; }
+    .page-break { page-break-before: always; }
+    .no-break { page-break-inside: avoid; }
+
+    /* ─── Cover ─── */
+    .cover {
+      background: var(--gradient-cover);
+      color: white;
+      min-height: 100vh;
+      padding: 1.2in 0.9in 0.9in;
+      position: relative;
+      overflow: hidden;
+    }
+    .cover::before {
+      content: '';
+      position: absolute;
+      top: -200px; right: -180px;
+      width: 500px; height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(37, 99, 235, 0.32), transparent 70%);
+    }
+    .cover::after {
+      content: '';
+      position: absolute;
+      bottom: -220px; left: -160px;
+      width: 460px; height: 460px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(224, 120, 86, 0.28), transparent 70%);
+    }
+    .cover-content { position: relative; z-index: 2; }
+    .cover-eyebrow {
+      font-size: 10pt;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: #FBBF9C;
+      margin-bottom: 0.4in;
+      font-weight: 600;
+    }
+    .cover-byline {
+      font-size: 9pt;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #FDD5C1;
+      margin-top: -0.28in;
+      margin-bottom: 0.4in;
+      font-weight: 500;
+      opacity: 0.9;
+    }
+    .cover-title {
+      font-size: 44pt;
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      margin: 0 0 0.25in 0;
+      max-width: 6in;
+      color: #FFFFFF;
+    }
+    .cover-title em {
+      font-style: normal;
+      background: linear-gradient(135deg, #93C5FD, #FBBF9C);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .cover-subtitle {
+      font-size: 16pt;
+      color: #CBD5E1;
+      font-weight: 400;
+      line-height: 1.4;
+      max-width: 5.6in;
+      margin: 0 0 0.9in 0;
+    }
+    .cover-meta {
+      border-top: 1px solid rgba(148, 163, 184, 0.35);
+      padding-top: 0.35in;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 0.3in;
+    }
+    .cover-meta-block { color: #CBD5E1; }
+    .cover-meta-block .label {
+      font-size: 8.5pt;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #94A3B8;
+      margin-bottom: 4pt;
+    }
+    .cover-meta-block .value {
+      font-size: 11pt;
+      color: #F1F5F9;
+      font-weight: 500;
+    }
+
+    /* ─── Section headings ─── */
+    h1 {
+      font-size: 26pt;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--navy);
+      margin: 0 0 0.15in 0;
+      line-height: 1.1;
+    }
+    h1 .kicker {
+      display: block;
+      font-size: 10pt;
+      font-weight: 600;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: 8pt;
+    }
+    h2 {
+      font-size: 15pt;
+      font-weight: 700;
+      color: var(--navy);
+      margin: 0.35in 0 0.1in 0;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    }
+    h3 {
+      font-size: 12pt;
+      font-weight: 700;
+      color: var(--navy);
+      margin: 0.2in 0 0.05in 0;
+      line-height: 1.3;
+    }
+    p { margin: 0 0 8pt 0; }
+    p.lead {
+      font-size: 12.5pt;
+      color: var(--slate-700);
+      line-height: 1.55;
+      margin-bottom: 0.2in;
+    }
+
+    /* ─── Table of contents ─── */
+    .toc {
+      counter-reset: toc-counter;
+      margin: 0.3in 0;
+    }
+    .toc-item {
+      display: flex;
+      align-items: baseline;
+      padding: 8pt 0;
+      border-bottom: 1px dotted var(--slate-300);
+      font-size: 11.5pt;
+    }
+    .toc-item:last-child { border-bottom: none; }
+    .toc-num {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9pt;
+      color: var(--blue);
+      font-weight: 700;
+      width: 32pt;
+      flex-shrink: 0;
+    }
+    .toc-title { flex: 1; color: var(--slate-900); font-weight: 500; }
+    .toc-desc { color: var(--slate-500); font-size: 10pt; font-weight: 400; margin-top: 2pt; }
+
+    /* ─── Callouts ─── */
+    .callout {
+      border-left: 4px solid var(--blue);
+      background: var(--blue-soft);
+      padding: 12pt 16pt;
+      border-radius: 0 6pt 6pt 0;
+      margin: 12pt 0;
+      page-break-inside: avoid;
+    }
+    .callout.brand {
+      border-left-color: var(--purple);
+      background: var(--purple-soft);
+    }
+    .callout.warn {
+      border-left-color: var(--amber);
+      background: var(--amber-soft);
+    }
+    .callout.success {
+      border-left-color: var(--green);
+      background: var(--green-soft);
+    }
+    .callout.danger {
+      border-left-color: var(--danger);
+      background: var(--danger-soft);
+    }
+    .callout-title {
+      font-weight: 700;
+      color: var(--navy);
+      margin: 0 0 4pt 0;
+      font-size: 10.5pt;
+      letter-spacing: 0.01em;
+    }
+    .callout-body { color: var(--slate-700); font-size: 10.5pt; margin: 0; }
+    .callout p:last-child { margin-bottom: 0; }
+
+    /* ─── Feature card ─── */
+    .card {
+      background: white;
+      border: 1px solid var(--slate-200);
+      border-radius: 10pt;
+      padding: 14pt 16pt;
+      margin: 10pt 0;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      page-break-inside: avoid;
+    }
+    .card-title {
+      font-weight: 700;
+      color: var(--navy);
+      font-size: 11.5pt;
+      margin: 0 0 4pt 0;
+      display: flex;
+      align-items: center;
+      gap: 8pt;
+    }
+    .card-title .pill {
+      font-size: 8pt;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 2pt 7pt;
+      border-radius: 99pt;
+      background: var(--slate-100);
+      color: var(--slate-600);
+      font-weight: 700;
+    }
+    .card-body { color: var(--slate-700); font-size: 10.5pt; }
+
+    /* ─── Module list — two-column grid for the module tour ─── */
+    .module-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8pt;
+      margin: 8pt 0;
+    }
+    .module {
+      background: var(--slate-50);
+      border: 1px solid var(--slate-200);
+      border-left: 3px solid var(--blue);
+      padding: 8pt 11pt;
+      border-radius: 5pt;
+      font-size: 10pt;
+      page-break-inside: avoid;
+    }
+    .module .name {
+      font-weight: 700;
+      color: var(--navy);
+      font-size: 10.5pt;
+      display: block;
+      margin-bottom: 2pt;
+    }
+    .module .desc { color: var(--slate-600); line-height: 1.4; }
+
+    /* Tier badges — PREMIUM chip is coral (IF); BASE chip is neutral if used */
+    .tier {
+      display: inline-block;
+      font-size: 7.5pt;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 1.5pt 6pt;
+      border-radius: 99pt;
+      font-weight: 700;
+      margin-left: 6pt;
+      vertical-align: 1pt;
+    }
+    .tier.premium {
+      background: var(--if-coral-soft);
+      color: #C85A3D;
+      border: 1px solid rgba(200, 90, 61, 0.28);
+    }
+    .tier.base {
+      background: var(--slate-100);
+      color: var(--slate-600);
+      border: 1px solid var(--slate-200);
+    }
+    /* Section-level tier note for Part 03 category headers */
+    .tier-note {
+      font-size: 9pt;
+      color: var(--slate-500);
+      font-weight: 400;
+      margin-left: 8pt;
+      font-style: italic;
+    }
+
+    /* Group modules by category by color-coding the left rule */
+    .module.g-money   { border-left-color: #059669; }
+    .module.g-people  { border-left-color: #7C3AED; }
+    .module.g-content { border-left-color: #DB2777; }
+    .module.g-ops     { border-left-color: #2563EB; }
+    .module.g-ref     { border-left-color: #B45309; }
+
+    /* ─── Diagram wrapper ─── */
+    .diagram-wrap {
+      background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
+      border: 1px solid var(--slate-200);
+      border-radius: 10pt;
+      padding: 18pt;
+      margin: 14pt 0;
+      page-break-inside: avoid;
+    }
+    .diagram-wrap svg { width: 100%; height: auto; display: block; }
+    .diagram-caption {
+      font-size: 9.5pt;
+      color: var(--slate-600);
+      text-align: center;
+      margin-top: 10pt;
+      font-style: italic;
+    }
+
+    /* ─── Data flow / code style ─── */
+    .flow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12pt;
+      padding: 8pt 0;
+    }
+    .flow-num {
+      flex-shrink: 0;
+      width: 26pt; height: 26pt;
+      border-radius: 50%;
+      background: var(--gradient-accent);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 11pt;
+    }
+    .flow-body { flex: 1; }
+    .flow-title { font-weight: 700; color: var(--navy); margin-bottom: 3pt; font-size: 11pt; }
+    .flow-desc { color: var(--slate-600); font-size: 10pt; line-height: 1.5; }
+    .flow-line {
+      margin-left: 12pt;
+      border-left: 2px dashed var(--slate-300);
+      padding: 4pt 0 4pt 22pt;
+      color: var(--slate-500);
+      font-size: 9.5pt;
+      font-style: italic;
+    }
+
+    /* ─── Code + inline code ─── */
+    code {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 9.5pt;
+      background: var(--slate-100);
+      padding: 1pt 5pt;
+      border-radius: 3pt;
+      color: var(--purple);
+      font-weight: 500;
+    }
+    pre {
+      background: #0F172A;
+      color: #E2E8F0;
+      padding: 12pt 14pt;
+      border-radius: 6pt;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 8.5pt;
+      line-height: 1.5;
+      overflow-x: auto;
+      margin: 10pt 0;
+      page-break-inside: avoid;
+    }
+    pre code { background: transparent; color: inherit; padding: 0; }
+
+    /* ─── Tables ─── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10pt 0;
+      font-size: 10pt;
+    }
+    th {
+      background: var(--slate-100);
+      color: var(--navy);
+      font-weight: 700;
+      text-align: left;
+      padding: 8pt 10pt;
+      border-bottom: 2px solid var(--slate-300);
+      font-size: 9.5pt;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 7pt 10pt;
+      border-bottom: 1px solid var(--slate-200);
+      vertical-align: top;
+      color: var(--slate-700);
+    }
+    tr:last-child td { border-bottom: none; }
+
+    /* ─── Lists ─── */
+    ul { padding-left: 18pt; margin: 6pt 0 10pt 0; }
+    ul li { margin-bottom: 3pt; color: var(--slate-700); }
+    ul li strong { color: var(--navy); }
+
+    /* ─── Section number badge ─── */
+    .section-num {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--blue);
+      font-size: 10pt;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      margin-bottom: 4pt;
+    }
+
+    /* ─── Contents section spacing ─── */
+    section { margin-bottom: 0.15in; }
+
+    /* ─── Footer stamp for closing page ─── */
+    .stamp {
+      margin-top: 0.4in;
+      padding: 20pt;
+      background: linear-gradient(135deg, #0F2745 0%, #1E3A5F 100%);
+      color: white;
+      border-radius: 12pt;
+      text-align: center;
+      page-break-inside: avoid;
+    }
+    .stamp-eyebrow {
+      font-size: 8.5pt;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #93C5FD;
+      margin-bottom: 8pt;
+    }
+    .stamp-title {
+      font-size: 17pt;
+      font-weight: 700;
+      margin-bottom: 6pt;
+      letter-spacing: -0.01em;
+    }
+    .stamp-sub { color: #CBD5E1; font-size: 11pt; }
+
+    /* ─── Small helpers ─── */
+    .muted { color: var(--slate-500); }
+    .center { text-align: center; }
+    hr {
+      border: none;
+      border-top: 1px solid var(--slate-200);
+      margin: 0.25in 0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     COVER
+     ═══════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-content">
+    <div class="cover-eyebrow">Sunshine State Insurance · Business Command Center</div>
+    <div class="cover-byline">Delivered by Imaginary Farms LLC</div>
+    <h1 class="cover-title">The Business <em>Command Center.</em></h1>
+    <p class="cover-subtitle">A plain-English guide to the operating system that runs alongside your State Farm agency — how it's built, how it thinks, and how to work with it.</p>
+
+    <div class="cover-meta">
+      <div class="cover-meta-block">
+        <div class="label">For</div>
+        <div class="value">You, your team, your CPA, and anyone you'd like to invite into the system.</div>
+      </div>
+      <div class="cover-meta-block">
+        <div class="label">Delivered by</div>
+        <div class="value">Imaginary Farms LLC<br>imaginary-farms.com</div>
+      </div>
+      <div class="cover-meta-block">
+        <div class="label">Version · Date</div>
+        <div class="value">v1.0 · July 2026</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TABLE OF CONTENTS
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<section>
+  <h1><span class="kicker">Contents</span>What's inside</h1>
+  <p class="lead">This guide walks through the BCC end-to-end — the layers underneath, the modules on the surface, the rules that keep it compliant, and the way it works with you day to day.</p>
+
+  <div class="toc">
+    <div class="toc-item">
+      <div class="toc-num">01</div>
+      <div class="toc-title">What the BCC actually is
+        <div class="toc-desc">Why this isn't a dashboard, or a CRM, or a to-do list.</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">02</div>
+      <div class="toc-title">The four layers underneath
+        <div class="toc-desc">Claude, the database, the webapp, the integrations — and how they talk.</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">03</div>
+      <div class="toc-title">The webapp, module by module
+        <div class="toc-desc">Every nav item. What it does, where the data comes from, and when to use it.</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">04</div>
+      <div class="toc-title">Working with your Claude
+        <div class="toc-desc">Persistent memory, prompt patterns, and why this Claude keeps getting smarter.</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">05</div>
+      <div class="toc-title">The automation layer
+        <div class="toc-desc">Twelve recipes that run in the background so you don't have to.</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">06</div>
+      <div class="toc-title">Compliance guardrails
+        <div class="toc-desc">State Farm's AA05 contract, translated into rules the system actually enforces.</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">07</div>
+      <div class="toc-title">Following a dollar
+        <div class="toc-desc">A real trace: SF pays a commission, and what happens next inside the BCC.</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">08</div>
+      <div class="toc-title">Getting started
+        <div class="toc-desc">If you share this with a new person, this is where they land.</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">09</div>
+      <div class="toc-title">Support &amp; self-healing
+        <div class="toc-desc">What to do when something drifts. And why it usually doesn't.</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">10</div>
+      <div class="toc-title">Appendix: key identifiers
+        <div class="toc-desc">The URLs, IDs, and contacts every operator eventually needs.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PART 01 · WHAT THE BCC ACTUALLY IS
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<section>
+  <div class="section-num">PART 01</div>
+  <h1>What the BCC actually is</h1>
+  <p class="lead">A dashboard shows you numbers. A CRM tracks contacts. A to-do list nags you. The BCC does none of those things exclusively — it does all of them, and it does something a plain dashboard can't: <strong>it thinks alongside you.</strong></p>
+
+  <p>The Business Command Center is your operating system for running your State Farm agency. It sits on top of every tool you were already using — Gmail, Drive, Calendar, State Farm's daily comp emails, QuickBooks, your bank, your payroll provider, your social accounts — and turns them into one continuous stream of context that your Claude can reason over.</p>
+
+  <p>The point is not to give you another place to log in. The point is that when you ask a question — <em>"how is my top producer trending against comp?"</em>, <em>"what's my AIPP pace?"</em>, <em>"can I afford a fourth producer?"</em> — the system already has the answer, because everything upstream has been feeding it while you weren't watching.</p>
+
+  <h2>Three ideas the BCC is built on</h2>
+
+  <div class="card">
+    <div class="card-title">1. The system should learn you, not the other way around.</div>
+    <div class="card-body">Every rule you give, every preference, every correction — it stores. Six months from now, if you start a fresh conversation with your Claude on a new device, the Claude that greets you knows your SMVC rate, your blended rate, your AIPP goal, your producer roster, your CPA's name, and the tone you prefer to be spoken to in. You never have to re-explain your business.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">2. Documents shouldn't need to be filed by hand.</div>
+    <div class="card-body">SF's daily comp email, the semi-monthly RECAP, the deduction statement, the bank statement, the credit card statement, the payroll notification — they all arrive in the same inbox. Recipes running in the background parse them, extract the numbers, write them to the right table, and file the source PDF to Drive. By the time you open the app in the morning, everything is already reconciled and posted.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">3. Compliance shouldn't be an afterthought.</div>
+    <div class="card-body">State Farm's AA05 Agent Agreement contains dozens of rules about what a captive agent can and cannot say, do, or advertise. The BCC bakes those rules into the system itself. When you ask your Claude to draft a Facebook post, the compliance layer runs before the draft is shown to you. It doesn't lecture — it just quietly produces something safe.</div>
+  </div>
+
+  <div class="callout brand">
+    <div class="callout-title">A useful mental model</div>
+    <div class="callout-body">Think of the BCC as a CFO, COO, HR director, compliance officer, and marketing coordinator who all live inside the same brain — Claude — and who all read from the same source of truth — your Supabase database. They don't send memos to each other. They just <em>know</em> what each other knows, in real time.</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PART 02 · THE FOUR LAYERS
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<section>
+  <div class="section-num">PART 02</div>
+  <h1>The four layers underneath</h1>
+  <p class="lead">The BCC is a stack of four cooperating layers. Each has a specific job. You can understand any question about the system by asking which layer it lives in.</p>
+
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 720 440" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="brainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#6D28D9"/>
+          <stop offset="100%" stop-color="#2563EB"/>
+        </linearGradient>
+        <linearGradient id="dbGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#059669"/>
+          <stop offset="100%" stop-color="#10B981"/>
+        </linearGradient>
+        <linearGradient id="appGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0F2745"/>
+          <stop offset="100%" stop-color="#2563EB"/>
+        </linearGradient>
+        <linearGradient id="handGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#B45309"/>
+          <stop offset="100%" stop-color="#F59E0B"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Layer 1: The Brain (Claude) -->
+      <rect x="80" y="30" width="560" height="70" rx="10" fill="url(#brainGrad)"/>
+      <text x="360" y="58" text-anchor="middle" fill="white" font-family="Inter" font-size="15" font-weight="700">The Brain — Claude</text>
+      <text x="360" y="80" text-anchor="middle" fill="#DDD6FE" font-family="Inter" font-size="10.5">Reasons. Reads memory. Uses tools. Talks to you.</text>
+
+      <!-- Arrow down -->
+      <line x1="360" y1="100" x2="360" y2="130" stroke="#94A3B8" stroke-width="2" stroke-dasharray="4 3"/>
+      <polygon points="360,138 355,128 365,128" fill="#94A3B8"/>
+
+      <!-- Layer 2: The Memory (Supabase) -->
+      <rect x="80" y="140" width="560" height="70" rx="10" fill="url(#dbGrad)"/>
+      <text x="360" y="168" text-anchor="middle" fill="white" font-family="Inter" font-size="15" font-weight="700">The Memory — Supabase Database</text>
+      <text x="360" y="190" text-anchor="middle" fill="#D1FAE5" font-family="Inter" font-size="10.5">80+ tables. Every financial event, staff record, and rule you've ever taught.</text>
+
+      <!-- Arrow down -->
+      <line x1="360" y1="210" x2="360" y2="240" stroke="#94A3B8" stroke-width="2" stroke-dasharray="4 3"/>
+      <polygon points="360,248 355,238 365,238" fill="#94A3B8"/>
+
+      <!-- Layer 3: The Interface (Webapp) -->
+      <rect x="80" y="250" width="560" height="70" rx="10" fill="url(#appGrad)"/>
+      <text x="360" y="278" text-anchor="middle" fill="white" font-family="Inter" font-size="15" font-weight="700">The Interface — BCC Webapp</text>
+      <text x="360" y="300" text-anchor="middle" fill="#CBD5E1" font-family="Inter" font-size="10.5">sunshinestate-bcc.vercel.app — 26 modules you click through daily.</text>
+
+      <!-- Arrow down -->
+      <line x1="360" y1="320" x2="360" y2="350" stroke="#94A3B8" stroke-width="2" stroke-dasharray="4 3"/>
+      <polygon points="360,358 355,348 365,348" fill="#94A3B8"/>
+
+      <!-- Layer 4: The Hands (Integrations) -->
+      <rect x="80" y="360" width="560" height="70" rx="10" fill="url(#handGrad)"/>
+      <text x="360" y="388" text-anchor="middle" fill="white" font-family="Inter" font-size="15" font-weight="700">The Hands — Integrations</text>
+      <text x="360" y="410" text-anchor="middle" fill="#FEF3C7" font-family="Inter" font-size="10.5">Gmail · Drive · Calendar · GitHub · Facebook · LinkedIn · QuickBooks · more.</text>
+    </svg>
+    <div class="diagram-caption">Data flows up. Actions flow down. Your questions land at the top; answers arrive with everything below already accounted for.</div>
+  </div>
+
+  <h2>What each layer does</h2>
+
+  <div class="card no-break">
+    <div class="card-title">The Brain — Claude <span class="pill">reasoning</span></div>
+    <div class="card-body">This is where you talk to your Claude. It's the same Claude project that's been paired with your BCC since setup. It reads from your persistent memory at the start of every conversation, so it never forgets what you've told it. It uses tools — SQL queries, GitHub commits, Composio actions — to answer questions and take action.</div>
+  </div>
+
+  <div class="card no-break">
+    <div class="card-title">The Memory — Supabase <span class="pill">source of truth</span></div>
+    <div class="card-body">Every financial event, every staff record, every rule you've taught the system lives in one Postgres database. The most important table is <code>persistent_memory</code>, which stores your business rules, preferences, and the "brain state" of the system. Others hold <code>journal_entries</code>, <code>comp_recap</code>, <code>producer_production</code>, <code>compliance_rules</code>, and so on — 80+ tables in all.</div>
+  </div>
+
+  <div class="card no-break">
+    <div class="card-title">The Interface — BCC Webapp <span class="pill">what you see</span></div>
+    <div class="card-body">A React app hosted on Vercel. It's the visual layer — the modules you click through, the dashboards, the alert badges. It reads from Supabase and displays everything in branded modules with light and dark themes. It has 26 modules across five categories: money, people, content, operations, and reference. Sixteen ship in the Base BCC; the Premium overlay adds ten more — PTO, Time Tracking, Sales Activity, Scoreboard, Handbook, Benefits, Personnel Files, Milestones, Licenses, and Emergency Contacts.</div>
+  </div>
+
+  <div class="card no-break">
+    <div class="card-title">The Hands — Integrations <span class="pill">how it acts</span></div>
+    <div class="card-body">Claude's ability to <em>do</em> things — send emails, file documents, post to Facebook, update GitHub — is powered by MCP connectors, primarily through Composio. Gmail reads and sends. Drive files documents. Calendar creates reminders. GitHub commits code changes. Facebook and LinkedIn publish. QuickBooks mirrors financial data.</div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">Why four layers, not one?</div>
+    <div class="callout-body">Because separation lets each piece be replaced without breaking the others. If Vercel goes down, the database is fine. If a Composio integration expires, Claude flags it and you reauthorize. If Claude changes, the memory persists. The system is designed to <em>self-heal</em> — a broken piece never cascades into a broken business.</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PART 03 · THE WEBAPP, MODULE BY MODULE
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<section>
+  <div class="section-num">PART 03</div>
+  <h1>The webapp, module by module</h1>
+  <p class="lead">The webapp has 26 modules across five categories — 16 in the Base BCC, plus 10 more that ship in the Premium overlay. Premium-only modules are marked <span class="tier premium">Premium</span> below.</p>
+
+  <h2>Money &amp; performance</h2>
+  <div class="module-grid">
+    <div class="module g-money">
+      <span class="name">Dashboard</span>
+      <span class="desc">The daily launchpad. Financial health ratios, AIPP pace, open items, alerts, setup progress, and modules that are filling up naturally.</span>
+    </div>
+    <div class="module g-money">
+      <span class="name">Financials</span>
+      <span class="desc">Twelve tabs — P&amp;L, Balance Sheet, COMP_RECAP, AIPP &amp; ScoreBoard, Payroll, Bank, Credit, GL, Report Package. Cash-basis, always live.</span>
+    </div>
+    <div class="module g-money">
+      <span class="name">Financial Reports</span>
+      <span class="desc">Ten-page print-ready report package for the CPA or a lender. Period selector, auto-generated narrative, downloadable PDF.</span>
+    </div>
+    <div class="module g-money">
+      <span class="name">Scoreboard <span class="tier premium">Premium</span></span>
+      <span class="desc">Life &amp; Health production tracker — because L&amp;H is the multiplier for next year's Auto/Fire ScoreBoard bonus. Q3 and Q4 matter most.</span>
+    </div>
+  </div>
+
+  <h2>People &amp; operations</h2>
+  <div class="module-grid">
+    <div class="module g-people">
+      <span class="name">HR &amp; People</span>
+      <span class="desc">Six tabs — Overview, Recruiting, Onboarding, Staff, Performance (Producer ROI), Commissions. Where team decisions get made.</span>
+    </div>
+    <div class="module g-people">
+      <span class="name">PTO <span class="tier premium">Premium</span></span>
+      <span class="desc">Pending queue, roster, balances, policies. Approve or decline requests from staff without leaving the app.</span>
+    </div>
+    <div class="module g-people">
+      <span class="name">Time Tracking <span class="tier premium">Premium</span></span>
+      <span class="desc">Clock in/out with category. Team hours by week and month. Past-due timesheet flags for coaching conversations.</span>
+    </div>
+    <div class="module g-people">
+      <span class="name">Sales Activity <span class="tier premium">Premium</span></span>
+      <span class="desc">Quote/call/follow-up log. What producers touched today, this week, this month.</span>
+    </div>
+    <div class="module g-people">
+      <span class="name">Handbook <span class="tier premium">Premium</span></span>
+      <span class="desc">The employee handbook. You edit sections; staff read them here instead of hunting for a PDF.</span>
+    </div>
+    <div class="module g-people">
+      <span class="name">Benefits <span class="tier premium">Premium</span></span>
+      <span class="desc">Benefit plans you offer. Enrollment records per staff member.</span>
+    </div>
+    <div class="module g-people">
+      <span class="name">Personnel Files <span class="tier premium">Premium</span></span>
+      <span class="desc">Every form and doc, per employee — I-9, W-4, licensing paperwork, coaching notes.</span>
+    </div>
+    <div class="module g-people">
+      <span class="name">Milestones <span class="tier premium">Premium</span></span>
+      <span class="desc">Anniversaries and celebrations. Feeds a team-culture rhythm without you having to remember.</span>
+    </div>
+    <div class="module g-people">
+      <span class="name">Licenses <span class="tier premium">Premium</span></span>
+      <span class="desc">Producer licensing status, expirations, and CE hour tracking. Fires alerts before anything lapses.</span>
+    </div>
+    <div class="module g-people">
+      <span class="name">Emergency Contacts <span class="tier premium">Premium</span></span>
+      <span class="desc">Simple, private, sorted. So you never scramble when something goes wrong.</span>
+    </div>
+  </div>
+
+  <h2>Content &amp; communication</h2>
+  <div class="module-grid">
+    <div class="module g-content">
+      <span class="name">Social Media</span>
+      <span class="desc">Facebook, Instagram, LinkedIn, X. 80/20 content mix, compliance-aware creation, calendar, analytics.</span>
+    </div>
+    <div class="module g-content">
+      <span class="name">Claude Chat</span>
+      <span class="desc">A conversation surface inside the app. Same Claude, same memory, just embedded.</span>
+    </div>
+  </div>
+
+  <h2>Operations &amp; automations</h2>
+  <div class="module-grid">
+    <div class="module g-ops">
+      <span class="name">Automations</span>
+      <span class="desc">Every recipe running in the background. Schedule, last run, success rate, and manual "run now" controls.</span>
+    </div>
+    <div class="module g-ops">
+      <span class="name">Compliance</span>
+      <span class="desc">Seventy-six State Farm AA05 rules. Audit log of every review. Monthly compliance calendar.</span>
+    </div>
+    <div class="module g-ops">
+      <span class="name">Operations Reports</span>
+      <span class="desc">Ten operational reports — payroll summary, hours by staff, PTO roster, license expirations, personnel files compliance, producer production, commission detail, AIPP pace, task/alert summary, automation health.</span>
+    </div>
+    <div class="module g-ops">
+      <span class="name">Tasks &amp; Goals</span>
+      <span class="desc">Annual and quarterly goals with progress. Daily task list with priorities and due dates.</span>
+    </div>
+    <div class="module g-ops">
+      <span class="name">Alerts</span>
+      <span class="desc">Anything you need to know about — a producer falling behind pace, an automation that failed, a bill past due. Auto-resolves when the underlying condition clears.</span>
+    </div>
+    <div class="module g-ops">
+      <span class="name">Documents</span>
+      <span class="desc">Every document the system has ever processed. Search, filter, download, or reopen the parsed data.</span>
+    </div>
+  </div>
+
+  <h2>Reference &amp; setup</h2>
+  <div class="module-grid">
+    <div class="module g-ref">
+      <span class="name">Memory</span>
+      <span class="desc">Everything your Claude knows about your business. Grouped by category — accounting rules, agency profile, goals, key contacts, session logs.</span>
+    </div>
+    <div class="module g-ref">
+      <span class="name">Wiki &amp; System Map</span>
+      <span class="desc">The reference library. What tables exist, what recipes run, what integrations are wired. When you wonder "does the system already know this?" — you look here.</span>
+    </div>
+    <div class="module g-ref">
+      <span class="name">Playbook &amp; Guide</span>
+      <span class="desc">Seventy-nine ready-to-use prompts organized by section. One-click "Try in Claude" copies the prompt to the clipboard and opens claude.ai.</span>
+    </div>
+    <div class="module g-ref">
+      <span class="name">Settings</span>
+      <span class="desc">Integrations, connection health, notification preferences, personal profile.</span>
+    </div>
+  </div>
+
+  <div class="callout success">
+    <div class="callout-title">The ? in the top right</div>
+    <div class="callout-body">Every module has an inline help drawer. Click the <code>?</code> at the top of the app and a right-side panel opens with a quick explainer of the current module — what it does, quick tips, and related modules. The content lives in the <code>module_help</code> table and can be edited without a redeploy.</div>
+  </div>
+</section>
+<!-- ═══════════════════════════════════════════════════════
+     PART 04 · WORKING WITH YOUR CLAUDE
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<section>
+  <div class="section-num">PART 04</div>
+  <h1>Working with your Claude</h1>
+  <p class="lead">This is where most people spend the most time misunderstanding what they've been given. It's worth reading twice.</p>
+
+  <h2>You're not training a specific Claude.<br>You're teaching your database.</h2>
+  <p>When you tell your Claude "I pay my producers on the SF SMVC rate of 10% for P&amp;C" — that fact doesn't live inside "your" Claude. It gets written to the <code>persistent_memory</code> table in your Supabase database. Every future Claude conversation reads that table at the start. The knowledge follows the database, not the model.</p>
+
+  <p>That's why you can lose your laptop, start a fresh chat next Tuesday, or open the BCC on your phone — and your Claude will still know your SMVC rate, your CPA's name, the roster of producers on your team, the tone you prefer to be spoken to in, and the SF rules that shape every response (like AIPP requiring 60 months of service).</p>
+
+  <div class="callout brand">
+    <div class="callout-title">The persistent memory categories</div>
+    <div class="callout-body">Facts get stored under one of ten categories: <strong>agency_profile</strong> (URLs, entity, SMVC), <strong>business_context</strong> (structure, rules), <strong>financial_context</strong> (targets, benchmarks), <strong>sf_compensation</strong> (bonus structures), <strong>accounting_rules</strong> (cash basis, PFA not an asset), <strong>compliance_rules</strong> (AA05 excerpts), <strong>communication_prefs</strong> (tone, formatting), <strong>goals</strong> (annual, quarterly), <strong>key_contacts</strong> (CPA, SF field consultant), and <strong>session_log</strong> (what happened in past conversations).</div>
+  </div>
+
+  <h2>Three ways to talk to your Claude</h2>
+
+  <div class="card">
+    <div class="card-title">1. Directly, in claude.ai <span class="pill">most powerful</span></div>
+    <div class="card-body">Your project on claude.ai is where the heaviest work happens — extending the BCC, debugging, running long analyses. All the tools (SQL, GitHub, Composio, Vercel) are wired here. This is the same account that was paired with your BCC at setup.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">2. Try in Claude buttons <span class="pill">one-click</span></div>
+    <div class="card-body">In Playbook &amp; Guide, every prompt has a blue <em>Try in Claude</em> button next to it. Click it, and the prompt is copied to the clipboard and claude.ai opens in a new tab. Switch to that tab, paste, hit Enter. That's it. Seventy-nine prompts, one paste away.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">3. Ask Claude buttons <span class="pill">contextual</span></div>
+    <div class="card-body">On many modules you'll see an <em>Ask Claude</em> button — usually paired with a specific record. Clicking it prefills a prompt that includes that record's context, so you don't have to explain what you're looking at.</div>
+  </div>
+
+  <h2>Adding a new rule</h2>
+  <p>Just tell your Claude the rule. Then say <em>"remember this."</em> The Claude will store it to the appropriate memory category and confirm. Next time — no matter which conversation, which device, which day — the rule applies.</p>
+
+  <pre><code>You: "From now on, when we talk about producer ROI,
+      always assume a 10% annual lapse rate.
+      Remember this."
+
+Claude: [stores rule in persistent_memory under 'financial_context']
+        Got it. ROI projections will use a 10% annual lapse rate
+        going forward. This is saved to memory.</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PART 05 · THE AUTOMATION LAYER
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<section>
+  <div class="section-num">PART 05</div>
+  <h1>The automation layer</h1>
+  <p class="lead">Twelve recipes run in the background so you don't have to. They read email, parse documents, write to the ledger, post to social media, and send you your morning briefing.</p>
+
+  <p>Every recipe lives in the <code>automation_recipes</code> table in Supabase and is scheduled via <code>pg_cron</code>. When a recipe fires, it calls a Composio tool to do its work, then writes a row to <code>automation_run_log</code> with the result. If something fails, an alert fires and you see it on the Dashboard the next morning.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Recipe</th>
+        <th>Schedule</th>
+        <th>What it does</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>SF Daily Comp Processor</strong></td>
+        <td>10:00 AM CDT · daily</td>
+        <td>Parses SF daily comp emails into <code>comp_recap</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Deduction Statement Processor</strong></td>
+        <td>every 6 hours</td>
+        <td>Parses SF semi-monthly deduction PDFs into <code>comp_recap</code> (negative lines) and <code>journal_entries</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Bank Statement Processor</strong></td>
+        <td>every 6 hours</td>
+        <td>Parses bank statements into <code>journal_entries</code> (Truist checking, US Bank, etc.).</td>
+      </tr>
+      <tr>
+        <td><strong>Credit Card Processor</strong></td>
+        <td>every 6 hours</td>
+        <td>Parses credit card statements into <code>credit_transactions</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Payroll Processor</strong></td>
+        <td>every 6 hours</td>
+        <td>Parses payroll provider notifications into <code>payroll_runs</code> and <code>payroll_detail</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Producer Production Report</strong></td>
+        <td>monthly · 1st at 9 UTC</td>
+        <td>Parses SF monthly producer reports into <code>producer_production</code>. Feeds the Performance tab.</td>
+      </tr>
+      <tr>
+        <td><strong>Email Archiver</strong></td>
+        <td>8:00 AM CDT · daily</td>
+        <td>Archives older email, files attachments to Drive, logs to <code>documents</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>GL Entry Writer</strong></td>
+        <td>11:00 AM CDT · daily</td>
+        <td>Daily reconciliation. Writes GL entries for any unposted comp / bank / payroll / CC events.</td>
+      </tr>
+      <tr>
+        <td><strong>Daily Briefing Email</strong></td>
+        <td>7:00 AM CDT · daily</td>
+        <td>Composes the morning briefing from real data and emails it to you.</td>
+      </tr>
+      <tr>
+        <td><strong>Social Media Scheduler</strong></td>
+        <td>9:00 AM CDT · daily</td>
+        <td>Posts approved <code>content_calendar</code> items to Facebook and LinkedIn.</td>
+      </tr>
+      <tr>
+        <td><strong>Monthly Close Monitor</strong></td>
+        <td>9:00 AM CDT · daily</td>
+        <td>Tracks <code>monthly_close_checklist</code> progress. Fires alerts on overdue items.</td>
+      </tr>
+      <tr>
+        <td><strong>Producer Underperformance Watcher</strong></td>
+        <td>12:00 UTC · daily</td>
+        <td>Checks each producer against a 3-month rolling pace. Alerts if any drops below 70%.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <div class="callout-title">Watching them work</div>
+    <div class="callout-body">The Automations module shows each recipe's schedule, last run, success rate, and gives you a "run now" button. Operations Reports has an Automation Health report that surfaces any recipe that hasn't succeeded recently, so a silently broken recipe never stays silent for long.</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PART 06 · COMPLIANCE GUARDRAILS
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<section>
+  <div class="section-num">PART 06</div>
+  <h1>Compliance guardrails</h1>
+  <p class="lead">You are a captive State Farm agent. The AA05 Agent Agreement governs what you can and cannot say, offer, or advertise. The BCC bakes those rules into the system itself so compliance never lives in your head alone.</p>
+
+  <h2>Word rules — automatic in every response</h2>
+  <p>Certain words trigger automatic rewrites. Your Claude never generates prohibited language, regardless of who's asking.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Prohibited</th>
+        <th>Used instead</th>
+        <th>AA05 basis</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>client</td><td>customer</td><td>I.B — principal-agent, not fiduciary</td></tr>
+      <tr><td>solution</td><td>options</td><td>SF provides options, not solutions</td></tr>
+      <tr><td>expert / specialist</td><td>(removed)</td><td>I.O — agent title only</td></tr>
+      <tr><td>advisor / consultant</td><td>(removed)</td><td>I.O — agent title only</td></tr>
+      <tr><td>fully licensed</td><td>licensed</td><td>title accuracy</td></tr>
+      <tr><td>transfers welcome</td><td>(removed)</td><td>I.J — anti-raiding</td></tr>
+      <tr><td>financial freedom</td><td>(removed)</td><td>prohibited category</td></tr>
+      <tr><td>best / #1 / greatest</td><td>(removed unless naming an award)</td><td>I.N — SF controls pricing/superlatives</td></tr>
+      <tr><td>will / promise / guarantee</td><td>may, can, designed to</td><td>I.D — no false advertising</td></tr>
+      <tr><td>cheap / affordable</td><td>rates more affordable than you think</td><td>I.N — SF controls pricing</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Social media — the 26-item checklist</h2>
+  <p>Before any social post is presented as final, the system runs a 26-item compliance pre-flight. The full checklist is in the Compliance module. Highlights:</p>
+
+  <ul>
+    <li><strong>No prohibited topics</strong> — investments, mutual funds, college savings, specific L&amp;H product names, pricing, or internal SF processes.</li>
+    <li><strong>No customer PII, SPI, or PHI</strong> — ever.</li>
+    <li><strong>English only</strong> — FINRA archiving requires it.</li>
+    <li><strong>Personal Price Plan®</strong> — always written in full; consumers <em>create</em> it, never <em>get</em> it.</li>
+    <li><strong>Giveaways</strong> — every participant receives the item. No element of chance.</li>
+    <li><strong>Referral rewards</strong> — never advertised on social.</li>
+    <li><strong>AI disclaimer</strong> — included whenever AI was used in the visual.</li>
+    <li><strong>Written release</strong> — required for all identifiable people in photos or videos.</li>
+    <li><strong>State license numbers</strong> — included for AR and NM residents when required.</li>
+  </ul>
+
+  <div class="callout warn">
+    <div class="callout-title">The compliance layer is not optional</div>
+    <div class="callout-body">You can override a Claude decision when you have context the system doesn't — but the word rules and social checklist run before every generated draft. Nothing slips through because you were in a hurry. The system's job is to make the compliant path the easy path.</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PART 07 · FOLLOWING A DOLLAR
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<section>
+  <div class="section-num">PART 07</div>
+  <h1>Following a dollar</h1>
+  <p class="lead">A trace of what actually happens when SF pays you a commission — from the moment the email arrives to the moment the dashboard shows it. This is the whole system working in concert.</p>
+
+  <div class="flow-step">
+    <div class="flow-num">1</div>
+    <div class="flow-body">
+      <div class="flow-title">SF sends the daily comp email.</div>
+      <div class="flow-desc">The email lands in <code>sunshinestate.claude@gmail.com</code> — the service mailbox the automations read from. It contains the day's SMVC breakdown: Auto, Fire, Life, Health.</div>
+    </div>
+  </div>
+  <div class="flow-line">…the email sits in the inbox, unread, until the recipe scheduled at 10:00 AM CDT fires.</div>
+
+  <div class="flow-step">
+    <div class="flow-num">2</div>
+    <div class="flow-body">
+      <div class="flow-title">SF Daily Comp Processor runs.</div>
+      <div class="flow-desc">The recipe fetches the email via <code>GMAIL_FETCH_EMAILS</code>. The automation runner then calls Groq directly (via <code>GROQ_API_KEY</code>) to extract the line items — one row per product line, plus adjustments. Each row is inserted into <code>comp_recap</code> with a period, product code, and amount.</div>
+    </div>
+  </div>
+  <div class="flow-line">…the source email is labeled "processed" in Gmail so it isn't reprocessed tomorrow.</div>
+
+  <div class="flow-step">
+    <div class="flow-num">3</div>
+    <div class="flow-body">
+      <div class="flow-title">GL Entry Writer picks it up.</div>
+      <div class="flow-desc">At 11:00 AM CDT, GL Entry Writer scans <code>comp_recap</code> for any unposted rows. For each row, it writes a matching pair of debits and credits into <code>journal_entries</code> using cash-basis accounting: cash goes up, commission income goes up.</div>
+    </div>
+  </div>
+  <div class="flow-line">…the <code>posted_at</code> timestamp on the <code>comp_recap</code> row is stamped so it doesn't post twice.</div>
+
+  <div class="flow-step">
+    <div class="flow-num">4</div>
+    <div class="flow-body">
+      <div class="flow-title">The P&amp;L view rolls it up.</div>
+      <div class="flow-desc">The database view <code>v_income_statement</code> is a live union of <code>journal_entries</code> and the QuickBooks mirror. The moment the new journal lines are written, they're already reflected in every P&amp;L, YTD rollup, and margin calculation across the system.</div>
+    </div>
+  </div>
+  <div class="flow-line">…no batch job. No overnight refresh. The view is always current.</div>
+
+  <div class="flow-step">
+    <div class="flow-num">5</div>
+    <div class="flow-body">
+      <div class="flow-title">Dashboard tiles update.</div>
+      <div class="flow-desc">you open the app. The Financial Health card shows the new SMVC total. The AIPP pace tile factors in the new qualifying premium. The Owner Comp ratio recalculates. Every downstream number is fresh — because the numbers were never stored anywhere except the ledger. Everything else is a view.</div>
+    </div>
+  </div>
+
+  <div class="flow-step">
+    <div class="flow-num">6</div>
+    <div class="flow-body">
+      <div class="flow-title">Alerts fire if anything is off pace.</div>
+      <div class="flow-desc">The Producer Underperformance Watcher runs at 12:00 UTC. It compares each producer's month-to-date pace to their 3-month rolling average. If any drops below 70%, an alert is written to the <code>alerts</code> table. You see it on the Dashboard the next morning without asking.</div>
+    </div>
+  </div>
+
+  <div class="callout success">
+    <div class="callout-title">What you actually did</div>
+    <div class="callout-body">Nothing. You woke up. Your Claude was already reading the email while you slept. The recipes ran. The journal was written. The dashboard is fresh. The alerts are queued. Your morning briefing arrived in your inbox at 7:00 AM. The only decisions left are the ones only you can make — coaching a producer, calling a customer, approving a PTO request. The system did the plumbing.</div>
+  </div>
+</section>
+<!-- ═══════════════════════════════════════════════════════
+     PART 08 · GETTING STARTED
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<section>
+  <div class="section-num">PART 08</div>
+  <h1>Getting started</h1>
+  <p class="lead">If you're sharing this guide with someone new — your CPA, a new hire, your SF field consultant, or a future collaborator — this section is for them.</p>
+
+  <h2>Where to log in</h2>
+  <p>The webapp lives at <code>sunshinestate-bcc.vercel.app</code>. Your Claude project on <code>claude.ai</code> is the conversation surface where the heavy work gets done.</p>
+
+  <h2>The Setup Wizard</h2>
+  <p>When you first log in to the BCC, the Dashboard shows a five-step Setup Wizard that fades away as each step is completed. Work through it in order:</p>
+
+  <div class="flow-step">
+    <div class="flow-num">1</div>
+    <div class="flow-body">
+      <div class="flow-title">Add benefit plans</div>
+      <div class="flow-desc">Open <em>Benefits</em>. Enter each plan you offer — medical, dental, vision, life, HSA. The system uses this list when producing offer letters and W-2 gross-up verifications.</div>
+    </div>
+  </div>
+
+  <div class="flow-step">
+    <div class="flow-num">2</div>
+    <div class="flow-body">
+      <div class="flow-title">Add producer licenses</div>
+      <div class="flow-desc">Open <em>Licenses</em>. Enter each producer's state license number, class, and expiration. Alerts will fire before anything lapses.</div>
+    </div>
+  </div>
+
+  <div class="flow-step">
+    <div class="flow-num">3</div>
+    <div class="flow-body">
+      <div class="flow-title">Add emergency contacts</div>
+      <div class="flow-desc">Open <em>Emergency Contacts</em>. Simple: name, relationship, phone. Private to you.</div>
+    </div>
+  </div>
+
+  <div class="flow-step">
+    <div class="flow-num">4</div>
+    <div class="flow-body">
+      <div class="flow-title">Forward the SF Producer Production report</div>
+      <div class="flow-desc">Each month, SF emails a producer production PDF. Forward it to <code>sunshinestate.claude@gmail.com</code>. This one action unblocks six downstream displays — the Performance tab, Commission Detail, AIPP pace projections, the producer ROI model, the Operations Reports empty state, and the underperformance watcher.</div>
+    </div>
+  </div>
+
+  <div class="flow-step">
+    <div class="flow-num">5</div>
+    <div class="flow-body">
+      <div class="flow-title">Confirm 2026 comp plan rates</div>
+      <div class="flow-desc">Open <em>HR &amp; People → Commissions</em>. Confirm each producer's 2026 bonus tier. Your internal bonus structure lives in <code>commission_structures</code>; the tiers determine per-producer profitability projections.</div>
+    </div>
+  </div>
+
+  <div class="callout brand">
+    <div class="callout-title">If you're on the fifth step, congratulations</div>
+    <div class="callout-body">The Setup Wizard tile disappears when all five are done. From that point on, the Dashboard shows your live business: financial health ratios, AIPP pace, open items requiring input, and modules that are filling up naturally as the team uses the system.</div>
+  </div>
+
+  <h2>The first week</h2>
+  <p>Every morning, open the BCC. The Dashboard is the launchpad. Read the daily briefing email that arrives at 7:00 AM CDT. Click through anything the alerts panel is showing you. That's the loop. Everything else — the deeper questions, the strategic work — happens in claude.ai when you have a specific decision to make.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PART 09 · SUPPORT & SELF-HEALING
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<section>
+  <div class="section-num">PART 09</div>
+  <h1>Support &amp; self-healing</h1>
+  <p class="lead">The BCC is designed so most problems flag themselves before you notice them. When they don't, the fix is usually a one-click reauthorization.</p>
+
+  <h2>What can go wrong (and how it heals)</h2>
+
+  <div class="card">
+    <div class="card-title">Gmail OAuth expires</div>
+    <div class="card-body">Google integrations (Gmail, Drive, Calendar) reach us through Composio and occasionally require reauthorization. When they do, the affected recipe writes a failure row to <code>automation_run_log</code> and fires an alert. Your Claude generates a Composio reauth link, sends it to you, you click, done — usually under a minute.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Facebook or LinkedIn token expires</div>
+    <div class="card-body">Same pattern. The Social Media Scheduler recipe fails. An alert appears. Your Claude generates the reauth link. You reconnect. The scheduler resumes on its next run.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">A recipe silently stops running</div>
+    <div class="card-body">The Operations Reports → Automation Health report surfaces any recipe that hasn't succeeded in the expected window. It's the safety net for the safety net. You review it weekly.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">A number on the dashboard looks wrong</div>
+    <div class="card-body">you ask your Claude to explain the number. The Claude traces it back to the source table, identifies the underlying rows, and either reconciles them or flags a specific document that needs to be re-parsed. Root cause, every time — never a bandaid.</div>
+  </div>
+
+  <h2>Two layers of connection health</h2>
+
+  <div class="callout">
+    <div class="callout-title">Layer 1 — Claude.ai connectors</div>
+    <div class="callout-body">These are the tools wired into your Claude project on claude.ai — Supabase, GitHub, Composio, Vercel. If Layer 1 is disconnected, your Claude can't take action inside a conversation. Fix: open claude.ai → Settings → Connectors → reconnect.</div>
+  </div>
+
+  <div class="callout brand">
+    <div class="callout-title">Layer 2 — Composio integrations</div>
+    <div class="callout-body">These are the individual app connections behind Composio — Gmail, Drive, Calendar, Facebook, LinkedIn, QuickBooks. If Layer 2 is disconnected, a background recipe fails but your conversation with your Claude still works. Fix: reauthorize the specific app from your Claude with a one-click Composio link.</div>
+  </div>
+
+  <div class="callout success">
+    <div class="callout-title">The Self-Heal Guide</div>
+    <div class="callout-body">The <em>Settings → About</em> page in the app has a "Keep It Connected" section that documents this Layer 1 vs. Layer 2 distinction. You never have to remember which dashboard to open. You screenshot the error, send it to your Claude, and get back a one-click fix.</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PART 10 · APPENDIX
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<section>
+  <div class="section-num">PART 10</div>
+  <h1>Appendix: key identifiers</h1>
+  <p class="lead">The URLs, IDs, and contacts every operator eventually needs.</p>
+
+  <h2>Live surfaces</h2>
+  <table>
+    <tbody>
+      <tr><td><strong>Webapp</strong></td><td><code>sunshinestate-bcc.vercel.app</code></td></tr>
+      <tr><td><strong>Claude conversation</strong></td><td><code>claude.ai</code> — your BCC project</td></tr>
+      <tr><td><strong>Supabase project</strong></td><td><code>eznhwsbofhnggqzwzgfo.supabase.co</code></td></tr>
+      <tr><td><strong>GitHub repository</strong></td><td><code>github.com/sunshinestate-claude-ship-it/sunshinestate-bcc</code></td></tr>
+      <tr><td><strong>Service mailbox</strong></td><td><code>sunshinestate.claude@gmail.com</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>System identifiers</h2>
+  <table>
+    <tbody>
+      <tr><td><strong>Agency UUID</strong></td><td><code>a1b2c3d4-e5f6-4789-9012-3456789abcde</code></td></tr>
+      <tr><td><strong>Composio project</strong></td><td><code>pr_SunSt8FL2026</code></td></tr>
+      <tr><td><strong>Google Drive BCC folder</strong></td><td>root folder ID stored in <code>settings</code></td></tr>
+      <tr><td><strong>SMVC rate — P&amp;C</strong></td><td>10.00%</td></tr>
+      <tr><td><strong>Blended rate — other lines</strong></td><td>9.00%</td></tr>
+      <tr><td><strong>Book annual lapse rate</strong></td><td>10.00%</td></tr>
+    </tbody>
+  </table>
+
+  <h2>People</h2>
+  <table>
+    <tbody>
+      <tr><td><strong>Agent · Owner</strong></td><td>Marcus Whitfield — Sunshine State Insurance, Inc.</td></tr>
+      <tr><td><strong>Agency structure</strong></td><td>S-Corp · SF captive · agent code 19-4472 · Sarasota, FL</td></tr>
+      <tr><td><strong>CPA</strong></td><td>Diana Kessler, CPA — Kessler & Partners CPAs</td></tr>
+      <tr><td><strong>Delivered &amp; maintained by</strong></td><td>Imaginary Farms LLC · Rebecca Cooper-Coelho · <code>imaginary-farms.com</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Financial benchmarks the system monitors</h2>
+  <table>
+    <thead>
+      <tr><th>Metric</th><th>Healthy</th><th>Warning</th><th>Critical</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Payroll + Taxes / Gross</td><td>40–50%</td><td>51–55%</td><td>&gt;55%</td></tr>
+      <tr><td>Team Payroll Only / Gross</td><td>30–38%</td><td>39–45%</td><td>&gt;45%</td></tr>
+      <tr><td>Owner Comp / Gross</td><td>25–35%</td><td>20–24%</td><td>&lt;20%</td></tr>
+      <tr><td>Rent / Gross</td><td>5–8%</td><td>9–12%</td><td>&gt;12%</td></tr>
+      <tr><td>Total OpEx / Gross</td><td>15–22%</td><td>23–28%</td><td>&gt;28%</td></tr>
+      <tr><td>Net Profit Margin</td><td>25–35%</td><td>20–24%</td><td>&lt;20%</td></tr>
+    </tbody>
+  </table>
+
+  <p class="muted" style="margin-top: 0.3in; font-size: 9.5pt;">Benchmarks sourced from the State Farm Agency Reference Guide. Warning and critical bands fire automatic alerts on the Dashboard when a rolling calculation crosses a threshold.</p>
+
+  <div class="stamp">
+    <div class="stamp-eyebrow">The Business Command Center</div>
+    <div class="stamp-title">Built for you. Yours to grow with.</div>
+    <div class="stamp-sub">Sunshine State Insurance · Sarasota, FL · v1.0 · July 2026<br><span style="color:#FBBF9C;">Delivered by Imaginary Farms LLC · imaginary-farms.com</span></div>
+  </div>
+</section>
+
+</body>
+</html>
