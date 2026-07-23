@@ -596,7 +596,70 @@ const Connections = ({ connections }) => (
 );
 
 // ─── Section: Daily Briefing ──────────────────────────────────
-const DailyBriefingSection = ({ briefings }) => {
+// ─── Live-data wrapper — reads daily_briefing_log for this agency ─────────────
+// Row shape from Supabase → transformed to the {id,date,sent_at,delivered,opened,content}
+// shape DailyBriefingView expects. Falls back to EmptyState when the table is empty
+// (e.g. a fresh agency install where the recipe hasn't run yet). Filed by task
+// f7a58dd4 (2026-06-30) and delivered 2026-07-23 as part of the 9-item work queue.
+const DailyBriefingSection = () => {
+  const [rows, setRows] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("daily_briefing_log")
+          .select("id, briefing_date, sent_at, delivered, opened, content_snapshot")
+          .eq("agency_id", AGENCY_ID)
+          .order("briefing_date", { ascending: false })
+          .limit(30);
+        if (cancelled) return;
+        if (error) { setErr(error.message); setRows([]); return; }
+        const shaped = (data || []).map((r) => ({
+          id: r.id,
+          date: r.briefing_date
+            ? new Date(r.briefing_date + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+            : "—",
+          sent_at: r.sent_at
+            ? new Date(r.sent_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+            : "—",
+          delivered: !!r.delivered,
+          opened: !!r.opened,
+          content: r.content_snapshot || "(no content captured)",
+        }));
+        setRows(shaped);
+      } catch (e) {
+        if (!cancelled) { setErr(e?.message || String(e)); setRows([]); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (rows === null) {
+    return <div style={{ padding: 24, color: "var(--text-tertiary)", fontSize: 12 }}>Loading briefings…</div>;
+  }
+  if (err) {
+    return (
+      <EmptyState
+        title="Couldn't load briefings"
+        message={err}
+      />
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        title="No briefings yet"
+        message="The Daily Briefing Email recipe runs at 8:00 AM ET. Once it fires, briefings will appear here."
+      />
+    );
+  }
+  return <DailyBriefingView briefings={rows} />;
+};
+
+const DailyBriefingView = ({ briefings }) => {
   const [selected, setSelected] = useState(briefings[0]?.id);
   const current = briefings.find(b => b.id === selected);
 
@@ -850,7 +913,7 @@ export default function Automations() {
       {section === "runlog"      && <RunLog runLog={runLog} />}
       {section === "recipes"     && <Recipes recipes={recipes} onToggle={toggleRecipe} />}
       {section === "connections" && <Connections connections={liveConnections} />}
-      {section === "briefing"    && <DailyBriefingSection briefings={MOCK_BRIEFINGS} />}
+      {section === "briefing"    && <DailyBriefingSection />}
       {section === "importer"    && <DocImporter imports={MOCK_IMPORTS} />}
     </div>
   );

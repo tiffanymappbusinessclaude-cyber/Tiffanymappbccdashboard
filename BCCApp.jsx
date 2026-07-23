@@ -95,32 +95,46 @@ const MOCK_AGENCY = {
   alerts: 3,
 };
 
+// NAV_ITEMS — organized into sections rendered as sidebar group headers.
+// Section labels are emitted in the sidebar render loop when `section` changes
+// between consecutive items. Dashboard is intentionally section-less (top).
 const NAV_ITEMS = [
-  { id: "dashboard",   label: "Dashboard",       icon: "grid",        roles: ["owner","manager","staff","readonly","accountant"] },
-  { id: "financials",  label: "Financials",       icon: "dollar",      roles: ["owner","manager","accountant"] },
-  { id: "memory",      label: "Memory",           icon: "brain",       roles: ["owner","manager"] },
-  { id: "systemmap",   label: "Wiki & System Map",icon: "map",         roles: ["owner","manager","staff","readonly","accountant"] },
-  { id: "playbook",    label: "Playbook & Guide", icon: "book",        roles: ["owner","manager","staff","readonly","accountant"] },
-  { id: "compliance",  label: "Compliance",       icon: "shield",      roles: ["owner","manager"] },
-  { id: "automations", label: "Automations",      icon: "zap",         roles: ["owner","manager"] },
-  { id: "social",      label: "Social Media",     icon: "share",       roles: ["owner","manager","staff"] },
-  { id: "tasks",       label: "Tasks & Goals",    icon: "check",       roles: ["owner","manager","staff","readonly"] },
-  { id: "alerts",      label: "Alerts",           icon: "bell",        roles: ["owner","manager","staff","readonly","accountant"] },
-  { id: "documents",   label: "Documents",        icon: "folder",      roles: ["owner","manager","accountant"] },
-  { id: "hr",             label: "HR & People",         icon: "users",     roles: ["owner","manager"] },
-  // ── Premium modules ──
-  { id: "pto",            label: "PTO",                 icon: "calendar",  roles: ["owner","manager","staff"] },
-  { id: "time_tracking",  label: "Time Tracking",       icon: "clock",     roles: ["owner","manager","staff"] },
-  { id: "sales_activity", label: "Sales Activity",      icon: "trending",  roles: ["owner","manager","staff"] },
-  { id: "scoreboard",     label: "Scoreboard",          icon: "trophy",    roles: ["owner","manager","staff"] },
-  { id: "handbook",       label: "Handbook",            icon: "book",      roles: ["owner","manager","staff","readonly"] },
-  { id: "benefits",       label: "Benefits",            icon: "heart",     roles: ["owner","manager","staff"] },
-  { id: "personnel_files",label: "Personnel Files",     icon: "folder",    roles: ["owner","manager"] },
-  { id: "milestones",     label: "Milestones",          icon: "star",      roles: ["owner","manager","staff","readonly"] },
-  { id: "licenses",       label: "Licenses",            icon: "shield",    roles: ["owner","manager"] },
-  { id: "emergency_contacts", label: "Emergency Contacts", icon: "phone", roles: ["owner","manager"] },
-  { id: "chat",           label: "Claude Chat",         icon: "message",   roles: ["owner","manager","staff","readonly","accountant"] },
-  { id: "settings",    label: "Settings",         icon: "settings",    roles: ["owner"] },
+  { id: "dashboard",   label: "Dashboard",       icon: "grid",     section: null,           roles: ["owner","manager","staff","readonly","accountant"] },
+
+  // FINANCIAL
+  { id: "financials",  label: "Financials",       icon: "dollar",   section: "FINANCIAL",    roles: ["owner","manager","accountant"] },
+
+  // SALES & PERFORMANCE
+  { id: "sales_activity", label: "Sales Activity",      icon: "trending",  section: "SALES & PERFORMANCE",  roles: ["owner","manager","staff"] },
+  { id: "scoreboard",     label: "Scoreboard",          icon: "trophy",    section: "SALES & PERFORMANCE",  roles: ["owner","manager","staff"] },
+
+  // PEOPLE
+  { id: "hr",                 label: "HR & People",         icon: "users",     section: "PEOPLE",        roles: ["owner","manager"] },
+  { id: "pto",                label: "PTO",                 icon: "calendar",  section: "PEOPLE",        roles: ["owner","manager","staff"] },
+  { id: "time_tracking",      label: "Time Tracking",       icon: "clock",     section: "PEOPLE",        roles: ["owner","manager","staff"] },
+  { id: "handbook",           label: "Handbook",            icon: "book",      section: "PEOPLE",        roles: ["owner","manager","staff","readonly"] },
+  { id: "benefits",           label: "Benefits",            icon: "heart",     section: "PEOPLE",        roles: ["owner","manager","staff"] },
+  { id: "personnel_files",    label: "Personnel Files",     icon: "folder",    section: "PEOPLE",        roles: ["owner","manager"] },
+  { id: "milestones",         label: "Milestones",          icon: "star",      section: "PEOPLE",        roles: ["owner","manager","staff","readonly"] },
+  { id: "licenses",           label: "Licenses",            icon: "shield",    section: "PEOPLE",        roles: ["owner","manager"] },
+  { id: "emergency_contacts", label: "Emergency Contacts",  icon: "phone",     section: "PEOPLE",        roles: ["owner","manager"] },
+
+  // OPERATIONS
+  { id: "compliance",  label: "Compliance",       icon: "shield",   section: "OPERATIONS",   roles: ["owner","manager"] },
+  { id: "automations", label: "Automations",      icon: "zap",      section: "OPERATIONS",   roles: ["owner","manager"] },
+  { id: "social",      label: "Social Media",     icon: "share",    section: "OPERATIONS",   roles: ["owner","manager","staff"] },
+  { id: "tasks",       label: "Tasks & Goals",    icon: "check",    section: "OPERATIONS",   roles: ["owner","manager","staff","readonly"] },
+  { id: "alerts",      label: "Alerts",           icon: "bell",     section: "OPERATIONS",   roles: ["owner","manager","staff","readonly","accountant"] },
+  { id: "documents",   label: "Documents",        icon: "folder",   section: "OPERATIONS",   roles: ["owner","manager","accountant"] },
+
+  // KNOWLEDGE
+  { id: "memory",      label: "Memory",           icon: "brain",    section: "KNOWLEDGE",    roles: ["owner","manager"] },
+  { id: "systemmap",   label: "Wiki & System Map",icon: "map",      section: "KNOWLEDGE",    roles: ["owner","manager","staff","readonly","accountant"] },
+  { id: "playbook",    label: "Playbook & Guide", icon: "book",     section: "KNOWLEDGE",    roles: ["owner","manager","staff","readonly","accountant"] },
+
+  // SYSTEM
+  { id: "chat",        label: "Claude Chat",      icon: "message",  section: "SYSTEM",       roles: ["owner","manager","staff","readonly","accountant"] },
+  { id: "settings",    label: "Settings",         icon: "settings", section: "SYSTEM",       roles: ["owner"] },
 ];
 
 const Icon = ({ name, size = 16, color = "currentColor", strokeWidth = 1.75 }) => {
@@ -170,6 +184,9 @@ const css = {
   body: { display: "flex", flex: 1, overflow: "hidden" },
   nav: (collapsed) => ({ width: collapsed ? 56 : 220, background: TOKENS.white, borderRight: `1px solid ${TOKENS.slate200}`, display: "flex", flexDirection: "column", flexShrink: 0, transition: "width 0.2s ease", overflow: "hidden", zIndex: 50 }),
   navScroll: { flex: 1, overflowY: "auto", overflowX: "hidden", padding: "8px 0" },
+  // Section grouping labels between nav items (demo-parity: FINANCIAL / PEOPLE / OPERATIONS / …).
+  navSectionHeader: { padding: "14px 14px 6px 14px", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", color: TOKENS.slate400, textTransform: "uppercase" },
+  navSectionSpacer: { height: 8, borderTop: `1px solid ${TOKENS.slate200}`, margin: "8px 8px 0 8px" },
   navItem: (active, collapsed) => ({ display: "flex", alignItems: "center", gap: collapsed ? 0 : 10, padding: collapsed ? "10px 0" : "9px 14px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", fontSize: 12.5, fontWeight: active ? 600 : 400, color: active ? TOKENS.blue : TOKENS.slate500, background: active ? TOKENS.blueLt : "transparent", borderLeft: active ? `3px solid ${TOKENS.blue}` : "3px solid transparent", borderRadius: collapsed ? 0 : "0 6px 6px 0", marginRight: collapsed ? 0 : 8, transition: "all 0.12s", whiteSpace: "nowrap", overflow: "hidden" }),
   navLabel: (collapsed) => ({ opacity: collapsed ? 0 : 1, maxWidth: collapsed ? 0 : 160, transition: "opacity 0.15s, max-width 0.2s", overflow: "hidden" }),
   navCollapseBtn: { padding: "10px 0", display: "flex", alignItems: "center", justifyContent: "center", borderTop: `1px solid ${TOKENS.slate200}`, cursor: "pointer", color: TOKENS.slate400, transition: "color 0.15s" },
@@ -445,20 +462,41 @@ export default function BCCApp() {
             } : {}),
           }}>
             <div style={css.navScroll}>
-              {visibleNav.map(item => {
-                const active = activeModule === item.id;
-                return (
-                  <div key={item.id} style={css.navItem(active, navCollapsed)} onClick={() => setActiveModule(item.id)} title={navCollapsed ? item.label : ""}>
-                    <Icon name={item.icon} size={15} color={active ? TOKENS.blue : TOKENS.slate400} />
-                    <span style={css.navLabel(navCollapsed)}>{item.label}</span>
-                    {item.id === "alerts" && !navCollapsed && agency.alerts > 0 && (
-                      <span style={{ ...css.pill("danger"), marginLeft: "auto", fontSize: 9, padding: "2px 6px" }}>
-                        {agency.alerts}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+              {(() => {
+                let lastSection = undefined;
+                const nodes = [];
+                visibleNav.forEach(item => {
+                  // Emit a group header when section changes.
+                  // navCollapsed hides the label; render a spacer instead for visual grouping.
+                  if (item.section !== lastSection) {
+                    lastSection = item.section;
+                    if (item.section) {
+                      nodes.push(
+                        navCollapsed ? (
+                          <div key={`sec-${item.section}`} style={css.navSectionSpacer} />
+                        ) : (
+                          <div key={`sec-${item.section}`} style={css.navSectionHeader}>
+                            {item.section}
+                          </div>
+                        )
+                      );
+                    }
+                  }
+                  const active = activeModule === item.id;
+                  nodes.push(
+                    <div key={item.id} style={css.navItem(active, navCollapsed)} onClick={() => setActiveModule(item.id)} title={navCollapsed ? item.label : ""}>
+                      <Icon name={item.icon} size={15} color={active ? TOKENS.blue : TOKENS.slate400} />
+                      <span style={css.navLabel(navCollapsed)}>{item.label}</span>
+                      {item.id === "alerts" && !navCollapsed && agency.alerts > 0 && (
+                        <span style={{ ...css.pill("danger"), marginLeft: "auto", fontSize: 9, padding: "2px 6px" }}>
+                          {agency.alerts}
+                        </span>
+                      )}
+                    </div>
+                  );
+                });
+                return nodes;
+              })()}
             </div>
 
             {!isMobile && (
