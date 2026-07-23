@@ -13,6 +13,23 @@ import AlertsNotifications from "./src/modules/AlertsNotifications.jsx";
 import Documents from "./src/modules/Documents.jsx";
 import HRPeople from "./src/modules/HRPeople.jsx";
 import Settings from "./src/modules/Settings.jsx";
+// ── Premium modules (added 2026-07-23) ──
+import PTOMine from "./src/modules/PTOMine.jsx";
+import PTOAdmin from "./src/modules/PTOAdmin.jsx";
+import PTOPolicies from "./src/modules/PTOPolicies.jsx";
+import TimeTracking from "./src/modules/TimeTracking.jsx";
+import SalesActivity from "./src/modules/SalesActivity.jsx";
+import Scoreboard from "./src/modules/Scoreboard.jsx";
+import Handbook from "./src/modules/Handbook.jsx";
+import Benefits from "./src/modules/Benefits.jsx";
+import PersonnelFiles from "./src/modules/PersonnelFiles.jsx";
+import Milestones from "./src/modules/Milestones.jsx";
+import Licenses from "./src/modules/Licenses.jsx";
+import EmergencyContacts from "./src/modules/EmergencyContacts.jsx";
+import EmergencyContactsMine from "./src/modules/EmergencyContactsMine.jsx";
+// ── Header widgets (added 2026-07-23) ──
+import ThemeToggle from "./src/components/ThemeToggle.jsx";
+import HelpButton from "./src/components/HelpButton.jsx";
 import ErrorBoundary from "./src/components/ErrorBoundary.jsx";
 import { supabase, AGENCY_ID } from "./src/lib/supabase.js";
 import DemoBanner from "./src/components/DemoBanner.jsx";
@@ -90,8 +107,19 @@ const NAV_ITEMS = [
   { id: "tasks",       label: "Tasks & Goals",    icon: "check",       roles: ["owner","manager","staff","readonly"] },
   { id: "alerts",      label: "Alerts",           icon: "bell",        roles: ["owner","manager","staff","readonly","accountant"] },
   { id: "documents",   label: "Documents",        icon: "folder",      roles: ["owner","manager","accountant"] },
-  { id: "hr",          label: "HR & People",      icon: "users",       roles: ["owner","manager"] },
-  { id: "chat",        label: "Claude Chat",      icon: "message",     roles: ["owner","manager","staff","readonly","accountant"] },
+  { id: "hr",             label: "HR & People",         icon: "users",     roles: ["owner","manager"] },
+  // ── Premium modules ──
+  { id: "pto",            label: "PTO",                 icon: "calendar",  roles: ["owner","manager","staff"] },
+  { id: "time_tracking",  label: "Time Tracking",       icon: "clock",     roles: ["owner","manager","staff"] },
+  { id: "sales_activity", label: "Sales Activity",      icon: "trending",  roles: ["owner","manager","staff"] },
+  { id: "scoreboard",     label: "Scoreboard",          icon: "trophy",    roles: ["owner","manager","staff"] },
+  { id: "handbook",       label: "Handbook",            icon: "book",      roles: ["owner","manager","staff","readonly"] },
+  { id: "benefits",       label: "Benefits",            icon: "heart",     roles: ["owner","manager","staff"] },
+  { id: "personnel_files",label: "Personnel Files",     icon: "folder",    roles: ["owner","manager"] },
+  { id: "milestones",     label: "Milestones",          icon: "star",      roles: ["owner","manager","staff","readonly"] },
+  { id: "licenses",       label: "Licenses",            icon: "shield",    roles: ["owner","manager"] },
+  { id: "emergency_contacts", label: "Emergency Contacts", icon: "phone", roles: ["owner","manager"] },
+  { id: "chat",           label: "Claude Chat",         icon: "message",   roles: ["owner","manager","staff","readonly","accountant"] },
   { id: "settings",    label: "Settings",         icon: "settings",    roles: ["owner"] },
 ];
 
@@ -207,8 +235,22 @@ const ModuleRouter = ({ active, onNavigate }) => {
     tasks:       <ErrorBoundary name="Tasks & Goals"><TasksGoals /></ErrorBoundary>,
     alerts:      <ErrorBoundary name="Alerts"><AlertsNotifications onNavigate={onNavigate} /></ErrorBoundary>,
     documents:   <ErrorBoundary name="Documents"><Documents /></ErrorBoundary>,
-    hr:          <ErrorBoundary name="HR & People"><HRPeople /></ErrorBoundary>,
-    settings:    <ErrorBoundary name="Settings"><Settings /></ErrorBoundary>,
+    hr:               <ErrorBoundary name="HR & People"><HRPeople /></ErrorBoundary>,
+    // ── Premium module routes ──
+    pto:              <ErrorBoundary name="PTO"><PTOMine /></ErrorBoundary>,
+    pto_admin:        <ErrorBoundary name="PTO Admin"><PTOAdmin /></ErrorBoundary>,
+    pto_policies:     <ErrorBoundary name="PTO Policies"><PTOPolicies /></ErrorBoundary>,
+    time_tracking:    <ErrorBoundary name="Time Tracking"><TimeTracking /></ErrorBoundary>,
+    sales_activity:   <ErrorBoundary name="Sales Activity"><SalesActivity /></ErrorBoundary>,
+    scoreboard:       <ErrorBoundary name="Scoreboard"><Scoreboard /></ErrorBoundary>,
+    handbook:         <ErrorBoundary name="Handbook"><Handbook /></ErrorBoundary>,
+    benefits:         <ErrorBoundary name="Benefits"><Benefits /></ErrorBoundary>,
+    personnel_files:  <ErrorBoundary name="Personnel Files"><PersonnelFiles /></ErrorBoundary>,
+    milestones:       <ErrorBoundary name="Milestones"><Milestones /></ErrorBoundary>,
+    licenses:         <ErrorBoundary name="Licenses"><Licenses /></ErrorBoundary>,
+    emergency_contacts: <ErrorBoundary name="Emergency Contacts"><EmergencyContacts /></ErrorBoundary>,
+    emergency_contacts_mine: <ErrorBoundary name="My Emergency Contact"><EmergencyContactsMine /></ErrorBoundary>,
+    settings:         <ErrorBoundary name="Settings"><Settings /></ErrorBoundary>,
     chat: (
       <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", flex:1, gap:16, padding:40, textAlign:"center" }}>
         <div style={{ fontSize:40 }}>💬</div>
@@ -328,6 +370,9 @@ export default function BCCApp() {
           </div>
 
           <div style={css.headerRight}>
+            {/* Theme toggle + help drawer (added 2026-07-23 per Kim Parks reference) */}
+            <ThemeToggle />
+            <HelpButton activeModule={activeModule} />
             <div style={css.bellWrap} title={`${agency.alerts} active alerts`}>
               <Icon name="bell" size={18} color={TOKENS.slate400} />
               {agency.alerts > 0 && <span style={css.bellBadge}>{agency.alerts}</span>}

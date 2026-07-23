@@ -1113,7 +1113,7 @@ const ProducerPnLSection = ({ roi }) => {
           <strong>Next step:</strong> forward your monthly SF producer production
           report to
           <code style={{ fontFamily: "monospace", fontSize: 11, padding: "1px 5px", background: T.slate100, borderRadius: 4, margin: "0 4px" }}>
-            [AGENCY_CLAUDE_EMAIL]
+            tiffanymapp.businessclaude@gmail.com
           </code>
           — the Producer Production Report Processor recipe will parse it and
           populate this section within the hour.

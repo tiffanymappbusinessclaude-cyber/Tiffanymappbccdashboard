@@ -1189,6 +1189,160 @@ const Q3UnifiedWidget = ({ data, onNavigate }) => {
   );
 };
 
+// ─── Setup Wizard + Modules Filling (added 2026-07-23 per Kim Parks reference dashboard) ───
+
+const SetupWizardWidget = ({ data, onNavigate }) => {
+  const steps = [
+    {
+      id: "benefits",
+      title: "Add your benefit plans",
+      hint: "Medical, dental, 401k — anything you offer. Powers the Benefits module.",
+      done: (data.benefitPlansCount || 0) > 0,
+      cta: "Open Benefits",
+      target: "benefits",
+    },
+    {
+      id: "licenses",
+      title: "Enter producer license details",
+      hint: "State license number + expiration per staff. Unblocks License Expirations report.",
+      done: (data.producerLicensesCount || 0) > 0,
+      cta: "Open Licenses",
+      target: "licenses",
+    },
+    {
+      id: "emergency",
+      title: "Collect emergency contacts",
+      hint: "One contact per staff member. HR requirement.",
+      done: (data.emergencyContactsCount || 0) > 0,
+      cta: "Open Emergency Contacts",
+      target: "emergency_contacts",
+    },
+    {
+      id: "producer_report",
+      title: "Forward SF Producer Production report",
+      hint: `Forward the monthly SF producer production email to ${data.serviceMailbox || "your BCC service mailbox"}. Unblocks Performance tab + Producer Production report.`,
+      done: (data.producerProductionDocsCount || 0) > 0,
+      cta: "Open Documents",
+      target: "documents",
+    },
+    {
+      id: "comp_rates",
+      title: "Confirm 2026 comp plan rates",
+      hint: "Some rows have NULL rate. Set them from HR & People → Comp Plans.",
+      done: (data.commissionStructuresCount || 0) > 0,
+      cta: "Open HR & People",
+      target: "hr",
+    },
+  ];
+  const doneCount = steps.filter(s => s.done).length;
+  const pct = Math.round((doneCount / steps.length) * 100);
+
+  if (doneCount === steps.length) return null;
+
+  return (
+    <Card>
+      <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12}}>
+        <div>
+          <SectionTitle icon="🎯" title="First-Week Setup" />
+          <div style={{fontSize:13, color:T.slate500, marginTop:2}}>
+            Complete these 5 items to unlock full BCC. Everything else fills in automatically.
+          </div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:24, fontWeight:800, color:T.navy}}>{doneCount} / {steps.length}</div>
+          <div style={{fontSize:11, color:T.slate500}}>{pct}% done</div>
+        </div>
+      </div>
+      <ProgressBar value={pct} />
+      <div style={{display:"flex", flexDirection:"column", gap:10, marginTop:16}}>
+        {steps.map(s => (
+          <div key={s.id} style={{
+            display:"flex", justifyContent:"space-between", alignItems:"center",
+            padding:"12px 14px", borderRadius:8,
+            border:`1px solid ${s.done ? T.green : T.slate200}`,
+            background: s.done ? T.greenLt : "#fff",
+          }}>
+            <div style={{display:"flex", alignItems:"center", gap:12, flex:1}}>
+              <div style={{
+                width:22, height:22, borderRadius:"50%",
+                border:`2px solid ${s.done ? T.green : T.slate300}`,
+                background: s.done ? T.green : "transparent",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                flexShrink:0,
+              }}>
+                {s.done && <span style={{color:"#fff", fontSize:14, fontWeight:700}}>✓</span>}
+              </div>
+              <div>
+                <div style={{fontSize:14, fontWeight:600, color: s.done ? T.slate500 : T.navy, textDecoration: s.done ? "line-through" : "none"}}>
+                  {s.title}
+                </div>
+                <div style={{fontSize:12, color:T.slate500, marginTop:2}}>{s.hint}</div>
+              </div>
+            </div>
+            {!s.done && (
+              <button
+                onClick={() => onNavigate(s.target)}
+                style={{
+                  padding:"8px 14px", borderRadius:6,
+                  background:T.blue, color:"#fff", border:"none",
+                  fontSize:13, fontWeight:600, cursor:"pointer",
+                  whiteSpace:"nowrap", marginLeft:12,
+                }}
+              >
+                {s.cta} →
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
+
+const ModulesFillingWidget = ({ data, onNavigate }) => {
+  const modules = [
+    { key:"time_tracking",  label:"Time Tracking",       target:"time_tracking",   count: data.timeTrackingCount    || 0, hint:"Fills as your team clocks in from Time Tracking." },
+    { key:"sales_activity", label:"Sales Activity",      target:"sales_activity",  count: data.salesActivityCount   || 0, hint:"Fills as staff log quotes, calls, and follow-ups." },
+    { key:"coaching",       label:"Coaching Notes",      target:"hr",              count: data.staffPerformanceCount|| 0, hint:"Fills as you log 1:1s in HR & People → Performance." },
+    { key:"compliance_log", label:"Compliance Log",      target:"compliance",      count: data.complianceLogCount   || 0, hint:"Fills on your first compliance review." },
+    { key:"personnel_docs", label:"Personnel Documents", target:"personnel_files", count: data.personnelDocsCount   || 0, hint:"Fills as you upload employee forms from Personnel Files." },
+  ];
+  return (
+    <Card>
+      <SectionTitle icon="🌱" title="Modules Filling Up Naturally" />
+      <div style={{fontSize:13, color:T.slate500, marginBottom:14}}>
+        These modules are empty for a reason — they populate on their own as you and your team use the system. No action needed unless you want to jump in.
+      </div>
+      <div style={{display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:12}}>
+        {modules.map(m => (
+          <div key={m.key} style={{
+            padding:14, borderRadius:8, border:`1px solid ${T.slate200}`, background:"#fff",
+            display:"flex", flexDirection:"column", justifyContent:"space-between", minHeight:120,
+          }}>
+            <div>
+              <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6}}>
+                <div style={{fontSize:14, fontWeight:700, color:T.navy}}>{m.label}</div>
+                <div style={{fontSize:11, color:T.slate500}}>{m.count} rows</div>
+              </div>
+              <div style={{fontSize:12, color:T.slate500, lineHeight:1.4}}>{m.hint}</div>
+            </div>
+            <button
+              onClick={() => onNavigate(m.target)}
+              style={{
+                marginTop:10, padding:"6px 0", borderRadius:6,
+                background:"transparent", color:T.blue, border:"none",
+                fontSize:12, fontWeight:600, cursor:"pointer", textAlign:"left",
+              }}
+            >
+              Open module →
+            </button>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
+
 export default function Dashboard({ onNavigate = () => {} }) {
   const [dashData, setDashData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -1283,6 +1437,25 @@ export default function Dashboard({ onNavigate = () => {} }) {
             .select("producer_name,activity_date,fs_pivots,renewal_touches,renewals_retained,renewals_lost")
             .gte("activity_date","2026-07-01")
             .lte("activity_date","2026-09-30"),
+        ]);
+
+        // ── Setup Wizard + Modules Filling counts (added 2026-07-23) ──
+        const [
+          benefitsRes, licensesRes, emergencyRes, commissionsRes, producerDocsRes,
+          timeTrackingRes, salesActivityRes, staffPerfRes, complianceLogRes, personnelDocsRes,
+          serviceMailboxRes,
+        ] = await Promise.allSettled([
+          supabase.from("benefit_plans").select("id", { count: "exact", head: true }),
+          supabase.from("producer_licenses").select("id", { count: "exact", head: true }),
+          supabase.from("emergency_contacts").select("id", { count: "exact", head: true }),
+          supabase.from("commission_structures").select("id", { count: "exact", head: true }),
+          supabase.from("documents").select("id", { count: "exact", head: true }).ilike("file_name", "%producer%"),
+          supabase.from("time_tracking").select("id", { count: "exact", head: true }),
+          supabase.from("sales_activity").select("id", { count: "exact", head: true }),
+          supabase.from("staff_performance").select("id", { count: "exact", head: true }),
+          supabase.from("compliance_log").select("id", { count: "exact", head: true }),
+          supabase.from("personnel_documents").select("id", { count: "exact", head: true }),
+          supabase.from("settings").select("setting_value").eq("setting_key","service_mailbox").maybeSingle(),
         ]);
 
         const agency = agencyRes.status==="fulfilled" ? agencyRes.value.data : null;
@@ -1693,6 +1866,18 @@ export default function Dashboard({ onNavigate = () => {} }) {
           q3Phase,
           q3DaysUntil,
           q3DaysInto,
+          // ── Setup Wizard + Modules Filling counts (added 2026-07-23) ──
+          benefitPlansCount:          benefitsRes.status       === "fulfilled" ? (benefitsRes.value.count       || 0) : 0,
+          producerLicensesCount:      licensesRes.status       === "fulfilled" ? (licensesRes.value.count       || 0) : 0,
+          emergencyContactsCount:     emergencyRes.status      === "fulfilled" ? (emergencyRes.value.count      || 0) : 0,
+          commissionStructuresCount:  commissionsRes.status    === "fulfilled" ? (commissionsRes.value.count    || 0) : 0,
+          producerProductionDocsCount:producerDocsRes.status   === "fulfilled" ? (producerDocsRes.value.count   || 0) : 0,
+          timeTrackingCount:          timeTrackingRes.status   === "fulfilled" ? (timeTrackingRes.value.count   || 0) : 0,
+          salesActivityCount:         salesActivityRes.status  === "fulfilled" ? (salesActivityRes.value.count  || 0) : 0,
+          staffPerformanceCount:      staffPerfRes.status      === "fulfilled" ? (staffPerfRes.value.count      || 0) : 0,
+          complianceLogCount:         complianceLogRes.status  === "fulfilled" ? (complianceLogRes.value.count  || 0) : 0,
+          personnelDocsCount:         personnelDocsRes.status  === "fulfilled" ? (personnelDocsRes.value.count  || 0) : 0,
+          serviceMailbox:             serviceMailboxRes.status === "fulfilled" ? (serviceMailboxRes.value.data?.setting_value || null) : null,
         });
       } catch (err) {
         console.error("Dashboard load error:", err);
@@ -1722,47 +1907,40 @@ export default function Dashboard({ onNavigate = () => {} }) {
         <div style={{fontSize:12, color:T.slate500, marginTop:4}}>{today}</div>
       </div>
 
-      {/* Top Row — Financial + AIPP + Renewals This Week */}
-      <div style={{display:"grid", gridTemplateColumns:"1.2fr 1.2fr 1fr", gap:14, marginBottom:14}}>
+      {/* ═══ Reorganized 2026-07-23 per Kim Parks reference dashboard ═══ */}
+
+      {/* Row 1 — First-Week Setup wizard (auto-hides when all 5 steps done) */}
+      <div style={{marginBottom:14}}>
+        <SetupWizardWidget data={dashData} onNavigate={onNavigate} />
+      </div>
+
+      {/* Row 2 — Financial Overview + AIPP */}
+      <div style={{display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:14, marginBottom:14}}>
         <FinancialWidget data={dashData} onNavigate={onNavigate} />
         <AIPPWidget data={dashData} onNavigate={onNavigate} />
-        <RetentionWeekTile data={dashData} onNavigate={onNavigate} />
       </div>
 
-      {/* Renewal Retention (full width) — the renewal book is the agency's foundation */}
-      <div style={{marginBottom:14}}>
-        <RetentionWidget data={dashData} onNavigate={onNavigate} />
-      </div>
-
-      {/* Second Row — Monthly Close + Alerts */}
+      {/* Row 3 — Monthly Close + Active Alerts */}
       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14}}>
         <MonthlyCloseWidget data={dashData} onNavigate={onNavigate} />
         <AlertsWidget data={dashData} onNavigate={onNavigate} />
       </div>
 
-      {/* Third Row — Tasks + Compliance */}
-      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14}}>
-        <EmailsNeedingAttentionWidget inbox={inboxEmails} onRefresh={fetchInboxEmails} onNavigate={onNavigate} />
-        <CalendarEventsWidget events={calendarEvents} onRefresh={fetchCalendarEvents} onNavigate={onNavigate} />
-      </div>
-
+      {/* Row 4 — High Priority Tasks + Compliance Status */}
       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14}}>
         <TasksWidget data={dashData} onNavigate={onNavigate} />
         <ComplianceWidget data={dashData} onNavigate={onNavigate} />
       </div>
 
-      {/* Fourth Row — Producer Scoreboard (full width) */}
+      {/* Row 5 — Open Items (full width) */}
       <div style={{marginBottom:14}}>
-        <ProducerScoreboardWidget data={dashData} onNavigate={onNavigate} />
+        <OpenItemsWidget data={dashData} onNavigate={onNavigate} />
       </div>
 
-      {/* Fifth Row — Q3 2026 Unified Strategic Progress (Pivots + Retention) */}
+      {/* Row 6 — Modules Filling Up Naturally (empty-state placeholders) */}
       <div style={{marginBottom:14}}>
-        <Q3UnifiedWidget data={dashData} onNavigate={onNavigate} />
+        <ModulesFillingWidget data={dashData} onNavigate={onNavigate} />
       </div>
-
-      {/* Bottom Row — Open Items (full width) */}
-      <OpenItemsWidget data={dashData} onNavigate={onNavigate} />
     </div>
   );
 }
