@@ -26,7 +26,7 @@
 // prompt text (single source of truth in Base).
 // =============================================================================
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ShieldCheck, AlertTriangle, GraduationCap, Plus, Pencil, Trash2, X, Check } from "lucide-react";
 
 import { supabase } from "../lib/supabase.js";
@@ -389,6 +389,13 @@ function LicenseModal({ initial, isOwnOnly, onClose, onSaved }) {
   const [form, setForm] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
 
   // For owner/manager: need staff picker
   const staffQuery = useSupabaseQuery(

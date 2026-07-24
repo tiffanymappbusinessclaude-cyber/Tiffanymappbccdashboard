@@ -24,7 +24,7 @@
 // contact data must not flow through Claude conversations.
 // =============================================================================
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PhoneCall, Users, ShieldAlert, History, X, Eye, Mail } from "lucide-react";
 
 import { supabase } from "../lib/supabase.js";
@@ -266,6 +266,13 @@ function RevealModal({ staff, onClose, onRevealed, revealed }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState(null);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
 
   async function reveal() {
     setBusy(true); setError(null);

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   BookOpen, Search, Plus, Edit2, Save, X, ChevronLeft, CheckCircle2,
   Clock, Link2, FileText, AlertTriangle, RefreshCw, History,
@@ -443,6 +443,13 @@ function RevisionHistoryModal({ slug, onClose }) {
     [slug],
   );
   const [openId, setOpenId] = useState(null);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const rows = data ?? [];
 
   return (

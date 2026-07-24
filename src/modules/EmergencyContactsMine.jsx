@@ -257,6 +257,13 @@ function ContactModal({ initial, myStaffId, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
 
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+
   function field(name, value) {
     setForm((f) => ({ ...f, [name]: value }));
   }
