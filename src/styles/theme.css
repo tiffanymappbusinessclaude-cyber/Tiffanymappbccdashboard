@@ -3,7 +3,7 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Surface colors */
-  --bg-app: #F8FAFC;
+  --bg-app: #F1F5F9;   /* was #F8FAFC — bumped so white cards & sidebar have visible contrast against page canvas */
   --bg-panel: #F1F5F9;
   --bg-panel-subtle: #FAFBFD;
   --bg-card: #FFFFFF;
@@ -63,7 +63,7 @@
   --if-muted:       #64748B;  --if-muted-rgb:       100 116 139;
   --if-line:        #E2E8F0;  --if-line-rgb:        226 232 240;
   --if-surface:     #FFFFFF;  --if-surface-rgb:     255 255 255;
-  --if-page:        #F8FAFC;  --if-page-rgb:        248 250 252;
+  --if-page:        #F1F5F9;  --if-page-rgb:        241 245 249;   /* was #F8FAFC / 248 250 252 — parity with --bg-app */
   --if-cream:       #FAF7F0;  --if-cream-rgb:       250 247 240;
   --if-teal:        #0D9488;  --if-teal-rgb:        13 148 136;
   --if-teal-lt:     #CCFBF1;  --if-teal-lt-rgb:     204 251 241;

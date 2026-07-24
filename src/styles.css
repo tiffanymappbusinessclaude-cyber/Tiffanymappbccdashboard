@@ -270,10 +270,8 @@ html, body, #root {
 /* ---- Dark-mode: hardcoded SURFACE backgrounds → themed dark surfaces ---- */
 [data-theme="dark"] [style*="background:#FFFFFF" i],
 [data-theme="dark"] [style*="background: #FFFFFF" i],
-[data-theme="dark"] [style*="background:#fff"" i],
-[data-theme="dark"] [style*="background: #fff"" i],
-[data-theme="dark"] [style*="background:#fff," i],
-[data-theme="dark"] [style*="background: #fff," i] { background: var(--bg-card) !important; }
+[data-theme="dark"] [style*="background:#fff;" i],
+[data-theme="dark"] [style*="background: #fff;" i] { background: var(--bg-card) !important; }
 
 [data-theme="dark"] [style*="background:#F8FAFC" i],
 [data-theme="dark"] [style*="background: #F8FAFC" i] { background: var(--bg-app) !important; }
