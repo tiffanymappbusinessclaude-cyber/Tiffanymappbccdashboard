@@ -18,7 +18,7 @@ export default function SectionHeader({ title, subtitle, description, icon: Icon
       gap: 12,
       marginBottom: 20,
       paddingBottom: 16,
-      borderBottom: "1px solid #E2E8F0",
+      borderBottom: "1px solid var(--if-line)",
     }}>
       {Icon && (
         <div style={{

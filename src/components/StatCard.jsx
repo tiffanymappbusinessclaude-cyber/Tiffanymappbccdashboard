@@ -53,7 +53,7 @@ export default function StatCard({
   }[tone] || "var(--accent-navy)";
 
   const accentBg = {
-    positive: "#ECFDF5",
+    positive: "var(--success-bg)",
     warning:  "var(--warning-bg)",
     negative: "var(--danger-bg)",
   }[tone] || "var(--accent-navy-bg)";
@@ -63,7 +63,7 @@ export default function StatCard({
   return (
     <div style={{
       background: "var(--bg-card)",
-      border: "1px solid #E2E8F0",
+      border: "1px solid var(--if-line)",
       borderRadius: 10,
       padding: 16,
       display: "flex",

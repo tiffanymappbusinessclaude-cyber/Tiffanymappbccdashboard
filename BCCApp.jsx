@@ -42,24 +42,32 @@ import DemoBanner from "./src/components/DemoBanner.jsx";
 // ============================================================
 
 const TOKENS = {
-  navy:    "#1B2B4B",
-  navyDark:"#121E35",
-  blue:    "#2D7DD2",
-  blueLt:  "#EFF6FF",
-  green:   "#10B981",
-  greenLt: "#D1FAE5",
-  amber:   "#F59E0B",
-  amberLt: "#FEF3C7",
-  red:     "#EF4444",
-  redLt:   "#FEE2E2",
-  slate50: "#F8FAFC",
-  slate100:"#F1F5F9",
-  slate200:"#E2E8F0",
-  slate400:"#94A3B8",
-  slate500:"#64748B",
-  slate700:"#334155",
-  slate900:"#0F172A",
-  white:   "#FFFFFF",
+  // Fixed brand — always dark navy header in BOTH light & dark modes (Kim Parks reference).
+  navy:        "#1B2B4B",
+  navyDark:    "#121E35",
+  // Text/icons ON brand-colored backgrounds (navy header, blue buttons, red badges) — always white.
+  textOnColor: "#FFFFFF",
+  // Semantic accents — themed via CSS vars in src/styles/theme.css.
+  blue:    "var(--accent-blue)",
+  blueLt:  "var(--accent-blue-bg)",
+  green:   "var(--success)",
+  greenLt: "var(--success-bg)",
+  amber:   "var(--warning)",
+  amberLt: "var(--warning-bg)",
+  red:     "var(--danger)",
+  redLt:   "var(--danger-bg)",
+  // Layout surfaces & text — themed via CSS vars (respond to <html data-theme="dark">).
+  slate50: "var(--bg-app)",
+  slate100: "var(--bg-panel)",
+  slate200: "var(--border-subtle)",
+  slate400: "var(--text-quaternary)",
+  slate500: "var(--text-tertiary)",
+  slate700: "var(--text-secondary)",
+  slate900: "var(--text-primary)",
+  // `white` was overloaded — used both for card surfaces AND for text-on-color.
+  // We rebind it to var(--bg-card) so card/nav/dropdown surfaces theme correctly;
+  // the 6 text-on-color call sites are migrated to `textOnColor` below.
+  white:   "var(--bg-card)",
 };
 
 const AppContext = createContext(null);
@@ -172,14 +180,14 @@ const css = {
   header: { background: TOKENS.navy, height: 58, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", flexShrink: 0, borderBottom: `1px solid ${TOKENS.navyDark}`, zIndex: 100 },
   headerLeft: { display: "flex", alignItems: "center", gap: 12 },
   headerLogo: { width: 32, height: 32, background: TOKENS.blue, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" },
-  agencyName: { fontSize: 14, fontWeight: 600, color: TOKENS.white, letterSpacing: "-0.01em" },
+  agencyName: { fontSize: 14, fontWeight: 600, color: TOKENS.textOnColor, letterSpacing: "-0.01em" },
   agencySub:  { fontSize: 10, color: TOKENS.slate400, marginTop: 1 },
   headerRight: { display: "flex", alignItems: "center", gap: 16 },
   bellWrap: { position: "relative", cursor: "pointer", padding: 4 },
-  bellBadge: { position: "absolute", top: 0, right: 0, background: TOKENS.red, color: TOKENS.white, fontSize: 9, fontWeight: 700, borderRadius: "50%", width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${TOKENS.navy}` },
+  bellBadge: { position: "absolute", top: 0, right: 0, background: TOKENS.red, color: TOKENS.textOnColor, fontSize: 9, fontWeight: 700, borderRadius: "50%", width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${TOKENS.navy}` },
   userPill: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 8px", borderRadius: 8, transition: "background 0.15s" },
-  avatar: { width: 30, height: 30, borderRadius: "50%", background: TOKENS.blue, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: TOKENS.white, flexShrink: 0 },
-  userName: { fontSize: 12, fontWeight: 600, color: TOKENS.white },
+  avatar: { width: 30, height: 30, borderRadius: "50%", background: TOKENS.blue, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: TOKENS.textOnColor, flexShrink: 0 },
+  userName: { fontSize: 12, fontWeight: 600, color: TOKENS.textOnColor },
   userRole: { fontSize: 10, color: TOKENS.slate400, textTransform: "capitalize" },
   body: { display: "flex", flex: 1, overflow: "hidden" },
   nav: (collapsed) => ({ width: collapsed ? 56 : 220, background: TOKENS.white, borderRight: `1px solid ${TOKENS.slate200}`, display: "flex", flexDirection: "column", flexShrink: 0, transition: "width 0.2s ease", overflow: "hidden", zIndex: 50 }),
@@ -196,7 +204,7 @@ const css = {
   pageHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 },
   pageTitle: { fontSize: 20, fontWeight: 700, color: TOKENS.slate900, letterSpacing: "-0.02em" },
   pageSubtitle: { fontSize: 12, color: TOKENS.slate500, marginTop: 3 },
-  askBtn: { display: "flex", alignItems: "center", gap: 6, background: TOKENS.blue, color: TOKENS.white, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "background 0.15s, transform 0.1s", whiteSpace: "nowrap", flexShrink: 0 },
+  askBtn: { display: "flex", alignItems: "center", gap: 6, background: TOKENS.blue, color: TOKENS.textOnColor, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "background 0.15s, transform 0.1s", whiteSpace: "nowrap", flexShrink: 0 },
   card: { background: TOKENS.white, border: `1px solid ${TOKENS.slate200}`, borderRadius: 12, padding: "16px 18px" },
   cardTitle: { fontSize: 12, fontWeight: 600, color: TOKENS.slate700, marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" },
   kpiGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 16 },
@@ -220,7 +228,7 @@ const AskClaudeBtn = ({ context, size = "normal" }) => {
   };
   return (
     <button style={{ ...css.askBtn, padding: size === "small" ? "5px 10px" : "8px 14px", fontSize: size === "small" ? 11 : 12 }} onClick={handleClick} title="Copies context to clipboard and opens Claude.ai">
-      <Icon name="lightning" size={12} color={TOKENS.white} />
+      <Icon name="lightning" size={12} color={TOKENS.textOnColor} />
       Ask Claude
       <Icon name="externalLink" size={11} color="rgba(255,255,255,0.7)" />
     </button>
@@ -374,11 +382,11 @@ export default function BCCApp() {
                 aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
                 aria-expanded={mobileNavOpen}
               >
-                <Icon name={mobileNavOpen ? "x" : "menu"} size={18} color={TOKENS.white} />
+                <Icon name={mobileNavOpen ? "x" : "menu"} size={18} color={TOKENS.textOnColor} />
               </div>
             )}
             <div style={css.headerLogo}>
-              <Icon name="lightning" size={16} color={TOKENS.white} />
+              <Icon name="lightning" size={16} color={TOKENS.textOnColor} />
             </div>
             <div>
               <div style={css.agencyName}>{agency.name}</div>
