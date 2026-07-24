@@ -247,3 +247,152 @@ html, body, #root {
 [data-theme="dark"] .border-amber-200 {
   border-color: rgba(253, 230, 138, 0.3) !important;
 }
+
+
+/* ============================================================================
+   Dark-mode inline-style safety net (added 2026-07-24 theme-audit)
+   ----------------------------------------------------------------------------
+   Every module has been refactored to reference CSS variables via its local T
+   token object. This block catches AD-HOC inline hex literals that remain
+   scattered inside modules (borders, semantic text like #92400E "warning ink",
+   fallback "#fff" surfaces, etc.) by matching them via `[style*="…" i]`
+   attribute selectors on the raw style attribute. Case-insensitive with the
+   [i] flag so any casing variant matches.
+
+   Notes:
+     - CSS !important overrides inline styles that do NOT carry !important.
+     - Attribute-substring selectors are O(n) but the rule count is bounded
+       and the DOM is modest — no measurable perf hit in profiling.
+     - The safe general pattern is "background:" or "color:" prefixed so we
+       don't cross-contaminate (e.g. a stray hex inside a `border:` rule).
+   ============================================================================ */
+
+/* ---- Dark-mode: hardcoded SURFACE backgrounds → themed dark surfaces ---- */
+[data-theme="dark"] [style*="background:#FFFFFF" i],
+[data-theme="dark"] [style*="background: #FFFFFF" i],
+[data-theme="dark"] [style*="background:#fff"" i],
+[data-theme="dark"] [style*="background: #fff"" i],
+[data-theme="dark"] [style*="background:#fff," i],
+[data-theme="dark"] [style*="background: #fff," i] { background: var(--bg-card) !important; }
+
+[data-theme="dark"] [style*="background:#F8FAFC" i],
+[data-theme="dark"] [style*="background: #F8FAFC" i] { background: var(--bg-app) !important; }
+
+[data-theme="dark"] [style*="background:#F1F5F9" i],
+[data-theme="dark"] [style*="background: #F1F5F9" i] { background: var(--bg-panel) !important; }
+
+[data-theme="dark"] [style*="background:#FAFBFD" i],
+[data-theme="dark"] [style*="background: #FAFBFD" i] { background: var(--bg-panel-subtle) !important; }
+
+/* ---- Dark-mode: hardcoded semantic TINT backgrounds → themed dark tints ---- */
+[data-theme="dark"] [style*="background:#EFF6FF" i],
+[data-theme="dark"] [style*="background: #EFF6FF" i],
+[data-theme="dark"] [style*="background:#DBEAFE" i],
+[data-theme="dark"] [style*="background: #DBEAFE" i],
+[data-theme="dark"] [style*="background:#BFDBFE" i],
+[data-theme="dark"] [style*="background: #BFDBFE" i] { background: var(--accent-blue-bg) !important; }
+
+[data-theme="dark"] [style*="background:#DCFCE7" i],
+[data-theme="dark"] [style*="background: #DCFCE7" i],
+[data-theme="dark"] [style*="background:#D1FAE5" i],
+[data-theme="dark"] [style*="background: #D1FAE5" i],
+[data-theme="dark"] [style*="background:#BBF7D0" i],
+[data-theme="dark"] [style*="background: #BBF7D0" i],
+[data-theme="dark"] [style*="background:#ECFDF5" i],
+[data-theme="dark"] [style*="background: #ECFDF5" i],
+[data-theme="dark"] [style*="background:#ECFDF3" i],
+[data-theme="dark"] [style*="background: #ECFDF3" i] { background: var(--success-bg) !important; }
+
+[data-theme="dark"] [style*="background:#FEF3C7" i],
+[data-theme="dark"] [style*="background: #FEF3C7" i],
+[data-theme="dark"] [style*="background:#FDE68A" i],
+[data-theme="dark"] [style*="background: #FDE68A" i],
+[data-theme="dark"] [style*="background:#FCD34D" i],
+[data-theme="dark"] [style*="background: #FCD34D" i],
+[data-theme="dark"] [style*="background:#FFFBEB" i],
+[data-theme="dark"] [style*="background: #FFFBEB" i] { background: var(--warning-bg) !important; }
+
+[data-theme="dark"] [style*="background:#FEE2E2" i],
+[data-theme="dark"] [style*="background: #FEE2E2" i],
+[data-theme="dark"] [style*="background:#FECACA" i],
+[data-theme="dark"] [style*="background: #FECACA" i] { background: var(--danger-bg) !important; }
+
+[data-theme="dark"] [style*="background:#EDE9FE" i],
+[data-theme="dark"] [style*="background: #EDE9FE" i] { background: var(--accent-purple-bg) !important; }
+
+[data-theme="dark"] [style*="background:#CCFBF1" i],
+[data-theme="dark"] [style*="background: #CCFBF1" i] { background: rgba(94, 234, 212, 0.14) !important; }
+
+[data-theme="dark"] [style*="background:#FCE7F3" i],
+[data-theme="dark"] [style*="background: #FCE7F3" i] { background: rgba(244, 114, 182, 0.14) !important; }
+
+/* ---- Dark-mode: hardcoded semantic TEXT COLORS → lighter shades ---- */
+[data-theme="dark"] [style*="color:#0F172A" i],
+[data-theme="dark"] [style*="color: #0F172A" i] { color: var(--text-primary) !important; }
+
+[data-theme="dark"] [style*="color:#1E293B" i],
+[data-theme="dark"] [style*="color: #1E293B" i] { color: var(--text-primary) !important; }
+
+[data-theme="dark"] [style*="color:#334155" i],
+[data-theme="dark"] [style*="color: #334155" i] { color: var(--text-secondary) !important; }
+
+[data-theme="dark"] [style*="color:#475569" i],
+[data-theme="dark"] [style*="color: #475569" i],
+[data-theme="dark"] [style*="color:#64748B" i],
+[data-theme="dark"] [style*="color: #64748B" i] { color: var(--text-tertiary) !important; }
+
+[data-theme="dark"] [style*="color:#065F46" i],
+[data-theme="dark"] [style*="color: #065F46" i],
+[data-theme="dark"] [style*="color:#16A34A" i],
+[data-theme="dark"] [style*="color: #16A34A" i] { color: var(--success-text) !important; }
+
+[data-theme="dark"] [style*="color:#92400E" i],
+[data-theme="dark"] [style*="color: #92400E" i],
+[data-theme="dark"] [style*="color: #78350F" i],
+[data-theme="dark"] [style*="color:#78350F" i],
+[data-theme="dark"] [style*="color: #B45309" i],
+[data-theme="dark"] [style*="color:#B45309" i],
+[data-theme="dark"] [style*="color: #D97706" i],
+[data-theme="dark"] [style*="color:#D97706" i] { color: var(--warning-text) !important; }
+
+[data-theme="dark"] [style*="color:#991B1B" i],
+[data-theme="dark"] [style*="color: #991B1B" i],
+[data-theme="dark"] [style*="color:#7F1D1D" i],
+[data-theme="dark"] [style*="color: #7F1D1D" i],
+[data-theme="dark"] [style*="color:#DC2626" i],
+[data-theme="dark"] [style*="color: #DC2626" i] { color: var(--danger-text) !important; }
+
+[data-theme="dark"] [style*="color:#1E40AF" i],
+[data-theme="dark"] [style*="color: #1E40AF" i],
+[data-theme="dark"] [style*="color:#2563EB" i],
+[data-theme="dark"] [style*="color: #2563EB" i] { color: var(--accent-blue-text) !important; }
+
+[data-theme="dark"] [style*="color:#5B21B6" i],
+[data-theme="dark"] [style*="color: #5B21B6" i],
+[data-theme="dark"] [style*="color:#6D28D9" i],
+[data-theme="dark"] [style*="color: #6D28D9" i] { color: var(--accent-purple-text) !important; }
+
+[data-theme="dark"] [style*="color:#1E3A5F" i],
+[data-theme="dark"] [style*="color: #1E3A5F" i] { color: var(--accent-navy-text) !important; }
+
+[data-theme="dark"] [style*="color:#0D9488" i],
+[data-theme="dark"] [style*="color: #0D9488" i] { color: #5EEAD4 !important; }
+
+/* ---- Dark-mode: hardcoded BORDER colors → themed dark borders ---- */
+[data-theme="dark"] [style*="1px solid #E2E8F0" i],
+[data-theme="dark"] [style*="1px solid #F1F5F9" i] { border-color: var(--border-subtle) !important; }
+
+[data-theme="dark"] [style*="1px solid #CBD5E1" i] { border-color: var(--border-strong) !important; }
+
+[data-theme="dark"] [style*="1px solid #BFDBFE" i],
+[data-theme="dark"] [style*="1px solid #93C5FD" i] { border-color: rgba(96, 165, 250, 0.35) !important; }
+
+[data-theme="dark"] [style*="1px solid #FDE68A" i],
+[data-theme="dark"] [style*="1px solid #FCD34D" i],
+[data-theme="dark"] [style*="1px solid #FBBF24" i] { border-color: rgba(251, 191, 36, 0.35) !important; }
+
+[data-theme="dark"] [style*="1px solid #FCA5A5" i],
+[data-theme="dark"] [style*="1px solid #FECACA" i] { border-color: rgba(248, 113, 113, 0.35) !important; }
+
+[data-theme="dark"] [style*="1px solid #BBF7D0" i],
+[data-theme="dark"] [style*="1px solid #86EFAC" i] { border-color: rgba(52, 211, 153, 0.35) !important; }

@@ -3,12 +3,28 @@ import { supabase, AGENCY_ID } from "../lib/supabase.js";
 
 // ── Design Tokens ──────────────────────────────────────────────
 const T = {
-  navy:"#1E3A5F", blue:"#2563EB", green:"#16A34A", amber:"#D97706",
-  red:"#DC2626", slate900:"#0F172A", slate800:"#1E293B", slate700:"#334155",
-  slate600:"#475569", slate500:"#64748B", slate400:"#94A3B8", slate300:"#CBD5E1",
-  slate200:"#E2E8F0", slate100:"#F1F5F9", slate50:"#F8FAFC", white:"#FFFFFF",
-  greenLt:"#DCFCE7", amberLt:"#FEF3C7", redLt:"#FEE2E2", blueLt:"#DBEAFE",
-  navyLt:"#EFF6FF",
+  navy:    "var(--accent-navy)",
+  blue:    "var(--accent-blue)",
+  blueLt:  "var(--accent-blue-bg)",
+  green:   "var(--success)",
+  greenLt: "var(--success-bg)",
+  amber:   "var(--warning)",
+  amberLt: "var(--warning-bg)",
+  red:     "var(--danger)",
+  redLt:   "var(--danger-bg)",
+  navyLt:  "var(--accent-navy-bg)",
+  slate50: "var(--bg-panel-subtle)",
+  slate100:"var(--bg-panel)",
+  slate200:"var(--border-subtle)",
+  slate300:"var(--border-strong)",
+  slate400:"var(--text-quaternary)",
+  slate500:"var(--text-tertiary)",
+  slate600:"var(--text-secondary)",
+  slate700:"var(--text-secondary)",
+  slate800:"var(--text-primary)",
+  slate900:"var(--text-primary)",
+  white:   "var(--bg-card)",
+  textOnColor: "#FFFFFF",
 };
 
 const fmt = v => { const n=parseFloat(v); return isNaN(n)?"$0.00":"$"+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); };

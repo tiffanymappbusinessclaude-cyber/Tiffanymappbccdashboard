@@ -55,9 +55,9 @@ export default function EmptyState({
       {awaiting && (
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 6,
-          background: "var(--warning-bg)", color: "#92400E", borderRadius: 20,
+          background: "var(--warning-bg)", color: "var(--warning-text)", borderRadius: 20,
           padding: "4px 12px", fontSize: 11, fontWeight: 600,
-          marginBottom: 16, border: "1px solid #FDE68A"
+          marginBottom: 16, border: "1px solid var(--warning)"
         }}>
           ⏳ Awaiting Information
         </div>
