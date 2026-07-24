@@ -591,6 +591,107 @@ const StageBadge = ({ status }) => {
   return <span style={{ fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:20, background:s.bg, color:s.color }}>{s.label}</span>;
 };
 
+// ─── Premium HR Overlays — Consolidated Tile Row ─────────────
+// Surfaces KPIs from adjacent HR overlay tables/views (PTO, Time
+// Tracking, Licenses, Milestones, Handbook, Benefits, Personnel
+// Files, Emergency Contacts) so HROverview is a real HR command
+// console. Each query is isolated via Promise.allSettled so a
+// missing view or agency_id column degrades to 0 rather than
+// erroring the whole tile row. Filed under the 9-item work queue
+// as #9 scope (c) — consolidate against Premium HR overlays.
+const PremiumHROverlayTiles = () => {
+  const [tiles, setTiles] = useState(null);
+  const [debug, setDebug] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const c = (t, opts) => {
+        let q = supabase.from(t).select(opts?.col || "id", { count: "exact", head: true });
+        if (opts?.byAgency !== false) q = q.eq("agency_id", AGENCY_ID);
+        for (const [k, v] of Object.entries(opts?.filters || {})) q = q.eq(k, v);
+        return q;
+      };
+      const results = await Promise.allSettled([
+        c("pto_requests",                            { filters: { status: "pending" } }),
+        c("v_time_tracking_missing_days_by_producer", { col: "staff_id" }),
+        c("v_expiring_licenses"),
+        c("v_upcoming_milestones"),
+        c("v_handbook_ack_status",                    { col: "staff_id", filters: { acknowledged: false } }),
+        c("benefit_enrollments",                      { filters: { is_active: true } }),
+        c("personnel_documents"),
+        c("emergency_contacts"),
+      ]);
+      if (cancelled) return;
+
+      const pick = (r) => {
+        if (r.status !== "fulfilled") return { count: 0, note: "unavailable" };
+        if (r.value?.error)           return { count: 0, note: r.value.error.message };
+        return { count: r.value?.count ?? 0, note: null };
+      };
+      const [pto, timeM, licE, mileU, hbkP, benE, perD, emgC] = results.map(pick);
+
+      const notes = results
+        .map((r, i) => r.status === "rejected" ? `q${i}: ${r.reason?.message || r.reason}` : (r.value?.error ? `q${i}: ${r.value.error.message}` : null))
+        .filter(Boolean);
+      setDebug(notes);
+
+      setTiles([
+        { key: "pto",        label: "PTO Requests Pending",     value: pto.count,   accent: pto.count   > 0 ? T.amber : T.slate400 },
+        { key: "time",       label: "Producers Missing Days",   value: timeM.count, accent: timeM.count > 0 ? T.red   : T.green },
+        { key: "licenses",   label: "Licenses Expiring Soon",   value: licE.count,  accent: licE.count  > 0 ? T.red   : T.green },
+        { key: "milestones", label: "Upcoming Milestones",      value: mileU.count, accent: T.purple },
+        { key: "handbook",   label: "Handbook Ack Pending",     value: hbkP.count,  accent: hbkP.count  > 0 ? T.amber : T.green },
+        { key: "benefits",   label: "Active Benefit Enrollments", value: benE.count, accent: T.teal },
+        { key: "personnel",  label: "Personnel Docs on File",   value: perD.count,  accent: T.navy },
+        { key: "emergency",  label: "Emergency Contacts",       value: emgC.count,  accent: T.blue },
+      ]);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!tiles) {
+    return (
+      <div style={{ padding: 12, marginBottom: 16, background: T.slate50, border: `1px solid ${T.slate200}`, borderRadius: 6, fontSize: 12, color: T.slate500 }}>
+        Loading Premium HR overlays…
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: T.slate600, textTransform: "uppercase", marginBottom: 8 }}>
+        Premium HR Overlays
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }}>
+        {tiles.map((t) => (
+          <div
+            key={t.key}
+            style={{
+              background: T.white,
+              border: `1px solid ${T.slate200}`,
+              borderLeft: `3px solid ${t.accent}`,
+              borderRadius: 6,
+              padding: "10px 12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            <div style={{ fontSize: 10.5, fontWeight: 600, color: T.slate500, textTransform: "uppercase", letterSpacing: "0.04em" }}>{t.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: t.accent }}>{t.value}</div>
+          </div>
+        ))}
+      </div>
+      {debug.length > 0 && (
+        <div style={{ marginTop: 6, fontSize: 10, color: T.slate400 }}>
+          {debug.length} overlay(s) unavailable — counts shown as 0.
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Section: Overview ────────────────────────────────────────
 const HROverview = ({ applicants, staff, onboarding }) => {
   const [showAddEmployee, setShowAddEmployee] = useState(false);
@@ -647,6 +748,8 @@ const HROverview = ({ applicants, staff, onboarding }) => {
           </div>
         ))}
       </div>
+
+      <PremiumHROverlayTiles />
 
       <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:12 }}>
         {/* Active Pipeline */}
